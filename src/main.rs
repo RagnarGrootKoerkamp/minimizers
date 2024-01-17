@@ -35,6 +35,29 @@ fn minimizer_pos(s: &[u8], k: usize) -> usize {
         .0
 }
 
+fn biminimizer_pos(s: &[u8], k: usize, last: &mut usize) -> usize {
+    let h1 = |x: &[u8]| fxhash::hash64(x);
+    let h2 = |x: &[u8]| fxhash::hash64(&fxhash::hash64(x));
+    let i1 = s
+        .windows(k)
+        .enumerate()
+        .min_by_key(|(_, w)| h1(w))
+        .unwrap()
+        .0;
+    let i2 = s
+        .windows(k)
+        .enumerate()
+        .min_by_key(|(_, w)| h2(w))
+        .unwrap()
+        .0;
+    if *last == i1 + 1 || *last == i2 + 1 {
+        *last -= 1;
+    } else {
+        *last = i1.max(i2);
+    }
+    *last
+}
+
 fn reduced_minimizer_pos(s: &[u8], k: usize, r: usize) -> usize {
     let idx = s
         .windows(r)
@@ -75,6 +98,7 @@ fn reduced_minimizer_pos(s: &[u8], k: usize, r: usize) -> usize {
 enum Type {
     Minimizer,
     ReducedMinimizer,
+    BiMinimizer,
     #[default]
     BdAnchor,
 }
@@ -152,6 +176,38 @@ fn main() {
                         .windows(l)
                         .enumerate()
                         .map(|(i, w)| i + minimizer_pos(w, k))
+                        .dedup()
+                        .collect();
+                    let exp = 2. / (l + 2 - k) as f64;
+                    let density = anchors.len() as f64 / (t.len() - l + 1) as f64;
+                    let density_str = if density < last_density {
+                        format!("{density:>.3}").green()
+                    } else {
+                        format!("{density:>.3}").red()
+                    };
+                    print!(" {}/{density_str}", format!("{exp:>.3}").dimmed(),);
+                    last_density = density;
+                    stdout().flush().unwrap();
+                }
+                println!();
+            }
+        }
+
+        Type::BiMinimizer => {
+            print!(" l ");
+            for k in args.k..=args.k {
+                print!("        k={k:>2}");
+            }
+            println!();
+            for l in args.l..=args.l {
+                print!("{l:>2}:");
+                let mut last_density = 2.;
+                for k in args.k..=args.k {
+                    let last = &mut 0;
+                    let anchors: Vec<_> = t
+                        .windows(l)
+                        .enumerate()
+                        .map(|(i, w)| i + biminimizer_pos(w, k, last))
                         .dedup()
                         .collect();
                     let exp = 2. / (l + 2 - k) as f64;
