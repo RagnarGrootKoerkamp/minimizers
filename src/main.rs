@@ -85,13 +85,33 @@ fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
         .0
 }
 
-fn robust_biminimizer_pos(s: &[u8], k: usize, last: &mut usize) -> usize {
-    let h1 = |x: &[u8]| fxhash::hash64(x);
-    let h2 = |x: &[u8]| fxhash::hash64(&fxhash::hash64(x));
+fn robust_biminimizer_bot(s: &[u8], k: usize, last: &mut usize) -> usize {
+    let mut vals = s
+        .windows(k)
+        .enumerate()
+        .map(|(i, w)| (h(w), Reverse(i)))
+        .collect_vec();
+    vals.sort();
+    let i1 = vals[0].1 .0;
+    if vals.len() == 1 {
+        *last = i1;
+        return i1;
+    }
+    let i2 = vals[1].1 .0;
+    if *last == i1 + 1 || *last == i2 + 1 {
+        *last -= 1;
+    } else {
+        *last = i1.max(i2);
+    }
+    *last
+}
+
+fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
+    let h2 = |x: &[u8]| fxhash::hash64(&(h(x) ^ 3283342332002053234u64));
     let i1 = s
         .windows(k)
         .enumerate()
-        .min_by_key(|&(i, w)| (h1(w), Reverse(i)))
+        .min_by_key(|&(i, w)| (h(w), Reverse(i)))
         .unwrap()
         .0;
     let i2 = s
@@ -131,7 +151,7 @@ fn reduced_minimizer(s: &[u8], k: usize, k0: usize) -> usize {
 /// k must be bound by the function.
 ///
 /// Must return a value in [0, l - k].
-fn density(text: &[u8], l: usize, scheme: impl Fn(&[u8]) -> usize) -> f64 {
+fn density(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> f64 {
     // Collect positions.
     let mut anchors = text
         .windows(l)
@@ -155,11 +175,13 @@ enum MinimizerType {
     BdAnchor { r: usize },
     Miniception { k0: usize },
     BiMinimizer,
+    BiMinimizerBot,
     ReducedMinimizer { k0: usize },
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
 struct Result {
+    sigma: usize,
     k: usize,
     w: usize,
     l: usize,
@@ -171,16 +193,20 @@ impl MinimizerType {
     fn density(&self, text: &[u8], l: usize, k: usize) -> f64 {
         match self {
             MinimizerType::Minimizer => density(text, l, |lmer| minimizer(lmer, k)),
-            MinimizerType::RobustMinimizer => density(text, l, |lmer| {
+            MinimizerType::RobustMinimizer => {
                 let last = &mut 0;
-                robust_minimizer(lmer, k, last)
-            }),
+                density(text, l, |lmer| robust_minimizer(lmer, k, last))
+            }
             MinimizerType::BdAnchor { r } => density(text, l, |lmer| bd_anchor(lmer, *r)),
             MinimizerType::Miniception { k0 } => density(text, l, |lmer| miniception(lmer, k, *k0)),
-            MinimizerType::BiMinimizer => density(text, l, |lmer| {
+            MinimizerType::BiMinimizer => {
                 let last = &mut 0;
-                robust_biminimizer_pos(lmer, k, last)
-            }),
+                density(text, l, move |lmer| robust_biminimizer(lmer, k, last))
+            }
+            MinimizerType::BiMinimizerBot => {
+                let last = &mut 0;
+                density(text, l, move |lmer| robust_biminimizer_bot(lmer, k, last))
+            }
             MinimizerType::ReducedMinimizer { k0 } => {
                 density(text, l, |lmer| reduced_minimizer(lmer, k, *k0))
             }
@@ -193,7 +219,8 @@ impl MinimizerType {
         match self {
             MinimizerType::Minimizer
             | MinimizerType::RobustMinimizer
-            | MinimizerType::BiMinimizer => vec![*self],
+            | MinimizerType::BiMinimizer
+            | MinimizerType::BiMinimizerBot => vec![*self],
             MinimizerType::BdAnchor { .. } => {
                 let r_max = k;
                 (0.min(r_max)..=10.min(r_max))
@@ -272,6 +299,7 @@ fn main() {
                 MinimizerType::BdAnchor { r: 0 },
                 MinimizerType::Miniception { k0: 0 },
                 MinimizerType::BiMinimizer,
+                MinimizerType::BiMinimizerBot,
                 MinimizerType::ReducedMinimizer { k0: 0 },
             ];
 
@@ -294,6 +322,7 @@ fn main() {
                             })
                             .unwrap();
                         results.push(Result {
+                            sigma: args.sigma,
                             k,
                             w,
                             l,
