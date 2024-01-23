@@ -70,9 +70,6 @@ fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
     let w0 = k - k0;
     let _l0 = w0 + k0 - 1;
 
-    // Alternate hash function.
-    let h1 = |x: &[u8]| fxhash::hash64(&fxhash::hash64(x));
-
     s.windows(k)
         .enumerate()
         .filter(|(_, kmer)| {
@@ -80,7 +77,7 @@ fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
             assert!(i <= k - k0);
             i == 0 || i == k - k0
         })
-        .min_by_key(|&(i, w)| (h1(w), Reverse(i)))
+        .min_by_key(|&(i, w)| (h(w), Reverse(i)))
         .unwrap()
         .0
 }
@@ -305,8 +302,10 @@ fn main() {
 
             let mut results = vec![];
 
-            for k in [1, 2, 4, 8, 16, 32, 64, 128] {
-                for w in [1, 2, 4, 8, 16, 32, 64, 128] {
+            for k in [
+                4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128,
+            ] {
+                for w in [8, 32, 128] {
                     let l = k + w - 1;
                     for tp in base_types.iter() {
                         let tps = &tp.try_params(l, k);
