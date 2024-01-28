@@ -166,6 +166,57 @@ fn miniception_new(s: &[u8], k: usize, k0: usize) -> usize {
         .0
 }
 
+// TODO: dedup
+fn text_miniception_new(text: &[u8], l: usize, k: usize, k0: usize) -> Vec<usize> {
+    let w = l - k + 1;
+    // The number of k0-mers in a kmer.
+    let w0 = k - k0;
+    assert!(k0 >= k.saturating_sub(w));
+    assert!(k0 <= k);
+
+    // Queue of all k0-mers.
+    let mut q0 = IQ::new();
+    // Queue of filtered k-mers.
+    let mut q = IQ::new();
+
+    // i: position of lmer
+    // j: position of kmer
+    // j0: position of k0mer
+
+    // 1: init k0-mers.
+    let mut k0mers = text.windows(k0).enumerate();
+    for (j0, k0mer) in k0mers.by_ref().take(w0) {
+        q0.push(j0, h(k0mer));
+    }
+
+    // 2: init k-mers.
+    let mut kmers = text.windows(k).enumerate().zip(k0mers);
+    for ((j, kmer), (j0, k0mer)) in kmers.by_ref().take(w - 1) {
+        q0.push(j0, h(k0mer));
+        let min_pos = q0.pop(j).unwrap().0;
+        assert!(j <= min_pos && min_pos <= j + w0);
+        if min_pos == j || min_pos == j + w0 {
+            // TODO: Test without h(kmer)?
+            q.push(j, (min_pos == j, h(&text[min_pos..min_pos + k0]), h(kmer)));
+        }
+    }
+
+    // 3: Iterate l-mers.
+    kmers
+        .enumerate()
+        .map(|(i, ((j, kmer), (j0, k0mer)))| {
+            q0.push(j0, h(k0mer));
+            let min_pos = q0.pop(j).unwrap().0;
+            if min_pos == j || min_pos == j + w0 {
+                q.push(j, (min_pos == j, h(&text[min_pos..min_pos + k0]), h(kmer)));
+            }
+
+            q.pop(i).unwrap().0
+        })
+        .dedup()
+        .collect()
+}
+
 fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
     let mut vals = s
         .windows(k)
@@ -277,9 +328,7 @@ impl MinimizerType {
             MinimizerType::Minimizer => d(text_minimizers(text, l, k)),
             MinimizerType::BdAnchor { r } => density(text, l, |lmer| bd_anchor(lmer, *r)),
             MinimizerType::Miniception { k0 } => d(text_miniception(text, l, k, *k0)),
-            MinimizerType::MiniceptionNew { k0 } => {
-                density(text, l, |lmer| miniception_new(lmer, k, *k0))
-            }
+            MinimizerType::MiniceptionNew { k0 } => d(text_miniception_new(text, l, k, *k0)),
             MinimizerType::BiMinimizer => {
                 let last = &mut 0;
                 density(text, l, move |lmer| robust_biminimizer(lmer, k, last))
@@ -507,6 +556,22 @@ mod test {
                 for k0 in k.saturating_sub(w).max(1)..=k {
                     let anchors = collect_anchors(&text, l, |lmer| super::miniception(lmer, k, k0));
                     let minimizers = text_miniception(&text, l, k, k0);
+                    assert_eq!(anchors, minimizers);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn miniception_new() {
+        let text = generate_random_string(1000, 4);
+        for k in 1..=20usize {
+            for w in 1..=20 {
+                let l = k + w - 1;
+                for k0 in k.saturating_sub(w).max(1)..=k {
+                    let anchors =
+                        collect_anchors(&text, l, |lmer| super::miniception_new(lmer, k, k0));
+                    let minimizers = text_miniception_new(&text, l, k, k0);
                     assert_eq!(anchors, minimizers);
                 }
             }
