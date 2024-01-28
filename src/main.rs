@@ -82,6 +82,39 @@ fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
         .0
 }
 
+/// Sort filtered kmers by:
+/// - first prefixes by h(k0), then suffixes by h(k0)
+///
+/// For small k, other orderings are worse, such as:
+/// - first prefixes by h(k0), then suffixes by -h(k0)
+/// - first prefixes by -h(k0), then suffixes by h(k0)
+/// - first prefixes by -h(k0), then suffixes by -h(k0)
+///
+/// Sorting by h(k0) directly is same as mod_minimizers and best for large k.
+fn miniception_new(s: &[u8], k: usize, k0: usize) -> usize {
+    let w = s.len() - k + 1;
+    assert!(k0 >= k.saturating_sub(w));
+    assert!(k0 <= k);
+
+    let w0 = k - k0;
+    let _l0 = w0 + k0 - 1;
+
+    s.windows(k)
+        .enumerate()
+        .filter_map(|(i, kmer)| {
+            let j = minimizer(kmer, k0);
+            assert!(j <= k - k0);
+            if j == 0 || j == k - k0 {
+                Some((i, kmer, j == 0, h(&kmer[j..j + k0])))
+            } else {
+                None
+            }
+        })
+        .min_by_key(|&(i, w, b, hk0)| (b, hk0, h(w), Reverse(i)))
+        .unwrap()
+        .0
+}
+
 fn robust_biminimizer_bot(s: &[u8], k: usize, last: &mut usize) -> usize {
     let mut vals = s
         .windows(k)
@@ -125,21 +158,17 @@ fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
     *last
 }
 
-fn reduced_minimizer(s: &[u8], k: usize, k0: usize) -> usize {
+/// Find minimal t-mer at pos idx. Then select idx % w.
+fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     let l = s.len();
-    let _w = l - k + 1;
-    assert!(k0 <= k);
-    assert!(k <= (l + k0 + 1) / 2);
+    let w = l - k + 1;
     let idx = s
-        .windows(k0)
+        .windows(t)
         .enumerate()
         .min_by_key(|&(i, w)| (fxhash::hash64(w), Reverse(i)))
         .unwrap()
         .0;
-    let i = if idx + k <= l { idx } else { idx - (k - k0) };
-    assert!(i <= l, "l={l} idx={idx} k={k} k0={k0} i={i}");
-    assert!(i + k <= l, "l={l} idx={idx} k={k} k0={k0} i={i}");
-    i
+    idx % w
 }
 
 /// Compute the density of the sampling scheme.
@@ -153,13 +182,19 @@ fn density(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> f64
     let mut anchors = text
         .windows(l)
         .enumerate()
-        .map(|(i, w)| i + scheme(w))
+        .map(|(i, w)| {
+            let x = i + scheme(w);
+            // eprintln!(" {x:>4}");
+            x
+        })
         .dedup()
         .collect_vec();
 
+    // eprintln!("{anchors:?}");
     // Dedup anchors to ensure valid results for non-forward schemes (bd-anchors).
     anchors.sort();
     anchors.dedup();
+    // eprintln!("{anchors:?}");
 
     anchors.len() as f64 / text.windows(l).len() as f64
 }
@@ -171,9 +206,10 @@ enum MinimizerType {
     RobustMinimizer,
     BdAnchor { r: usize },
     Miniception { k0: usize },
+    MiniceptionNew { k0: usize },
     BiMinimizer,
     BiMinimizerBot,
-    ReducedMinimizer { k0: usize },
+    ModMinimizer { k0: usize },
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -196,6 +232,9 @@ impl MinimizerType {
             }
             MinimizerType::BdAnchor { r } => density(text, l, |lmer| bd_anchor(lmer, *r)),
             MinimizerType::Miniception { k0 } => density(text, l, |lmer| miniception(lmer, k, *k0)),
+            MinimizerType::MiniceptionNew { k0 } => {
+                density(text, l, |lmer| miniception_new(lmer, k, *k0))
+            }
             MinimizerType::BiMinimizer => {
                 let last = &mut 0;
                 density(text, l, move |lmer| robust_biminimizer(lmer, k, last))
@@ -204,14 +243,12 @@ impl MinimizerType {
                 let last = &mut 0;
                 density(text, l, move |lmer| robust_biminimizer_bot(lmer, k, last))
             }
-            MinimizerType::ReducedMinimizer { k0 } => {
-                density(text, l, |lmer| reduced_minimizer(lmer, k, *k0))
+            MinimizerType::ModMinimizer { k0 } => {
+                density(text, l, |lmer| mod_minimizer(lmer, k, *k0))
             }
         }
     }
 
-    /// For BdAnchor and ReducedMinimizer, try r/k0 from 3 to 7.
-    /// For Miniception, try k0 from 3 to 7, and k0 = k-w = k-(l-k+1) = 2k-l-1.
     fn try_params(&self, l: usize, k: usize) -> Vec<Self> {
         match self {
             MinimizerType::Minimizer
@@ -237,14 +274,24 @@ impl MinimizerType {
                     .map(|k0| MinimizerType::Miniception { k0 })
                     .collect()
             }
-            MinimizerType::ReducedMinimizer { .. } => {
-                // k <= (l+k0+1)/2
-                // 2k <= l + k0 + 1
-                // 2k - l - 1 <= k0
-                let k0_min = 1.max((2 * k - 1).saturating_sub(l));
-                let k0_max = 10.max(k0_min + 2).min(k);
+            MinimizerType::MiniceptionNew { .. } => {
+                let k0_min = (2 * k).saturating_sub(l + 1);
+                let k0_max = k;
+                if k0_min > k0_max {
+                    return vec![];
+                }
+
+                let start = 1.max(k0_min);
+                let end = 10.max(k0_min + 2).min(k0_max);
+                (start..=end)
+                    .map(|k0| MinimizerType::MiniceptionNew { k0 })
+                    .collect()
+            }
+            MinimizerType::ModMinimizer { .. } => {
+                let k0_min = 1;
+                let k0_max = l;
                 (k0_min..=k0_max)
-                    .map(|k0| MinimizerType::ReducedMinimizer { k0 })
+                    .map(|k0| MinimizerType::ModMinimizer { k0 })
                     .collect()
             }
         }
@@ -292,20 +339,25 @@ fn main() {
         Command::Eval => {
             let base_types = [
                 MinimizerType::Minimizer,
-                MinimizerType::RobustMinimizer,
-                MinimizerType::BdAnchor { r: 0 },
+                // MinimizerType::RobustMinimizer,
+                // MinimizerType::BdAnchor { r: 0 },
                 MinimizerType::Miniception { k0: 0 },
-                MinimizerType::BiMinimizer,
-                MinimizerType::BiMinimizerBot,
-                MinimizerType::ReducedMinimizer { k0: 0 },
+                // MinimizerType::Miniception2 { k0: 0 }, // same as RM
+                // MinimizerType::Miniception3 { k0: 0 }, // Worse than MC5 for small k
+                // MinimizerType::Miniception4 { k0: 0 }, // worse than MC5 for large k
+                MinimizerType::MiniceptionNew { k0: 0 },
+                // MinimizerType::BiMinimizer,
+                // MinimizerType::BiMinimizerBot,
+                MinimizerType::ModMinimizer { k0: 0 },
             ];
 
             let mut results = vec![];
 
             for k in [
-                4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128,
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 28, 32, 34, 36, 38, 40, 42, 44, 46, 48, 56, 64, //80, 96, 112, 128,
             ] {
-                for w in [8, 32, 128] {
+                for w in [8, 16, 32] {
                     let l = k + w - 1;
                     for tp in base_types.iter() {
                         let tps = &tp.try_params(l, k);
