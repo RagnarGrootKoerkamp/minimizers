@@ -251,11 +251,35 @@ fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     idx % w
 }
 
+/// FastMod32, using the low 32 bits of the hash.
+/// Taken from https://github.com/lemire/fastmod/blob/master/include/fastmod.h
+#[derive(Copy, Clone, Debug)]
+pub struct FM32 {
+    d: u64,
+    m: u64,
+}
+impl FM32 {
+    fn new(d: usize) -> Self {
+        assert!(d <= u32::MAX as usize);
+        Self {
+            d: d as u64,
+            m: u64::MAX / d as u64 + 1,
+        }
+    }
+    fn reduce(self, h: usize) -> usize {
+        let lowbits = self.m * (h as u64);
+        ((lowbits as u128 * self.d as u128) >> 64) as usize
+    }
+}
+
 fn text_mod_minimizers(text: &[u8], l: usize, k: usize, t: usize) -> Vec<usize> {
     let mut q = IQ::new();
     let w = l - k + 1;
     let wt = l - t + 1;
     let mut tmers = text.windows(t).enumerate();
+
+    let fastmod_w = FM32::new(w);
+
     for (j, tmer) in tmers.by_ref().take(wt - 1) {
         q.push(j, h(tmer));
     }
@@ -265,7 +289,7 @@ fn text_mod_minimizers(text: &[u8], l: usize, k: usize, t: usize) -> Vec<usize> 
         .enumerate()
         .map(|(i, (j, tmer))| {
             q.push(j, h(tmer));
-            i + (q.pop(i).unwrap().0 - i) % w
+            i + fastmod_w.reduce(q.pop(i).unwrap().0 - i)
         })
         .dedup()
         .collect()
