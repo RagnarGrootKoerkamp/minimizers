@@ -116,7 +116,7 @@ fn miniception_new(s: &[u8], k: usize, k0: usize) -> usize {
         .0
 }
 
-fn robust_biminimizer_bot(s: &[u8], k: usize, last: &mut usize) -> usize {
+fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
     let mut vals = s
         .windows(k)
         .enumerate()
@@ -129,28 +129,6 @@ fn robust_biminimizer_bot(s: &[u8], k: usize, last: &mut usize) -> usize {
         return i1;
     }
     let i2 = vals[1].1 .0;
-    if *last == i1 + 1 || *last == i2 + 1 {
-        *last -= 1;
-    } else {
-        *last = i1.max(i2);
-    }
-    *last
-}
-
-fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
-    let h2 = |x: &[u8]| fxhash::hash64(&(h(x) ^ 3283342332002053234u64));
-    let i1 = s
-        .windows(k)
-        .enumerate()
-        .min_by_key(|&(i, w)| (h(w), Reverse(i)))
-        .unwrap()
-        .0;
-    let i2 = s
-        .windows(k)
-        .enumerate()
-        .min_by_key(|&(i, w)| (h2(w), Reverse(i)))
-        .unwrap()
-        .0;
     if *last == i1 + 1 || *last == i2 + 1 {
         *last -= 1;
     } else {
@@ -209,7 +187,6 @@ enum MinimizerType {
     Miniception { k0: usize },
     MiniceptionNew { k0: usize },
     BiMinimizer,
-    BiMinimizerBot,
     ModMinimizer { k0: usize },
 }
 
@@ -241,10 +218,6 @@ impl MinimizerType {
                 let last = &mut 0;
                 density(text, l, move |lmer| robust_biminimizer(lmer, k, last))
             }
-            MinimizerType::BiMinimizerBot => {
-                let last = &mut 0;
-                density(text, l, move |lmer| robust_biminimizer_bot(lmer, k, last))
-            }
             MinimizerType::ModMinimizer { k0 } => {
                 density(text, l, |lmer| mod_minimizer(lmer, k, *k0))
             }
@@ -255,8 +228,7 @@ impl MinimizerType {
         match self {
             MinimizerType::Minimizer
             | MinimizerType::RobustMinimizer
-            | MinimizerType::BiMinimizer
-            | MinimizerType::BiMinimizerBot => vec![*self],
+            | MinimizerType::BiMinimizer => vec![*self],
             MinimizerType::BdAnchor { .. } => {
                 let r_max = k;
                 (0.min(r_max)..=10.min(r_max))
@@ -350,7 +322,6 @@ fn main() {
                 MinimizerType::Miniception { k0: 0 },
                 MinimizerType::MiniceptionNew { k0: 0 },
                 // MinimizerType::BiMinimizer,
-                // MinimizerType::BiMinimizerBot,
                 MinimizerType::ModMinimizer { k0: 0 },
             ];
 
