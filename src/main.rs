@@ -1,8 +1,9 @@
 #![feature(exclusive_range_pattern, type_alias_impl_trait)]
-use std::cmp::Reverse;
+use std::{cmp::Reverse, sync::Mutex};
 
 use clap::Parser;
 use itertools::Itertools;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_derive::Serialize;
 
 /// Generate a random string.
@@ -351,39 +352,40 @@ fn main() {
                 MinimizerType::ModMinimizer { k0: 0 },
             ];
 
-            let mut results = vec![];
+            let results = Mutex::new(vec![]);
 
-            for k in [
+            let ks = [
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                 24, 28, 32, 34, 36, 38, 40, 42, 44, 46, 48, 56, 64, //80, 96, 112, 128,
-            ] {
-                for w in [8, 16, 32] {
-                    let l = k + w - 1;
-                    for tp in base_types.iter() {
-                        let tps = &tp.try_params(l, k);
-                        let (d, tp) = tps
-                            .iter()
-                            .map(|tp| (tp.density(text, l, k), tp))
-                            .min_by(|&(ld, _), &(rd, _)| {
-                                if ld < rd {
-                                    std::cmp::Ordering::Less
-                                } else {
-                                    std::cmp::Ordering::Greater
-                                }
-                            })
-                            .unwrap();
-                        results.push(Result {
-                            sigma: args.sigma,
-                            k,
-                            w,
-                            l,
-                            tp: *tp,
-                            density: d,
-                        });
-                        eprintln!("k={k} w={w} l={l} tp={tp:?} d={d:.3}",);
-                    }
+            ];
+            let ws = [8, 16, 32];
+            let kws = ks.into_iter().cartesian_product(ws).collect_vec();
+            kws.par_iter().for_each(|&(k, w)| {
+                let l = k + w - 1;
+                for tp in base_types.iter() {
+                    let tps = &tp.try_params(l, k);
+                    let (d, tp) = tps
+                        .iter()
+                        .map(|tp| (tp.density(text, l, k), tp))
+                        .min_by(|&(ld, _), &(rd, _)| {
+                            if ld < rd {
+                                std::cmp::Ordering::Less
+                            } else {
+                                std::cmp::Ordering::Greater
+                            }
+                        })
+                        .unwrap();
+                    results.lock().unwrap().push(Result {
+                        sigma: args.sigma,
+                        k,
+                        w,
+                        l,
+                        tp: *tp,
+                        density: d,
+                    });
+                    eprintln!("k={k} w={w} l={l} tp={tp:?} d={d:.3}",);
                 }
-            }
+            });
 
             let result_json = serde_json::to_string(&results).unwrap();
             println!("{}", result_json);
