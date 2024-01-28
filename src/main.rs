@@ -239,6 +239,43 @@ fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
 }
 
 /// Find minimal t-mer at pos idx. Then select idx % w.
+fn lr_minimizer(s: &[u8], k: usize, t: usize) -> usize {
+    let l = s.len();
+    let w = l - k + 1;
+    let idx = s
+        .windows(t)
+        .enumerate()
+        .min_by_key(|&(i, w)| (h(w), Reverse(i)))
+        .unwrap()
+        .0;
+    let i = if idx >= w { idx - w } else { idx };
+    assert!(i + k <= l);
+    i
+}
+
+fn text_lr_minimizers(text: &[u8], l: usize, k: usize, t: usize) -> Vec<usize> {
+    let mut q = IQ::new();
+    let w = l - k + 1;
+    let wt = l - t + 1;
+    let mut tmers = text.windows(t).enumerate();
+
+    for (j, tmer) in tmers.by_ref().take(wt - 1) {
+        q.push(j, h(tmer));
+    }
+    // i: position of lmer
+    // j: position of tmer
+    tmers
+        .enumerate()
+        .map(|(i, (j, tmer))| {
+            q.push(j, h(tmer));
+            let idx = q.pop(i).unwrap().0 - i;
+            i + if idx >= w { idx - w } else { idx }
+        })
+        .dedup()
+        .collect()
+}
+
+/// Find minimal t-mer at pos idx. Then select idx % w.
 fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     let l = s.len();
     let w = l - k + 1;
@@ -332,6 +369,7 @@ enum MinimizerType {
     MiniceptionNew { k0: usize },
     BiMinimizer,
     ModMinimizer { k0: usize },
+    LrMinimizer { k0: usize },
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -358,6 +396,7 @@ impl MinimizerType {
                 density(text, l, move |lmer| robust_biminimizer(lmer, k, last))
             }
             MinimizerType::ModMinimizer { k0 } => d(text_mod_minimizers(text, l, k, *k0)),
+            MinimizerType::LrMinimizer { k0 } => d(text_lr_minimizers(text, l, k, *k0)),
         }
     }
 
@@ -401,6 +440,16 @@ impl MinimizerType {
                 let k0_max = l;
                 (k0_min..=k0_max)
                     .map(|k0| MinimizerType::ModMinimizer { k0 })
+                    .collect()
+            }
+            MinimizerType::LrMinimizer { .. } => {
+                // k <= (l+k0+1)/2
+                // 2k <= l + k0 + 1
+                // 2k - l - 1 <= k0
+                let k0_min = 1.max((2 * k - 1).saturating_sub(l));
+                let k0_max = k;
+                (k0_min..=k0_max)
+                    .map(|k0| MinimizerType::LrMinimizer { k0 })
                     .collect()
             }
         }
@@ -456,6 +505,7 @@ fn main() {
                 MinimizerType::Miniception { k0: 0 },
                 MinimizerType::MiniceptionNew { k0: 0 },
                 // MinimizerType::BiMinimizer,
+                MinimizerType::LrMinimizer { k0: 0 },
                 MinimizerType::ModMinimizer { k0: 0 },
             ];
 
@@ -565,6 +615,23 @@ mod test {
                 for t in 1..=l {
                     let anchors = collect_anchors(&text, l, |lmer| mod_minimizer(lmer, k, t));
                     let minimizers = text_mod_minimizers(&text, l, k, t);
+                    assert_eq!(anchors, minimizers);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn lr_minimizers() {
+        let text = generate_random_string(1000, 4);
+        for k in 1..=20usize {
+            for w in 1..=20 {
+                let l = k + w - 1;
+                let k0_min = 1.max((2 * k - 1).saturating_sub(l));
+                let k0_max = k;
+                for t in k0_min..=k0_max {
+                    let anchors = collect_anchors(&text, l, |lmer| lr_minimizer(lmer, k, t));
+                    let minimizers = text_lr_minimizers(&text, l, k, t);
                     assert_eq!(anchors, minimizers);
                 }
             }
