@@ -152,6 +152,26 @@ fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     idx % w
 }
 
+fn text_mod_minimizers(text: &[u8], l: usize, k: usize, t: usize) -> Vec<usize> {
+    let mut q = IQ::new();
+    let w = l - k + 1;
+    let wt = l - t + 1;
+    let mut tmers = text.windows(t).enumerate();
+    for (j, tmer) in tmers.by_ref().take(wt - 1) {
+        q.push(j, h(tmer));
+    }
+    // i: position of lmer
+    // j: position of tmer
+    tmers
+        .enumerate()
+        .map(|(i, (j, tmer))| {
+            q.push(j, h(tmer));
+            i + (q.pop(i).unwrap().0 - i) % w
+        })
+        .dedup()
+        .collect()
+}
+
 fn collect_anchors(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> Vec<usize> {
     text.windows(l)
         .enumerate()
@@ -216,9 +236,7 @@ impl MinimizerType {
                 let last = &mut 0;
                 density(text, l, move |lmer| robust_biminimizer(lmer, k, last))
             }
-            MinimizerType::ModMinimizer { k0 } => {
-                density(text, l, |lmer| mod_minimizer(lmer, k, *k0))
-            }
+            MinimizerType::ModMinimizer { k0 } => d(text_mod_minimizers(text, l, k, *k0)),
         }
     }
 
@@ -413,6 +431,20 @@ mod test {
                 let anchors = collect_anchors(&text, l, |lmer| minimizer(lmer, k));
                 let minimizers = text_minimizers(&text, l, k);
                 assert_eq!(anchors, minimizers);
+            }
+        }
+    }
+    #[test]
+    fn mod_minimizers() {
+        let text = generate_random_string(1000, 4);
+        for k in 1..=10 {
+            for w in 1..=10 {
+                let l = k + w - 1;
+                for t in 1..=l {
+                    let anchors = collect_anchors(&text, l, |lmer| mod_minimizer(lmer, k, t));
+                    let minimizers = text_mod_minimizers(&text, l, k, t);
+                    assert_eq!(anchors, minimizers);
+                }
             }
         }
     }
