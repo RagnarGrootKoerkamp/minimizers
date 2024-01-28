@@ -1,5 +1,5 @@
 #![feature(exclusive_range_pattern, type_alias_impl_trait)]
-use std::{cmp::Reverse, io::Write, path::PathBuf, sync::Mutex};
+use std::{cmp::Reverse, collections::VecDeque, io::Write, path::PathBuf, sync::Mutex};
 
 use clap::Parser;
 use itertools::Itertools;
@@ -17,7 +17,6 @@ fn h(kmer: &[u8]) -> u64 {
     fxhash::hash64(kmer)
 }
 
-/// Rightmost element with minimal hash.
 fn minimizer(s: &[u8], k: usize) -> usize {
     assert!(k > 0);
     assert!(k <= s.len());
@@ -26,6 +25,25 @@ fn minimizer(s: &[u8], k: usize) -> usize {
         .min_by_key(|&(i, kmer)| (h(kmer), Reverse(i)))
         .unwrap()
         .0
+}
+
+fn text_minimizers(text: &[u8], l: usize, k: usize) -> Vec<usize> {
+    let mut q = IQ::new();
+    let w = l - k + 1;
+    let mut kmers = text.windows(k).enumerate();
+    for (j, kmer) in kmers.by_ref().take(w - 1) {
+        q.push(j, h(kmer));
+    }
+    // i: position of lmer
+    // j: position of kmer
+    kmers
+        .enumerate()
+        .map(|(i, (j, kmer))| {
+            q.push(j, h(kmer));
+            q.pop(i).unwrap().0
+        })
+        .dedup()
+        .collect()
 }
 
 fn bd_anchor(s: &[u8], r: usize) -> usize {
@@ -134,16 +152,8 @@ fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     idx % w
 }
 
-/// Compute the density of the sampling scheme.
-/// A function to select the minimal kmer from an lmer.
-/// The length of the slice is l.
-/// k must be bound by the function.
-///
-/// Must return a value in [0, l - k].
-fn density(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> f64 {
-    // Collect positions.
-    let mut anchors = text
-        .windows(l)
+fn collect_anchors(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> Vec<usize> {
+    text.windows(l)
         .enumerate()
         .map(|(i, w)| {
             let x = i + scheme(w);
@@ -151,10 +161,19 @@ fn density(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> f64
             x
         })
         .dedup()
-        .collect_vec();
+        .collect_vec()
+}
 
+/// Compute the density of the sampling scheme.
+/// A function to select the minimal kmer from an lmer.
+/// The length of the slice is l.
+/// k must be bound by the function.
+///
+/// Must return a value in [0, l - k].
+fn density(text: &[u8], l: usize, scheme: impl FnMut(&[u8]) -> usize) -> f64 {
+    let mut anchors = collect_anchors(text, l, scheme);
     // Dedup anchors to ensure valid results for non-forward schemes (bd-anchors).
-    // TODO: Analyzer non-forward schemes.
+    // TODO: Analyze non-forward schemes.
     anchors.sort();
     anchors.dedup();
 
@@ -185,8 +204,9 @@ struct Result {
 impl MinimizerType {
     #[inline(never)]
     fn density(&self, text: &[u8], l: usize, k: usize) -> f64 {
+        let d = |minis: Vec<usize>| minis.len() as f64 / text.windows(l).len() as f64;
         match self {
-            MinimizerType::Minimizer => density(text, l, |lmer| minimizer(lmer, k)),
+            MinimizerType::Minimizer => d(text_minimizers(text, l, k)),
             MinimizerType::BdAnchor { r } => density(text, l, |lmer| bd_anchor(lmer, *r)),
             MinimizerType::Miniception { k0 } => density(text, l, |lmer| miniception(lmer, k, *k0)),
             MinimizerType::MiniceptionNew { k0 } => {
@@ -304,7 +324,7 @@ fn main() {
 
             let ks = [
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                24, 28, 32, 34, 36, 38, 40, 42, 44, 46, 48, 56, 64, //80, 96, 112, 128,
+                24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64,
             ];
             let ws = [8, 16, 32];
             let kws = ks.into_iter().cartesian_product(ws).collect_vec();
@@ -339,6 +359,60 @@ fn main() {
                 let result_json = serde_json::to_string(&results).unwrap();
                 let mut file = std::fs::File::create(output).unwrap();
                 file.write_all(result_json.as_bytes()).unwrap();
+            }
+        }
+    }
+}
+
+/// For increasing timestamps, store increasing values.
+struct IQ<K: Ord> {
+    q: VecDeque<(usize, K)>,
+}
+
+impl<K: Ord> IQ<K>
+where
+    K: Copy,
+{
+    fn new() -> Self {
+        Self { q: VecDeque::new() }
+    }
+
+    fn push(&mut self, t: usize, k: K) {
+        while let Some(&back) = self.q.back() {
+            if back.1 >= k {
+                self.q.pop_back();
+            } else {
+                break;
+            }
+        }
+        self.q.push_back((t, k));
+    }
+
+    /// Return the minimal element with timestamp >= t.
+    fn pop(&mut self, t: usize) -> Option<&(usize, K)> {
+        while let Some(&front) = self.q.front() {
+            if front.0 < t {
+                self.q.pop_front();
+            } else {
+                break;
+            }
+        }
+        self.q.front()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn minimizers() {
+        let text = generate_random_string(1000, 4);
+        for k in 1..=10 {
+            for w in 1..=10 {
+                let l = k + w - 1;
+                let anchors = collect_anchors(&text, l, |lmer| minimizer(lmer, k));
+                let minimizers = text_minimizers(&text, l, k);
+                assert_eq!(anchors, minimizers);
             }
         }
     }
