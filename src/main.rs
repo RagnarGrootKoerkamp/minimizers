@@ -153,11 +153,10 @@ fn density(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> f64
         .dedup()
         .collect_vec();
 
-    // eprintln!("{anchors:?}");
     // Dedup anchors to ensure valid results for non-forward schemes (bd-anchors).
+    // TODO: Analyzer non-forward schemes.
     anchors.sort();
     anchors.dedup();
-    // eprintln!("{anchors:?}");
 
     anchors.len() as f64 / text.windows(l).len() as f64
 }
