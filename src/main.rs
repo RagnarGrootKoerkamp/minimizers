@@ -1,5 +1,5 @@
 #![feature(exclusive_range_pattern, type_alias_impl_trait)]
-use std::{cmp::Reverse, sync::Mutex};
+use std::{cmp::Reverse, io::Write, path::PathBuf, sync::Mutex};
 
 use clap::Parser;
 use itertools::Itertools;
@@ -166,7 +166,7 @@ fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     let idx = s
         .windows(t)
         .enumerate()
-        .min_by_key(|&(i, w)| (fxhash::hash64(w), Reverse(i)))
+        .min_by_key(|&(i, w)| (h(w), Reverse(i)))
         .unwrap()
         .0;
     idx % w
@@ -224,6 +224,7 @@ struct Result {
 }
 
 impl MinimizerType {
+    #[inline(never)]
     fn density(&self, text: &[u8], l: usize, k: usize) -> f64 {
         match self {
             MinimizerType::Minimizer => density(text, l, |lmer| minimizer(lmer, k)),
@@ -311,7 +312,11 @@ enum Command {
         #[clap(subcommand)]
         tp: MinimizerType,
     },
-    Eval,
+    Eval {
+        /// Write to file.
+        #[clap(short, long)]
+        output: Option<PathBuf>,
+    },
 }
 
 /// Print expected and measured densities for different l and r.
@@ -337,15 +342,12 @@ fn main() {
             let d = tp.density(text, l, k);
             eprintln!("  Density: {:.3}", d);
         }
-        Command::Eval => {
+        Command::Eval { output } => {
             let base_types = [
                 MinimizerType::Minimizer,
                 // MinimizerType::RobustMinimizer,
                 // MinimizerType::BdAnchor { r: 0 },
                 MinimizerType::Miniception { k0: 0 },
-                // MinimizerType::Miniception2 { k0: 0 }, // same as RM
-                // MinimizerType::Miniception3 { k0: 0 }, // Worse than MC5 for small k
-                // MinimizerType::Miniception4 { k0: 0 }, // worse than MC5 for large k
                 MinimizerType::MiniceptionNew { k0: 0 },
                 // MinimizerType::BiMinimizer,
                 // MinimizerType::BiMinimizerBot,
@@ -387,8 +389,11 @@ fn main() {
                 }
             });
 
-            let result_json = serde_json::to_string(&results).unwrap();
-            println!("{}", result_json);
+            if let Some(output) = output {
+                let result_json = serde_json::to_string(&results).unwrap();
+                let mut file = std::fs::File::create(output).unwrap();
+                file.write_all(result_json.as_bytes()).unwrap();
+            }
         }
     }
 }
