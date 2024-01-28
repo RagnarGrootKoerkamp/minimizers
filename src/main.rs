@@ -28,22 +28,6 @@ fn minimizer(s: &[u8], k: usize) -> usize {
         .0
 }
 
-/// Rightmost element with minimal hash, or last if possible.
-fn robust_minimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
-    assert!(k <= s.len());
-    let (i, kmer) = s
-        .windows(k)
-        .enumerate()
-        .min_by_key(|&(i, kmer)| (h(kmer), Reverse(i)))
-        .unwrap();
-    if *last > 0 && h(&s[*last - 1..*last - 1 + k]) == h(kmer) {
-        *last -= 1;
-    } else {
-        *last = i;
-    }
-    *last
-}
-
 fn bd_anchor(s: &[u8], r: usize) -> usize {
     assert!(r <= s.len());
     let mut best = 0;
@@ -182,7 +166,6 @@ fn density(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> f64
 #[serde(tag = "minimizer_type")]
 enum MinimizerType {
     Minimizer,
-    RobustMinimizer,
     BdAnchor { r: usize },
     Miniception { k0: usize },
     MiniceptionNew { k0: usize },
@@ -205,10 +188,6 @@ impl MinimizerType {
     fn density(&self, text: &[u8], l: usize, k: usize) -> f64 {
         match self {
             MinimizerType::Minimizer => density(text, l, |lmer| minimizer(lmer, k)),
-            MinimizerType::RobustMinimizer => {
-                let last = &mut 0;
-                density(text, l, |lmer| robust_minimizer(lmer, k, last))
-            }
             MinimizerType::BdAnchor { r } => density(text, l, |lmer| bd_anchor(lmer, *r)),
             MinimizerType::Miniception { k0 } => density(text, l, |lmer| miniception(lmer, k, *k0)),
             MinimizerType::MiniceptionNew { k0 } => {
@@ -226,9 +205,7 @@ impl MinimizerType {
 
     fn try_params(&self, l: usize, k: usize) -> Vec<Self> {
         match self {
-            MinimizerType::Minimizer
-            | MinimizerType::RobustMinimizer
-            | MinimizerType::BiMinimizer => vec![*self],
+            MinimizerType::Minimizer | MinimizerType::BiMinimizer => vec![*self],
             MinimizerType::BdAnchor { .. } => {
                 let r_max = k;
                 (0.min(r_max)..=10.min(r_max))
@@ -317,7 +294,6 @@ fn main() {
         Command::Eval { output } => {
             let base_types = [
                 MinimizerType::Minimizer,
-                // MinimizerType::RobustMinimizer,
                 // MinimizerType::BdAnchor { r: 0 },
                 MinimizerType::Miniception { k0: 0 },
                 MinimizerType::MiniceptionNew { k0: 0 },
