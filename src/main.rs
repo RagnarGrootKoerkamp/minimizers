@@ -437,7 +437,7 @@ enum MinimizerType {
     DoubleDecyclingMinimizer,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct Result {
     sigma: usize,
     k: usize,
@@ -445,15 +445,29 @@ struct Result {
     l: usize,
     tp: MinimizerType,
     density: f64,
+    dists: Vec<f64>,
 }
 
 /// TODO: Analyze non-forward schemes.
 impl MinimizerType {
+    /// Returns density and scaled distribution of distances.
     #[inline(never)]
-    fn density(&self, text: &[u8], w: usize, k: usize) -> f64 {
+    fn density(&self, text: &[u8], w: usize, k: usize) -> (f64, Vec<f64>) {
         let l = w + k - 1;
         let poss = self.run(text, w, k);
-        poss.len() as f64 / text.windows(l).len() as f64
+
+        let density = poss.len() as f64 / text.windows(l).len() as f64;
+
+        let mut dists = vec![0; w + 1];
+        for (p1, p2) in poss.iter().tuple_windows() {
+            dists[p2 - p1] += 1;
+        }
+        let dists = dists
+            .into_iter()
+            .map(|c| (c * k) as f64 / poss.len() as f64)
+            .collect();
+
+        (density, dists)
     }
 
     fn run(&self, text: &[u8], w: usize, k: usize) -> Vec<usize> {
@@ -592,8 +606,9 @@ fn main() {
     match args.command {
         Command::Run { tp, w, k } => {
             eprintln!("Running {tp:?}:");
-            let d = tp.density(text, w, k);
-            eprintln!("  Density: {:.3}", d);
+            let (d, dists) = tp.density(text, w, k);
+            eprintln!("  Density: {d:.3}");
+            eprintln!("  Dists  : {dists:?}");
         }
         Command::Eval { output } => {
             let base_types = [
@@ -621,29 +636,29 @@ fn main() {
                 let l = w + k - 1;
                 for tp in base_types.iter() {
                     let tps = &tp.try_params(w, k);
-                    if tps.is_empty() {
-                        continue;
-                    }
-                    let (d, tp) = tps
+                    let Some(((density, dists), tp)) = tps
                         .iter()
                         .map(|tp| (tp.density(text, w, k), tp))
-                        .min_by(|&(ld, _), &(rd, _)| {
-                            if ld < rd {
+                        .min_by(|(ld, _), (rd, _)| {
+                            if ld.0 < rd.0 {
                                 std::cmp::Ordering::Less
                             } else {
                                 std::cmp::Ordering::Greater
                             }
                         })
-                        .unwrap();
+                    else {
+                        continue;
+                    };
                     results.lock().unwrap().push(Result {
                         sigma: args.sigma,
                         k,
                         w,
                         l,
                         tp: *tp,
-                        density: d,
+                        density,
+                        dists,
                     });
-                    eprintln!("k={k} w={w} l={l} tp={tp:?} d={d:.3}",);
+                    eprintln!("k={k} w={w} l={l} tp={tp:?} d={density:.3}",);
                 }
             });
 
