@@ -407,6 +407,7 @@ fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
         .0
 }
 
+/// scheme must return a value in [0, l - k].
 fn collect_anchors(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> Vec<usize> {
     text.windows(l)
         .enumerate()
@@ -417,22 +418,6 @@ fn collect_anchors(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize
         })
         .dedup()
         .collect_vec()
-}
-
-/// Compute the density of the sampling scheme.
-/// A function to select the minimal kmer from an lmer.
-/// The length of the slice is l.
-/// k must be bound by the function.
-///
-/// Must return a value in [0, l - k].
-fn density(text: &[u8], l: usize, scheme: impl FnMut(&[u8]) -> usize) -> f64 {
-    let mut anchors = collect_anchors(text, l, scheme);
-    // Dedup anchors to ensure valid results for non-forward schemes (bd-anchors).
-    // TODO: Analyze non-forward schemes.
-    anchors.sort();
-    anchors.dedup();
-
-    anchors.len() as f64 / text.windows(l).len() as f64
 }
 
 #[derive(Clone, Copy, clap::Subcommand, Debug, Serialize)]
@@ -460,29 +445,36 @@ struct Result {
     density: f64,
 }
 
+/// TODO: Analyze non-forward schemes.
 impl MinimizerType {
     #[inline(never)]
     fn density(&self, text: &[u8], l: usize, k: usize) -> f64 {
-        let d = |minis: Vec<usize>| minis.len() as f64 / text.windows(l).len() as f64;
+        let poss = self.run(text, l, k);
+        poss.len() as f64 / text.windows(l).len() as f64
+    }
+
+    fn run(&self, text: &[u8], l: usize, k: usize) -> Vec<usize> {
         match self {
-            MinimizerType::Minimizer => d(text_minimizers(text, l, k)),
-            MinimizerType::BdAnchor { r } => density(text, l, |lmer| bd_anchor(lmer, *r)),
-            MinimizerType::Miniception { k0 } => d(text_miniception(text, l, k, *k0)),
-            MinimizerType::MiniceptionNew { k0 } => d(text_miniception_new(text, l, k, *k0)),
+            MinimizerType::Minimizer => text_minimizers(text, l, k),
+            MinimizerType::BdAnchor { r } => collect_anchors(text, l, |lmer| bd_anchor(lmer, *r)),
+            MinimizerType::Miniception { k0 } => text_miniception(text, l, k, *k0),
+            MinimizerType::MiniceptionNew { k0 } => text_miniception_new(text, l, k, *k0),
             MinimizerType::BiMinimizer => {
                 let last = &mut 0;
-                density(text, l, move |lmer| robust_biminimizer(lmer, k, last))
+                collect_anchors(text, l, move |lmer| robust_biminimizer(lmer, k, last))
             }
-            MinimizerType::ModMinimizer { k0 } => d(text_mod_minimizers(text, l, k, *k0)),
-            MinimizerType::LrMinimizer { k0 } => d(text_lr_minimizers(text, l, k, *k0)),
-            MinimizerType::RotMinimizer => density(text, l, move |lmer| rot_minimizer(lmer, k)),
+            MinimizerType::ModMinimizer { k0 } => text_mod_minimizers(text, l, k, *k0),
+            MinimizerType::LrMinimizer { k0 } => text_lr_minimizers(text, l, k, *k0),
+            MinimizerType::RotMinimizer => {
+                collect_anchors(text, l, move |lmer| rot_minimizer(lmer, k))
+            }
             MinimizerType::DecyclingMinimizer => {
                 let cs = decycling_minimizer_init(k);
-                density(text, l, move |lmer| decycling_minimizer(lmer, k, &cs))
+                collect_anchors(text, l, move |lmer| decycling_minimizer(lmer, k, &cs))
             }
             MinimizerType::DoubleDecyclingMinimizer => {
                 let cs = decycling_minimizer_init(k);
-                density(text, l, move |lmer| {
+                collect_anchors(text, l, move |lmer| {
                     double_decycling_minimizer(lmer, k, &cs)
                 })
             }
