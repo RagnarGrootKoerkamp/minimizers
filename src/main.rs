@@ -1,5 +1,8 @@
 #![feature(exclusive_range_pattern, type_alias_impl_trait)]
-use std::{cmp::Reverse, collections::VecDeque, io::Write, path::PathBuf, sync::Mutex};
+use std::{
+    cmp::Reverse, collections::VecDeque, f32::consts::PI, io::Write, iter::zip, path::PathBuf,
+    sync::Mutex,
+};
 
 use clap::Parser;
 use itertools::Itertools;
@@ -332,6 +335,78 @@ fn text_mod_minimizers(text: &[u8], l: usize, k: usize, t: usize) -> Vec<usize> 
         .collect()
 }
 
+/// Asymptotic (in k) optimal minimizers:
+/// - Assume k=x*w; sum all i mod w positions.
+/// - Take minimizer if first coordinate is max or at most sigma away from max.
+/// - If multiple, take random.
+///
+/// - Ignore for k < w.
+/// - Ignore trailing chars.
+///
+/// Simplified:
+/// - For all k-mers compute the rotational sum of k/w w-strided values.
+/// - Take k-mer that maximizes the first coordinate.
+fn rot_minimizer(s: &[u8], k: usize) -> usize {
+    let w = s.len() - k + 1;
+    assert!(k >= w);
+    (0..=s.len() - k)
+        .max_by_key(|&i| {
+            s[i..i + k]
+                .iter()
+                .step_by(w)
+                .map(|&x| x as u64)
+                .sum::<u64>()
+        })
+        .unwrap()
+}
+
+fn decycling_minimizer_init(k: usize) -> Vec<f32> {
+    // (0..k).map(|i| (i as f32).sin()).collect()
+    (0..k)
+        .map(|i| (i as f32 / k as f32 * 2. * PI).sin())
+        .collect()
+}
+
+/// Check if this is in the decyling set.
+/// Note that we ignore the edge case where ix=0 and ix2=0.
+fn is_in_decycling_set(kmer: &[u8], cs: &Vec<f32>) -> bool {
+    let ix = zip(kmer, cs).map(|(&x, c)| x as f32 * c).sum::<f32>();
+    let ix2 = *kmer.last().unwrap() as f32 * cs[0]
+        + zip(kmer, &cs[1..]).map(|(&x, c)| x as f32 * c).sum::<f32>();
+    ix > 0. && ix2 <= 0.
+}
+fn is_in_double_decycling_set(kmer: &[u8], cs: &Vec<f32>) -> bool {
+    let ix = zip(kmer, cs).map(|(&x, c)| x as f32 * c).sum::<f32>();
+    let ix2 = *kmer.last().unwrap() as f32 * cs[0]
+        + zip(kmer, &cs[1..]).map(|(&x, c)| x as f32 * c).sum::<f32>();
+    ix < 0. && ix2 >= 0.
+}
+
+/// Decycling minimizer using Mykkelvelt embedding
+fn decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
+    s.windows(k)
+        .enumerate()
+        .min_by_key(|&(i, kmer)| (!is_in_decycling_set(kmer, cs), h(kmer), Reverse(i)))
+        .unwrap()
+        .0
+}
+
+/// Decycling minimizer using Mykkelvelt embedding
+fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
+    s.windows(k)
+        .enumerate()
+        .min_by_key(|&(i, kmer)| {
+            (
+                !is_in_decycling_set(kmer, cs),
+                !is_in_double_decycling_set(kmer, cs),
+                h(kmer),
+                Reverse(i),
+            )
+        })
+        .unwrap()
+        .0
+}
+
 fn collect_anchors(text: &[u8], l: usize, mut scheme: impl FnMut(&[u8]) -> usize) -> Vec<usize> {
     text.windows(l)
         .enumerate()
@@ -370,6 +445,9 @@ enum MinimizerType {
     BiMinimizer,
     ModMinimizer { k0: usize },
     LrMinimizer { k0: usize },
+    RotMinimizer,
+    DecyclingMinimizer,
+    DoubleDecyclingMinimizer,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -397,12 +475,29 @@ impl MinimizerType {
             }
             MinimizerType::ModMinimizer { k0 } => d(text_mod_minimizers(text, l, k, *k0)),
             MinimizerType::LrMinimizer { k0 } => d(text_lr_minimizers(text, l, k, *k0)),
+            MinimizerType::RotMinimizer => density(text, l, move |lmer| rot_minimizer(lmer, k)),
+            MinimizerType::DecyclingMinimizer => {
+                let cs = decycling_minimizer_init(k);
+                density(text, l, move |lmer| decycling_minimizer(lmer, k, &cs))
+            }
+            MinimizerType::DoubleDecyclingMinimizer => {
+                let cs = decycling_minimizer_init(k);
+                density(text, l, move |lmer| {
+                    double_decycling_minimizer(lmer, k, &cs)
+                })
+            }
         }
     }
 
     fn try_params(&self, l: usize, k: usize) -> Vec<Self> {
+        let w = l - k + 1;
         match self {
-            MinimizerType::Minimizer | MinimizerType::BiMinimizer => vec![*self],
+            MinimizerType::Minimizer
+            | MinimizerType::BiMinimizer
+            | MinimizerType::DecyclingMinimizer
+            | MinimizerType::DoubleDecyclingMinimizer => {
+                vec![*self]
+            }
             MinimizerType::BdAnchor { .. } => {
                 let r_max = k;
                 (0.min(r_max)..=10.min(r_max))
@@ -451,6 +546,13 @@ impl MinimizerType {
                 (k0_min..=k0_max)
                     .map(|k0| MinimizerType::LrMinimizer { k0 })
                     .collect()
+            }
+            MinimizerType::RotMinimizer => {
+                if k > w {
+                    vec![*self]
+                } else {
+                    vec![]
+                }
             }
         }
     }
@@ -507,6 +609,9 @@ fn main() {
                 // MinimizerType::BiMinimizer,
                 MinimizerType::LrMinimizer { k0: 0 },
                 MinimizerType::ModMinimizer { k0: 0 },
+                MinimizerType::RotMinimizer,
+                MinimizerType::DecyclingMinimizer,
+                MinimizerType::DoubleDecyclingMinimizer,
             ];
 
             let results = Mutex::new(vec![]);
@@ -521,6 +626,9 @@ fn main() {
                 let l = k + w - 1;
                 for tp in base_types.iter() {
                     let tps = &tp.try_params(l, k);
+                    if tps.is_empty() {
+                        continue;
+                    }
                     let (d, tp) = tps
                         .iter()
                         .map(|tp| (tp.density(text, l, k), tp))

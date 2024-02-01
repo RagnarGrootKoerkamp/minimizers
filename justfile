@@ -1,6 +1,10 @@
 eval:
-    cargo run -r -- -n 5000000 -s 4 eval -o data/results_4.json
-    cargo run -r -- -n 5000000 -s 256 eval -o data/results_256.json
+    # cargo run -r -- -n 1000000 -s 4 eval -o data/results_4.json
+    cargo run -r -- -n 1000000 -s 256 eval -o data/results_256.json
+
+fast:
+    # cargo run -r -- -n 500000 -s 4 eval -o data/results_4.json
+    cargo run -r -- -n 500000 -s 256 eval -o data/results_256.json
 
 run:
     cargo run -r -- -n 100000 -s 256 eval
