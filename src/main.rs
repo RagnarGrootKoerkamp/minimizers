@@ -1,7 +1,12 @@
 #![feature(exclusive_range_pattern, type_alias_impl_trait)]
 use std::{
-    cmp::Reverse, collections::VecDeque, f32::consts::PI, io::Write, iter::zip, path::PathBuf,
-    sync::Mutex,
+    cmp::Reverse,
+    collections::VecDeque,
+    f32::consts::PI,
+    io::Write,
+    iter::zip,
+    path::PathBuf,
+    sync::{atomic::AtomicUsize, Mutex},
 };
 
 use clap::Parser;
@@ -30,7 +35,7 @@ fn minimizer(s: &[u8], k: usize) -> usize {
         .0
 }
 
-fn text_minimizers(text: &[u8], w: usize, k: usize) -> Vec<usize> {
+fn text_minimizers<'a>(text: &'a [u8], w: usize, k: usize) -> impl Iterator<Item = usize> + 'a {
     let mut q = IQ::new();
     let mut kmers = text.windows(k).enumerate();
     for (j, kmer) in kmers.by_ref().take(w - 1) {
@@ -38,14 +43,10 @@ fn text_minimizers(text: &[u8], w: usize, k: usize) -> Vec<usize> {
     }
     // i: position of lmer
     // j: position of kmer
-    kmers
-        .enumerate()
-        .map(|(i, (j, kmer))| {
-            q.push(j, h(kmer));
-            q.pop(i).unwrap().0
-        })
-        .dedup()
-        .collect()
+    kmers.enumerate().map(move |(i, (j, kmer))| {
+        q.push(j, h(kmer));
+        q.pop(i).unwrap().0
+    })
 }
 
 fn bd_anchor(s: &[u8], r: usize) -> usize {
@@ -87,7 +88,12 @@ fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
         .0
 }
 
-fn text_miniception(text: &[u8], w: usize, k: usize, k0: usize) -> Vec<usize> {
+fn text_miniception<'a>(
+    text: &'a [u8],
+    w: usize,
+    k: usize,
+    k0: usize,
+) -> impl Iterator<Item = usize> + 'a {
     // The number of k0-mers in a kmer.
     let w0 = k - k0;
     assert!(k0 >= k.saturating_sub(w));
@@ -119,19 +125,15 @@ fn text_miniception(text: &[u8], w: usize, k: usize, k0: usize) -> Vec<usize> {
     }
 
     // 3: Iterate l-mers.
-    kmers
-        .enumerate()
-        .map(|(i, ((j, kmer), (j0, k0mer)))| {
-            q0.push(j0, h(k0mer));
-            let min_pos = q0.pop(j).unwrap().0;
-            if min_pos == j || min_pos == j + w0 {
-                q.push(j, h(kmer));
-            }
+    kmers.enumerate().map(move |(i, ((j, kmer), (j0, k0mer)))| {
+        q0.push(j0, h(k0mer));
+        let min_pos = q0.pop(j).unwrap().0;
+        if min_pos == j || min_pos == j + w0 {
+            q.push(j, h(kmer));
+        }
 
-            q.pop(i).unwrap().0
-        })
-        .dedup()
-        .collect()
+        q.pop(i).unwrap().0
+    })
 }
 
 /// Sort filtered kmers by:
@@ -168,7 +170,12 @@ fn miniception_new(s: &[u8], k: usize, k0: usize) -> usize {
 }
 
 // TODO: dedup
-fn text_miniception_new(text: &[u8], w: usize, k: usize, k0: usize) -> Vec<usize> {
+fn text_miniception_new<'a>(
+    text: &'a [u8],
+    w: usize,
+    k: usize,
+    k0: usize,
+) -> impl Iterator<Item = usize> + 'a {
     // The number of k0-mers in a kmer.
     let w0 = k - k0;
     assert!(k0 >= k.saturating_sub(w));
@@ -202,19 +209,15 @@ fn text_miniception_new(text: &[u8], w: usize, k: usize, k0: usize) -> Vec<usize
     }
 
     // 3: Iterate l-mers.
-    kmers
-        .enumerate()
-        .map(|(i, ((j, kmer), (j0, k0mer)))| {
-            q0.push(j0, h(k0mer));
-            let min_pos = q0.pop(j).unwrap().0;
-            if min_pos == j || min_pos == j + w0 {
-                q.push(j, (min_pos == j, h(&text[min_pos..min_pos + k0]), h(kmer)));
-            }
+    kmers.enumerate().map(move |(i, ((j, kmer), (j0, k0mer)))| {
+        q0.push(j0, h(k0mer));
+        let min_pos = q0.pop(j).unwrap().0;
+        if min_pos == j || min_pos == j + w0 {
+            q.push(j, (min_pos == j, h(&text[min_pos..min_pos + k0]), h(kmer)));
+        }
 
-            q.pop(i).unwrap().0
-        })
-        .dedup()
-        .collect()
+        q.pop(i).unwrap().0
+    })
 }
 
 fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
@@ -253,7 +256,12 @@ fn lr_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     i
 }
 
-fn text_lr_minimizers(text: &[u8], w: usize, k: usize, t: usize) -> Vec<usize> {
+fn text_lr_minimizers<'a>(
+    text: &'a [u8],
+    w: usize,
+    k: usize,
+    t: usize,
+) -> impl Iterator<Item = usize> + 'a {
     let mut q = IQ::new();
     let l = w + k - 1;
     let wt = l - t + 1;
@@ -264,15 +272,11 @@ fn text_lr_minimizers(text: &[u8], w: usize, k: usize, t: usize) -> Vec<usize> {
     }
     // i: position of lmer
     // j: position of tmer
-    tmers
-        .enumerate()
-        .map(|(i, (j, tmer))| {
-            q.push(j, h(tmer));
-            let idx = q.pop(i).unwrap().0 - i;
-            i + if idx >= w { idx - w } else { idx }
-        })
-        .dedup()
-        .collect()
+    tmers.enumerate().map(move |(i, (j, tmer))| {
+        q.push(j, h(tmer));
+        let idx = q.pop(i).unwrap().0 - i;
+        i + if idx >= w { idx - w } else { idx }
+    })
 }
 
 /// Find minimal t-mer at pos idx. Then select idx % w.
@@ -309,7 +313,12 @@ impl FM32 {
     }
 }
 
-fn text_mod_minimizers(text: &[u8], w: usize, k: usize, t: usize) -> Vec<usize> {
+fn text_mod_minimizers<'a>(
+    text: &'a [u8],
+    w: usize,
+    k: usize,
+    t: usize,
+) -> impl Iterator<Item = usize> + 'a {
     let mut q = IQ::new();
     let l = w + k - 1;
     let wt = l - t + 1;
@@ -322,14 +331,10 @@ fn text_mod_minimizers(text: &[u8], w: usize, k: usize, t: usize) -> Vec<usize> 
     }
     // i: position of lmer
     // j: position of tmer
-    tmers
-        .enumerate()
-        .map(|(i, (j, tmer))| {
-            q.push(j, h(tmer));
-            i + fastmod_w.reduce(q.pop(i).unwrap().0 - i)
-        })
-        .dedup()
-        .collect()
+    tmers.enumerate().map(move |(i, (j, tmer))| {
+        q.push(j, h(tmer));
+        i + fastmod_w.reduce(q.pop(i).unwrap().0 - i)
+    })
 }
 
 /// Asymptotic (in k) optimal minimizers:
@@ -405,21 +410,46 @@ fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
 }
 
 /// scheme must return a value in [0, l - k].
-fn collect_anchors(
-    text: &[u8],
+///
+/// Returns anchors and position distribution.
+fn stream<'a>(
+    text: &'a [u8],
     w: usize,
     k: usize,
-    mut scheme: impl FnMut(&[u8]) -> usize,
-) -> Vec<usize> {
+    mut scheme: impl FnMut(&[u8]) -> usize + 'a,
+) -> impl Iterator<Item = usize> + 'a {
     text.windows(w + k - 1)
         .enumerate()
-        .map(|(i, w)| {
-            let x = i + scheme(w);
-            // eprintln!(" {x:>4}");
-            x
-        })
-        .dedup()
-        .collect_vec()
+        .map(move |(i, w)| i + scheme(w))
+}
+
+/// Returns:
+/// - density
+/// - position distribution
+/// - distance distribution
+fn collect_stats(w: usize, it: impl Iterator<Item = usize>) -> (f64, Vec<f64>, Vec<f64>) {
+    let mut n = 0;
+    let mut anchors = 0;
+    let mut ps = vec![0; w];
+    let mut ds = vec![0; 2 * w + 1];
+    let mut last = 0;
+    for (i, idx) in it.enumerate() {
+        assert!(i <= idx && idx < i + w);
+        n += 1;
+        ps[idx - i] += 1;
+        if idx != last {
+            anchors += 1;
+            ds[w + idx - last] += 1;
+            last = idx;
+        }
+    }
+    let density = anchors as f64 / n as f64;
+    let ps = ps.into_iter().map(|c| (c * w) as f64 / n as f64).collect();
+    let ds = ds
+        .into_iter()
+        .map(|d| (d * w) as f64 / anchors as f64)
+        .collect();
+    (density, ps, ds)
 }
 
 #[derive(Clone, Copy, clap::Subcommand, Debug, Serialize)]
@@ -445,57 +475,56 @@ struct Result {
     l: usize,
     tp: MinimizerType,
     density: f64,
+    positions: Vec<f64>,
     dists: Vec<f64>,
 }
 
 /// TODO: Analyze non-forward schemes.
 impl MinimizerType {
-    /// Returns density and scaled distribution of distances.
     #[inline(never)]
-    fn density(&self, text: &[u8], w: usize, k: usize) -> (f64, Vec<f64>) {
-        let l = w + k - 1;
-        let poss = self.run(text, w, k);
-
-        let density = poss.len() as f64 / text.windows(l).len() as f64;
-
-        let mut dists = vec![0; w + 1];
-        for (p1, p2) in poss.iter().tuple_windows() {
-            dists[p2 - p1] += 1;
-        }
-        let dists = dists
-            .into_iter()
-            .map(|c| (c * k) as f64 / poss.len() as f64)
-            .collect();
-
-        (density, dists)
-    }
-
-    fn run(&self, text: &[u8], w: usize, k: usize) -> Vec<usize> {
+    fn stats(&self, text: &[u8], w: usize, k: usize) -> (f64, Vec<f64>, Vec<f64>) {
         match self {
-            MinimizerType::Minimizer => text_minimizers(text, w, k),
+            MinimizerType::Minimizer => collect_stats(w, text_minimizers(text, w, k)),
             MinimizerType::BdAnchor { r } => {
-                collect_anchors(text, w, k, |lmer| bd_anchor(lmer, *r))
+                collect_stats(w, stream(text, w, k, |lmer| bd_anchor(lmer, *r)))
             }
-            MinimizerType::Miniception { k0 } => text_miniception(text, w, k, *k0),
-            MinimizerType::MiniceptionNew { k0 } => text_miniception_new(text, w, k, *k0),
+            MinimizerType::Miniception { k0 } => {
+                collect_stats(w, text_miniception(text, w, k, *k0))
+            }
+            MinimizerType::MiniceptionNew { k0 } => {
+                collect_stats(w, text_miniception_new(text, w, k, *k0))
+            }
             MinimizerType::BiMinimizer => {
                 let last = &mut 0;
-                collect_anchors(text, w, k, move |lmer| robust_biminimizer(lmer, k, last))
+                collect_stats(
+                    w,
+                    stream(text, w, k, move |lmer| robust_biminimizer(lmer, k, last)),
+                )
             }
-            MinimizerType::ModMinimizer { k0 } => text_mod_minimizers(text, w, k, *k0),
-            MinimizerType::LrMinimizer { k0 } => text_lr_minimizers(text, w, k, *k0),
+            MinimizerType::ModMinimizer { k0 } => {
+                collect_stats(w, text_mod_minimizers(text, w, k, *k0))
+            }
+            MinimizerType::LrMinimizer { k0 } => {
+                collect_stats(w, text_lr_minimizers(text, w, k, *k0))
+            }
             MinimizerType::RotMinimizer => {
-                collect_anchors(text, w, k, move |lmer| rot_minimizer(lmer, k))
+                collect_stats(w, stream(text, w, k, move |lmer| rot_minimizer(lmer, k)))
             }
             MinimizerType::DecyclingMinimizer => {
                 let cs = decycling_minimizer_init(k);
-                collect_anchors(text, w, k, move |lmer| decycling_minimizer(lmer, k, &cs))
+                collect_stats(
+                    w,
+                    stream(text, w, k, move |lmer| decycling_minimizer(lmer, k, &cs)),
+                )
             }
             MinimizerType::DoubleDecyclingMinimizer => {
                 let cs = decycling_minimizer_init(k);
-                collect_anchors(text, w, k, move |lmer| {
-                    double_decycling_minimizer(lmer, k, &cs)
-                })
+                collect_stats(
+                    w,
+                    stream(text, w, k, move |lmer| {
+                        double_decycling_minimizer(lmer, k, &cs)
+                    }),
+                )
             }
         }
     }
@@ -583,6 +612,9 @@ enum Command {
         /// Write to file.
         #[clap(short, long)]
         output: Option<PathBuf>,
+        /// Run in statistics mode.
+        #[clap(short, long)]
+        stats: bool,
     },
 }
 
@@ -606,11 +638,12 @@ fn main() {
     match args.command {
         Command::Run { tp, w, k } => {
             eprintln!("Running {tp:?}:");
-            let (d, dists) = tp.density(text, w, k);
+            let (d, ps, ds) = tp.stats(text, w, k);
             eprintln!("  Density: {d:.3}");
-            eprintln!("  Dists  : {dists:?}");
+            eprintln!("  Poss   : {ps:?}");
+            eprintln!("  Dists  : {ds:?}");
         }
-        Command::Eval { output } => {
+        Command::Eval { output, stats } => {
             let base_types = [
                 MinimizerType::Minimizer,
                 // MinimizerType::BdAnchor { r: 0 },
@@ -626,41 +659,57 @@ fn main() {
 
             let results = Mutex::new(vec![]);
 
-            let ks = [
-                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64,
-            ];
-            let ws = [8, 16, 32];
-            let kws = ks.into_iter().cartesian_product(ws).collect_vec();
-            kws.par_iter().for_each(|&(k, w)| {
+            let ks = if stats {
+                &[4, 8, 16, 32][..]
+            } else {
+                &[
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64,
+                ][..]
+            };
+            let ws = if stats {
+                &[8, 16, 32, 64][..]
+            } else {
+                &[8, 16, 32][..]
+            };
+            let k_w_tp = ks
+                .iter()
+                .cartesian_product(ws)
+                .cartesian_product(base_types)
+                .collect_vec();
+            let done = AtomicUsize::new(0);
+            let total = k_w_tp.len();
+            k_w_tp.par_iter().for_each(|&((&k, &w), tp)| {
                 let l = w + k - 1;
-                for tp in base_types.iter() {
-                    let tps = &tp.try_params(w, k);
-                    let Some(((density, dists), tp)) = tps
-                        .iter()
-                        .map(|tp| (tp.density(text, w, k), tp))
-                        .min_by(|(ld, _), (rd, _)| {
-                            if ld.0 < rd.0 {
-                                std::cmp::Ordering::Less
-                            } else {
-                                std::cmp::Ordering::Greater
-                            }
-                        })
-                    else {
-                        continue;
-                    };
-                    results.lock().unwrap().push(Result {
-                        sigma: args.sigma,
-                        k,
-                        w,
-                        l,
-                        tp: *tp,
-                        density,
-                        dists,
-                    });
-                    eprintln!("k={k} w={w} l={l} tp={tp:?} d={density:.3}",);
-                }
+                let tps = &tp.try_params(w, k);
+                let Some(((density, positions, dists), tp)) = tps
+                    .iter()
+                    .map(|tp| (tp.stats(text, w, k), tp))
+                    .min_by(|(ld, _), (rd, _)| {
+                        if ld.0 < rd.0 {
+                            std::cmp::Ordering::Less
+                        } else {
+                            std::cmp::Ordering::Greater
+                        }
+                    })
+                else {
+                    done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    return;
+                };
+                results.lock().unwrap().push(Result {
+                    sigma: args.sigma,
+                    k,
+                    w,
+                    l,
+                    tp: *tp,
+                    density,
+                    positions,
+                    dists,
+                });
+                let done = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                eprint!("{done:>3}/{total:>3}: k={k} w={w} l={l} tp={tp:?} d={density:.3}\r");
             });
+            eprintln!();
 
             if let Some(output) = output {
                 let result_json = serde_json::to_string(&results).unwrap();
@@ -716,8 +765,10 @@ mod test {
         let text = generate_random_string(1000, 4);
         for k in 1..=20 {
             for w in 1..=20 {
-                let anchors = collect_anchors(&text, w, k, |lmer| minimizer(lmer, k));
-                let minimizers = text_minimizers(&text, w, k);
+                let anchors = stream(&text, w, k, |lmer| minimizer(lmer, k))
+                    .dedup()
+                    .collect_vec();
+                let minimizers = text_minimizers(&text, w, k).dedup().collect_vec();
                 assert_eq!(anchors, minimizers);
             }
         }
@@ -730,8 +781,10 @@ mod test {
             for w in 1..=20 {
                 let l = k + w - 1;
                 for t in 1..=l {
-                    let anchors = collect_anchors(&text, w, k, |lmer| mod_minimizer(lmer, k, t));
-                    let minimizers = text_mod_minimizers(&text, w, k, t);
+                    let anchors = stream(&text, w, k, |lmer| mod_minimizer(lmer, k, t))
+                        .dedup()
+                        .collect_vec();
+                    let minimizers = text_mod_minimizers(&text, w, k, t).dedup().collect_vec();
                     assert_eq!(anchors, minimizers);
                 }
             }
@@ -747,8 +800,10 @@ mod test {
                 let k0_min = 1.max((2 * k - 1).saturating_sub(l));
                 let k0_max = k;
                 for t in k0_min..=k0_max {
-                    let anchors = collect_anchors(&text, w, k, |lmer| lr_minimizer(lmer, k, t));
-                    let minimizers = text_lr_minimizers(&text, w, k, t);
+                    let anchors = stream(&text, w, k, |lmer| lr_minimizer(lmer, k, t))
+                        .dedup()
+                        .collect_vec();
+                    let minimizers = text_lr_minimizers(&text, w, k, t).dedup().collect_vec();
                     assert_eq!(anchors, minimizers);
                 }
             }
@@ -761,9 +816,10 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let anchors =
-                        collect_anchors(&text, w, k, |lmer| super::miniception(lmer, k, k0));
-                    let minimizers = text_miniception(&text, w, k, k0);
+                    let anchors = stream(&text, w, k, |lmer| super::miniception(lmer, k, k0))
+                        .dedup()
+                        .collect_vec();
+                    let minimizers = text_miniception(&text, w, k, k0).dedup().collect_vec();
                     assert_eq!(anchors, minimizers);
                 }
             }
@@ -776,9 +832,10 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let anchors =
-                        collect_anchors(&text, w, k, |lmer| super::miniception_new(lmer, k, k0));
-                    let minimizers = text_miniception_new(&text, w, k, k0);
+                    let anchors = stream(&text, w, k, |lmer| super::miniception_new(lmer, k, k0))
+                        .dedup()
+                        .collect_vec();
+                    let minimizers = text_miniception_new(&text, w, k, k0).dedup().collect_vec();
                     assert_eq!(anchors, minimizers);
                 }
             }
