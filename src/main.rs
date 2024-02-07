@@ -1,17 +1,12 @@
 #![feature(exclusive_range_pattern, type_alias_impl_trait)]
 use std::{
-    cmp::Reverse,
-    collections::VecDeque,
-    f32::consts::PI,
-    io::Write,
-    iter::zip,
-    path::PathBuf,
-    sync::{atomic::AtomicUsize, Mutex},
+    cmp::Reverse, collections::VecDeque, f32::consts::PI, io::Write, iter::zip, path::PathBuf,
+    sync::atomic::AtomicUsize,
 };
 
 use clap::Parser;
 use itertools::Itertools;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde_derive::Serialize;
 
 /// Generate a random string.
@@ -456,22 +451,33 @@ fn collect_stats(w: usize, it: impl Iterator<Item = usize>) -> (f64, Vec<f64>, V
     (density, ps, ds)
 }
 
-#[derive(Clone, Copy, clap::Subcommand, Debug, Serialize)]
+#[derive(Clone, Copy, clap::Subcommand, Debug, Serialize, Default)]
 #[serde(tag = "minimizer_type")]
 enum MinimizerType {
+    #[default]
     Minimizer,
-    BdAnchor { r: usize },
-    Miniception { k0: usize },
-    MiniceptionNew { k0: usize },
+    BdAnchor {
+        r: usize,
+    },
+    Miniception {
+        k0: usize,
+    },
+    MiniceptionNew {
+        k0: usize,
+    },
     BiMinimizer,
-    ModMinimizer { k0: usize },
-    LrMinimizer { k0: usize },
+    ModMinimizer {
+        k0: usize,
+    },
+    LrMinimizer {
+        k0: usize,
+    },
     RotMinimizer,
     DecyclingMinimizer,
     DoubleDecyclingMinimizer,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Default)]
 struct Result {
     sigma: usize,
     k: usize,
@@ -661,8 +667,6 @@ fn main() {
                 MinimizerType::DoubleDecyclingMinimizer,
             ];
 
-            let results = Mutex::new(vec![]);
-
             let ks = if stats {
                 &[4, 8, 16, 32][..]
             } else {
@@ -681,38 +685,42 @@ fn main() {
                 .cartesian_product(ws)
                 .cartesian_product(base_types)
                 .collect_vec();
+            let mut results = vec![Result::default(); k_w_tp.len()];
             let done = AtomicUsize::new(0);
             let total = k_w_tp.len();
-            k_w_tp.par_iter().for_each(|&((&k, &w), tp)| {
-                let l = w + k - 1;
-                let tps = tp.try_params(w, k);
-                let Some(((density, positions, dists), tp)) = tps
-                    .iter()
-                    .map(|tp| (tp.stats(text, w, k), tp))
-                    .min_by(|(ld, _), (rd, _)| {
-                        if ld.0 < rd.0 {
-                            std::cmp::Ordering::Less
-                        } else {
-                            std::cmp::Ordering::Greater
-                        }
-                    })
-                else {
-                    done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    return;
-                };
-                results.lock().unwrap().push(Result {
-                    sigma: args.sigma,
-                    k,
-                    w,
-                    l,
-                    tp: *tp,
-                    density,
-                    positions,
-                    dists,
+            k_w_tp
+                .par_iter()
+                .zip(&mut results)
+                .for_each(|(&((&k, &w), tp), result)| {
+                    let l = w + k - 1;
+                    let tps = tp.try_params(w, k);
+                    let Some(((density, positions, dists), tp)) = tps
+                        .iter()
+                        .map(|tp| (tp.stats(text, w, k), tp))
+                        .min_by(|(ld, _), (rd, _)| {
+                            if ld.0 < rd.0 {
+                                std::cmp::Ordering::Less
+                            } else {
+                                std::cmp::Ordering::Greater
+                            }
+                        })
+                    else {
+                        done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        return;
+                    };
+                    *result = Result {
+                        sigma: args.sigma,
+                        k,
+                        w,
+                        l,
+                        tp: *tp,
+                        density,
+                        positions,
+                        dists,
+                    };
+                    let done = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    eprint!("{done:>3}/{total:>3}: k={k} w={w} l={l} tp={tp:?} d={density:.3}\r");
                 });
-                let done = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                eprint!("{done:>3}/{total:>3}: k={k} w={w} l={l} tp={tp:?} d={density:.3}\r");
-            });
             eprintln!();
 
             if let Some(output) = output {
