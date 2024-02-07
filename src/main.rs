@@ -242,6 +242,7 @@ fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
 }
 
 /// Find minimal t-mer at pos idx. Then select idx % w.
+/// NOTE: THIS IS NOT A FORWARD SCHEME.
 fn lr_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     let l = s.len();
     let w = l - k + 1;
@@ -256,6 +257,7 @@ fn lr_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     i
 }
 
+/// NOTE: THIS IS NOT A FORWARD SCHEME.
 fn text_lr_minimizers<'a>(
     text: &'a [u8],
     w: usize,
@@ -280,6 +282,7 @@ fn text_lr_minimizers<'a>(
 }
 
 /// Find minimal t-mer at pos idx. Then select idx % w.
+/// NOTE: THIS IS NOT A FORWARD SCHEME.
 fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     let l = s.len();
     let w = l - k + 1;
@@ -313,6 +316,7 @@ impl FM32 {
     }
 }
 
+/// NOTE: THIS IS NOT A FORWARD SCHEME.
 fn text_mod_minimizers<'a>(
     text: &'a [u8],
     w: usize,
@@ -681,7 +685,7 @@ fn main() {
             let total = k_w_tp.len();
             k_w_tp.par_iter().for_each(|&((&k, &w), tp)| {
                 let l = w + k - 1;
-                let tps = &tp.try_params(w, k);
+                let tps = tp.try_params(w, k);
                 let Some(((density, positions, dists), tp)) = tps
                     .iter()
                     .map(|tp| (tp.stats(text, w, k), tp))
