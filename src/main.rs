@@ -431,16 +431,22 @@ fn stream<'a>(
 /// - density
 /// - position distribution
 /// - distance distribution
-fn collect_stats(w: usize, it: impl Iterator<Item = usize>) -> (f64, Vec<f64>, Vec<f64>) {
+/// - transfer distribution
+fn collect_stats(
+    w: usize,
+    it: impl Iterator<Item = usize>,
+) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
     let mut n = 0;
     let mut anchors = 0;
     let mut ps = vec![0; w];
     let mut ds = vec![0; 2 * w + 1];
+    let mut transfer = vec![vec![0; w]; w];
     let mut last = 0;
     for (i, idx) in it.enumerate() {
         assert!(i <= idx && idx < i + w);
         n += 1;
         ps[idx - i] += 1;
+        transfer[last - (i - 1)][idx - i] += 1;
         if idx != last {
             anchors += 1;
             ds[w + idx - last] += 1;
@@ -453,7 +459,11 @@ fn collect_stats(w: usize, it: impl Iterator<Item = usize>) -> (f64, Vec<f64>, V
         .into_iter()
         .map(|d| (d * w) as f64 / anchors as f64)
         .collect();
-    (density, ps, ds)
+    let transfer = transfer
+        .into_iter()
+        .map(|row| row.into_iter().map(|c| c as f64 / n as f64).collect())
+        .collect();
+    (density, ps, ds, transfer)
 }
 
 #[derive(Clone, Copy, clap::Subcommand, Debug, Serialize, Default)]
@@ -492,12 +502,13 @@ struct Result {
     density: f64,
     positions: Vec<f64>,
     dists: Vec<f64>,
+    transfer: Vec<Vec<f64>>,
 }
 
 /// TODO: Analyze non-forward schemes.
 impl MinimizerType {
     #[inline(never)]
-    fn stats(&self, text: &[u8], w: usize, k: usize) -> (f64, Vec<f64>, Vec<f64>) {
+    fn stats(&self, text: &[u8], w: usize, k: usize) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
         match self {
             MinimizerType::Minimizer => collect_stats(w, text_minimizers(text, w, k)),
             MinimizerType::BdAnchor { r } => {
@@ -653,10 +664,15 @@ fn main() {
     match args.command {
         Command::Run { tp, w, k } => {
             eprintln!("Running {tp:?}:");
-            let (d, ps, ds) = tp.stats(text, w, k);
-            eprintln!("  Density: {d:.3}");
-            eprintln!("  Poss   : {ps:?}");
-            eprintln!("  Dists  : {ds:?}");
+            let (d, ps, ds, transfer) = tp.stats(text, w, k);
+            eprintln!("  Density : {d:.3}");
+            eprintln!("  Poss    : {ps:.5?}");
+            eprintln!("  Dists<0 : {:.5?}", &ds[0..w]);
+            eprintln!("  Dists>0 : {:.5?}", &ds[w + 1..]);
+            eprintln!("  Transfer:");
+            for row in &transfer {
+                eprintln!("    {row:.5?}");
+            }
         }
         Command::Eval { output, stats } => {
             let base_types = [
@@ -699,7 +715,7 @@ fn main() {
                 .for_each(|(&((&k, &w), tp), result)| {
                     let l = w + k - 1;
                     let tps = tp.try_params(w, k);
-                    let Some(((density, positions, dists), tp)) = tps
+                    let Some(((density, positions, dists, transfer), tp)) = tps
                         .iter()
                         .map(|tp| (tp.stats(text, w, k), tp))
                         .min_by(|(ld, _), (rd, _)| {
@@ -722,6 +738,7 @@ fn main() {
                         density,
                         positions,
                         dists,
+                        transfer,
                     };
                     let done = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     eprint!("{done:>3}/{total:>3}: k={k} w={w} l={l} tp={tp:?} d={density:.3}\r");
