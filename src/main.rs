@@ -20,6 +20,7 @@ fn h(kmer: &[u8]) -> u64 {
     fxhash::hash64(kmer)
 }
 
+#[allow(unused)]
 fn minimizer(s: &[u8], k: usize) -> usize {
     assert!(k > 0);
     assert!(k <= s.len());
@@ -63,6 +64,7 @@ fn bd_anchor(s: &[u8], r: usize) -> usize {
 /// 1. Select kmers whose k0-minimizer is at their start or end.
 /// 2. From these, select a minimal one.
 // TODO: Same hash or distinct hashes?
+#[allow(unused)]
 fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
     let w = s.len() - k + 1;
     assert!(k0 >= k.saturating_sub(w));
@@ -140,6 +142,7 @@ fn text_miniception<'a>(
 /// - first prefixes by -h(k0), then suffixes by -h(k0)
 ///
 /// Sorting by h(k0) directly is same as mod_minimizers and best for large k.
+#[allow(unused)]
 fn miniception_new(s: &[u8], k: usize, k0: usize) -> usize {
     let w = s.len() - k + 1;
     assert!(k0 >= k.saturating_sub(w));
@@ -238,6 +241,7 @@ fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
 
 /// Find minimal t-mer at pos idx. Then select idx % w.
 /// NOTE: THIS IS NOT A FORWARD SCHEME.
+#[allow(unused)]
 fn lr_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     let l = s.len();
     let w = l - k + 1;
@@ -278,6 +282,7 @@ fn text_lr_minimizers<'a>(
 
 /// Find minimal t-mer at pos idx. Then select idx % w.
 /// NOTE: THIS IS NOT A FORWARD SCHEME.
+#[allow(unused)]
 fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     let l = s.len();
     let w = l - k + 1;
