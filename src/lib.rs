@@ -1,21 +1,21 @@
 #![feature(exclusive_range_pattern, type_alias_impl_trait)]
 
-mod monotone_queue;
+pub mod monotone_queue;
 
 use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;
-use std::{cmp::Reverse, f32::consts::PI, iter::zip};
+use std::{f32::consts::PI, iter::zip};
 
 fn h(kmer: &[u8]) -> u64 {
     fxhash::hash64(kmer)
 }
 
-pub fn minimizer(s: &[u8], k: usize) -> usize {
+pub fn random_minimizer(s: &[u8], k: usize) -> usize {
     assert!(k > 0);
     assert!(k <= s.len());
     s.windows(k)
         .enumerate()
-        .min_by_key(|&(i, kmer)| (h(kmer), Reverse(i)))
+        .min_by_key(|&(_i, kmer)| h(kmer))
         .unwrap()
         .0
 }
@@ -64,11 +64,11 @@ pub fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
     s.windows(k)
         .enumerate()
         .filter(|(_, kmer)| {
-            let i = minimizer(kmer, k0);
+            let i = random_minimizer(kmer, k0);
             assert!(i <= k - k0);
             i == 0 || i == k - k0
         })
-        .min_by_key(|&(i, w)| (h(w), Reverse(i)))
+        .min_by_key(|&(_i, w)| h(w))
         .unwrap()
         .0
 }
@@ -141,7 +141,7 @@ pub fn miniception_new(s: &[u8], k: usize, k0: usize) -> usize {
     s.windows(k)
         .enumerate()
         .filter_map(|(i, kmer)| {
-            let j = minimizer(kmer, k0);
+            let j = random_minimizer(kmer, k0);
             assert!(j <= k - k0);
             if j == 0 || j == k - k0 {
                 Some((i, kmer, j == 0, h(&kmer[j..j + k0])))
@@ -149,7 +149,7 @@ pub fn miniception_new(s: &[u8], k: usize, k0: usize) -> usize {
                 None
             }
         })
-        .min_by_key(|&(i, w, b, hk0)| (b, hk0, h(w), Reverse(i)))
+        .min_by_key(|&(_i, w, b, hk0)| (b, hk0, h(w)))
         .unwrap()
         .0
 }
@@ -209,15 +209,15 @@ pub fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
     let mut vals = s
         .windows(k)
         .enumerate()
-        .map(|(i, w)| (h(w), Reverse(i)))
+        .map(|(i, w)| (h(w), i))
         .collect_vec();
     vals.sort();
-    let i1 = vals[0].1 .0;
+    let i1 = vals[0].1;
     if vals.len() == 1 {
         *last = i1;
         return i1;
     }
-    let i2 = vals[1].1 .0;
+    let i2 = vals[1].1;
     if *last == i1 + 1 || *last == i2 + 1 {
         *last -= 1;
     } else {
@@ -234,7 +234,7 @@ pub fn lr_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     let idx = s
         .windows(t)
         .enumerate()
-        .min_by_key(|&(i, w)| (h(w), Reverse(i)))
+        .min_by_key(|&(_i, w)| h(w))
         .unwrap()
         .0;
     let i = if idx >= w { idx - w } else { idx };
@@ -274,7 +274,7 @@ pub fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
     let idx = s
         .windows(t)
         .enumerate()
-        .min_by_key(|&(i, w)| (h(w), Reverse(i)))
+        .min_by_key(|&(_i, w)| h(w))
         .unwrap()
         .0;
     idx % w
@@ -292,11 +292,11 @@ impl FM32 {
         assert!(d <= u32::MAX as usize);
         Self {
             d: d as u64,
-            m: u64::MAX / d as u64 + 1,
+            m: (u64::MAX / d as u64).wrapping_add(1),
         }
     }
     fn reduce(self, h: usize) -> usize {
-        let lowbits = self.m * (h as u64);
+        let lowbits = self.m.wrapping_mul(h as u64);
         ((lowbits as u128 * self.d as u128) >> 64) as usize
     }
 }
@@ -377,7 +377,7 @@ pub fn is_in_double_decycling_set(kmer: &[u8], cs: &Vec<f32>) -> bool {
 pub fn decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
     s.windows(k)
         .enumerate()
-        .min_by_key(|&(i, kmer)| (!is_in_decycling_set(kmer, cs), h(kmer), Reverse(i)))
+        .min_by_key(|&(_i, kmer)| (!is_in_decycling_set(kmer, cs), h(kmer)))
         .unwrap()
         .0
 }
@@ -386,12 +386,11 @@ pub fn decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
 pub fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
     s.windows(k)
         .enumerate()
-        .min_by_key(|&(i, kmer)| {
+        .min_by_key(|&(_i, kmer)| {
             (
                 !is_in_decycling_set(kmer, cs),
                 !is_in_double_decycling_set(kmer, cs),
                 h(kmer),
-                Reverse(i),
             )
         })
         .unwrap()

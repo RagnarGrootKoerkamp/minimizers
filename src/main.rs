@@ -363,7 +363,7 @@ mod test {
         let text = generate_random_string(1000, 4);
         for k in 1..=20 {
             for w in 1..=20 {
-                let anchors = stream(&text, w, k, |lmer| minimizer(lmer, k))
+                let anchors = stream(&text, w, k, |lmer| random_minimizer(lmer, k))
                     .dedup()
                     .collect_vec();
                 let minimizers = text_minimizers(&text, w, k).dedup().collect_vec();
