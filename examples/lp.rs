@@ -27,9 +27,11 @@
 //! - Either k=w=2 minimizers can achieve density 0.5 (which I think is unlikely),
 //! - or the random-variable model lost some assumptions, and the output
 //!   distribution here is not actually achievable by a minimizer scheme.
+
 use good_lp::*;
+
 fn main() {
-    for t in 1..=10 {
+    for t in 1..=5 {
         maximise(t);
     }
 }
@@ -90,16 +92,16 @@ fn maximise(t: usize) {
     let out = solution.eval(&objective);
     eprintln!("{t:>3}: {out}");
 
-    // for y in 0..t {
-    //     for z in 0..t {
-    //         for x in 0..t {
-    //             eprint!(
-    //                 "{:>.4} ",
-    //                 0.0f64.max(solution.value(vars[x][y][z])) * (t * t * t) as f64
-    //             );
-    //         }
-    //         eprintln!();
-    //     }
-    //     eprintln!();
-    // }
+    for y in 0..t {
+        for z in 0..t {
+            for x in 0..t {
+                eprint!(
+                    "{:>.4} ",
+                    0.0f64.max(solution.value(vars[x][y][z])) * (t * t * t) as f64
+                );
+            }
+            eprint!("   ");
+        }
+        eprintln!();
+    }
 }
