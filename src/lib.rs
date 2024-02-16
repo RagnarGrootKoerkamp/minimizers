@@ -1,5 +1,6 @@
 #![feature(exclusive_range_pattern, type_alias_impl_trait)]
 
+pub mod de_bruijn_seq;
 pub mod monotone_queue;
 
 use crate::monotone_queue::MonotoneQueue;
