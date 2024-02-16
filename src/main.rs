@@ -110,29 +110,30 @@ struct Result {
 impl MinimizerType {
     #[inline(never)]
     fn stats(&self, text: &[u8], w: usize, k: usize) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
+        let o = &order::RandomOrder;
         match self {
             MinimizerType::Minimizer => collect_stats(w, text_random_minimizers(text, w, k)),
             MinimizerType::BdAnchor { r } => {
                 collect_stats(w, stream(text, w, k, |lmer| bd_anchor(lmer, *r)))
             }
             MinimizerType::Miniception { k0 } => {
-                collect_stats(w, text_miniception(text, w, k, *k0))
+                collect_stats(w, text_miniception(text, w, k, *k0, o))
             }
             MinimizerType::MiniceptionNew { k0 } => {
-                collect_stats(w, text_miniception_new(text, w, k, *k0))
+                collect_stats(w, text_miniception_new(text, w, k, *k0, o))
             }
             MinimizerType::BiMinimizer => {
                 let last = &mut 0;
                 collect_stats(
                     w,
-                    stream(text, w, k, move |lmer| robust_biminimizer(lmer, k, last)),
+                    stream(text, w, k, move |lmer| robust_biminimizer(lmer, k, last, o)),
                 )
             }
             MinimizerType::ModMinimizer { k0 } => {
-                collect_stats(w, text_mod_minimizers(text, w, k, *k0))
+                collect_stats(w, text_mod_minimizers(text, w, k, *k0, o))
             }
             MinimizerType::LrMinimizer { k0 } => {
-                collect_stats(w, text_lr_minimizers(text, w, k, *k0))
+                collect_stats(w, text_lr_minimizers(text, w, k, *k0, o))
             }
             MinimizerType::RotMinimizer => {
                 collect_stats(w, stream(text, w, k, move |lmer| rot_minimizer(lmer, k)))
@@ -141,7 +142,7 @@ impl MinimizerType {
                 let cs = decycling_minimizer_init(k);
                 collect_stats(
                     w,
-                    stream(text, w, k, move |lmer| decycling_minimizer(lmer, k, &cs)),
+                    stream(text, w, k, move |lmer| decycling_minimizer(lmer, k, &cs, o)),
                 )
             }
             MinimizerType::DoubleDecyclingMinimizer => {
@@ -149,7 +150,7 @@ impl MinimizerType {
                 collect_stats(
                     w,
                     stream(text, w, k, move |lmer| {
-                        double_decycling_minimizer(lmer, k, &cs)
+                        double_decycling_minimizer(lmer, k, &cs, o)
                     }),
                 )
             }
@@ -379,10 +380,14 @@ mod test {
             for w in 1..=20 {
                 let l = k + w - 1;
                 for t in 1..=l {
-                    let anchors = stream(&text, w, k, |lmer| mod_minimizer(lmer, k, t))
+                    let anchors = stream(&text, w, k, |lmer| {
+                        mod_minimizer(lmer, k, t, &order::RandomOrder)
+                    })
+                    .dedup()
+                    .collect_vec();
+                    let minimizers = text_mod_minimizers(&text, w, k, t, &order::RandomOrder)
                         .dedup()
                         .collect_vec();
-                    let minimizers = text_mod_minimizers(&text, w, k, t).dedup().collect_vec();
                     assert_eq!(anchors, minimizers);
                 }
             }
@@ -398,10 +403,14 @@ mod test {
                 let k0_min = 1.max((2 * k - 1).saturating_sub(l));
                 let k0_max = k;
                 for t in k0_min..=k0_max {
-                    let anchors = stream(&text, w, k, |lmer| lr_minimizer(lmer, k, t))
+                    let anchors = stream(&text, w, k, |lmer| {
+                        lr_minimizer(lmer, k, t, &order::RandomOrder)
+                    })
+                    .dedup()
+                    .collect_vec();
+                    let minimizers = text_lr_minimizers(&text, w, k, t, &order::RandomOrder)
                         .dedup()
                         .collect_vec();
-                    let minimizers = text_lr_minimizers(&text, w, k, t).dedup().collect_vec();
                     assert_eq!(anchors, minimizers);
                 }
             }
@@ -414,10 +423,14 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let anchors = stream(&text, w, k, |lmer| super::miniception(lmer, k, k0))
+                    let anchors = stream(&text, w, k, |lmer| {
+                        super::miniception(lmer, k, k0, &order::RandomOrder)
+                    })
+                    .dedup()
+                    .collect_vec();
+                    let minimizers = text_miniception(&text, w, k, k0, &order::RandomOrder)
                         .dedup()
                         .collect_vec();
-                    let minimizers = text_miniception(&text, w, k, k0).dedup().collect_vec();
                     assert_eq!(anchors, minimizers);
                 }
             }
@@ -430,10 +443,14 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let anchors = stream(&text, w, k, |lmer| super::miniception_new(lmer, k, k0))
+                    let anchors = stream(&text, w, k, |lmer| {
+                        super::miniception_new(lmer, k, k0, &order::RandomOrder)
+                    })
+                    .dedup()
+                    .collect_vec();
+                    let minimizers = text_miniception_new(&text, w, k, k0, &order::RandomOrder)
                         .dedup()
                         .collect_vec();
-                    let minimizers = text_miniception_new(&text, w, k, k0).dedup().collect_vec();
                     assert_eq!(anchors, minimizers);
                 }
             }

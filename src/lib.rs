@@ -2,44 +2,63 @@
 
 pub mod de_bruijn_seq;
 pub mod monotone_queue;
+pub mod order;
 
 use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;
+use order::Order;
 use std::{f32::consts::PI, iter::zip};
 
 pub trait Minimizers: Iterator<Item = usize> {}
 impl<T: Iterator<Item = usize>> Minimizers for T {}
 
-fn h(kmer: &[u8]) -> u64 {
-    fxhash::hash64(kmer)
+fn pack(kmer: &[u8], sigma: usize) -> usize {
+    let mut v = 0;
+    for c in kmer {
+        v = sigma * v + *c as usize;
+    }
+    v
 }
 
 // TODO: Make `random_minimizer` take an `Order`.
 
-pub fn random_minimizer(s: &[u8], k: usize) -> usize {
+pub fn minimizer(s: &[u8], k: usize, o: &impl Order) -> usize {
     assert!(k > 0);
     assert!(k <= s.len());
     s.windows(k)
         .enumerate()
-        .min_by_key(|&(_i, kmer)| h(kmer))
+        .min_by_key(|&(_i, kmer)| o.key(kmer))
         .unwrap()
         .0
 }
 
+pub fn random_minimizer(s: &[u8], k: usize) -> usize {
+    minimizer(s, k, &order::RandomOrder)
+}
+
 /// TODO: Rolling hash using NtHash.
 /// TODO: Take an iterator over u8 instead?
-pub fn text_random_minimizers<'a>(text: &'a [u8], w: usize, k: usize) -> impl Minimizers + 'a {
+pub fn text_minimizers<'a>(
+    text: &'a [u8],
+    w: usize,
+    k: usize,
+    o: &'a impl Order,
+) -> impl Minimizers + 'a {
     let mut q = monotone_queue::MonotoneQueue::new();
     let mut kmers = text.windows(k).enumerate();
     for (j, kmer) in kmers.by_ref().take(w - 1) {
-        q.push(j, h(kmer));
+        q.push(j, o.key(kmer));
     }
     // i: position of lmer
     // j: position of kmer
     kmers.enumerate().map(move |(i, (j, kmer))| {
-        q.push(j, h(kmer));
+        q.push(j, o.key(kmer));
         q.pop(i).unwrap().0
     })
+}
+
+pub fn text_random_minimizers<'a>(text: &'a [u8], w: usize, k: usize) -> impl Minimizers + 'a {
+    text_minimizers(text, w, k, &order::RandomOrder)
 }
 
 pub fn bd_anchor(s: &[u8], r: usize) -> usize {
@@ -61,7 +80,7 @@ pub fn bd_anchor(s: &[u8], r: usize) -> usize {
 /// 1. Select kmers whose k0-minimizer is at their start or end.
 /// 2. From these, select a minimal one.
 // TODO: Same hash or distinct hashes?
-pub fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
+pub fn miniception(s: &[u8], k: usize, k0: usize, o: &impl Order) -> usize {
     let w = s.len() - k + 1;
     assert!(k0 >= k.saturating_sub(w));
     assert!(k0 <= k);
@@ -76,93 +95,17 @@ pub fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
             assert!(i <= k - k0);
             i == 0 || i == k - k0
         })
-        .min_by_key(|&(_i, w)| h(w))
+        .min_by_key(|&(_i, w)| o.key(w))
         .unwrap()
         .0
 }
 
-pub fn text_miniception<'a>(text: &'a [u8], w: usize, k: usize, k0: usize) -> impl Minimizers + 'a {
-    // The number of k0-mers in a kmer.
-    let w0 = k - k0;
-    assert!(k0 >= k.saturating_sub(w));
-    assert!(k0 <= k);
-
-    // Queue of all k0-mers.
-    let mut q0 = MonotoneQueue::new();
-    // Queue of filtered k-mers.
-    let mut q = MonotoneQueue::new();
-
-    // i: position of lmer
-    // j: position of kmer
-    // j0: position of k0mer
-
-    // 1: init k0-mers.
-    let mut k0mers = text.windows(k0).enumerate();
-    for (j0, k0mer) in k0mers.by_ref().take(w0) {
-        q0.push(j0, h(k0mer));
-    }
-
-    // 2: init k-mers.
-    let mut kmers = text.windows(k).enumerate().zip(k0mers);
-    for ((j, kmer), (j0, k0mer)) in kmers.by_ref().take(w - 1) {
-        q0.push(j0, h(k0mer));
-        let min_pos = q0.pop(j).unwrap().0;
-        if min_pos == j || min_pos == j + w0 {
-            q.push(j, h(kmer));
-        }
-    }
-
-    // 3: Iterate l-mers.
-    kmers.enumerate().map(move |(i, ((j, kmer), (j0, k0mer)))| {
-        q0.push(j0, h(k0mer));
-        let min_pos = q0.pop(j).unwrap().0;
-        if min_pos == j || min_pos == j + w0 {
-            q.push(j, h(kmer));
-        }
-
-        q.pop(i).unwrap().0
-    })
-}
-
-/// Sort filtered kmers by:
-/// - first prefixes by h(k0), then suffixes by h(k0)
-///
-/// For small k, other orderings are worse, such as:
-/// - first prefixes by h(k0), then suffixes by -h(k0)
-/// - first prefixes by -h(k0), then suffixes by h(k0)
-/// - first prefixes by -h(k0), then suffixes by -h(k0)
-///
-/// Sorting by h(k0) directly is same as mod_minimizers and best for large k.
-pub fn miniception_new(s: &[u8], k: usize, k0: usize) -> usize {
-    let w = s.len() - k + 1;
-    assert!(k0 >= k.saturating_sub(w));
-    assert!(k0 <= k);
-
-    let w0 = k - k0;
-    let _l0 = w0 + k0 - 1;
-
-    s.windows(k)
-        .enumerate()
-        .filter_map(|(i, kmer)| {
-            let j = random_minimizer(kmer, k0);
-            assert!(j <= k - k0);
-            if j == 0 || j == k - k0 {
-                Some((i, kmer, j == 0, h(&kmer[j..j + k0])))
-            } else {
-                None
-            }
-        })
-        .min_by_key(|&(_i, w, b, hk0)| (b, hk0, h(w)))
-        .unwrap()
-        .0
-}
-
-// TODO: dedup
-pub fn text_miniception_new<'a>(
+pub fn text_miniception<'a>(
     text: &'a [u8],
     w: usize,
     k: usize,
     k0: usize,
+    o: &'a impl Order,
 ) -> impl Minimizers + 'a {
     // The number of k0-mers in a kmer.
     let w0 = k - k0;
@@ -181,38 +124,135 @@ pub fn text_miniception_new<'a>(
     // 1: init k0-mers.
     let mut k0mers = text.windows(k0).enumerate();
     for (j0, k0mer) in k0mers.by_ref().take(w0) {
-        q0.push(j0, h(k0mer));
+        q0.push(j0, o.key(k0mer));
     }
 
     // 2: init k-mers.
     let mut kmers = text.windows(k).enumerate().zip(k0mers);
     for ((j, kmer), (j0, k0mer)) in kmers.by_ref().take(w - 1) {
-        q0.push(j0, h(k0mer));
+        q0.push(j0, o.key(k0mer));
         let min_pos = q0.pop(j).unwrap().0;
-        assert!(j <= min_pos && min_pos <= j + w0);
         if min_pos == j || min_pos == j + w0 {
-            // TODO: Test without h(kmer)?
-            q.push(j, (min_pos == j, h(&text[min_pos..min_pos + k0]), h(kmer)));
+            q.push(j, o.key(kmer));
         }
     }
 
     // 3: Iterate l-mers.
     kmers.enumerate().map(move |(i, ((j, kmer), (j0, k0mer)))| {
-        q0.push(j0, h(k0mer));
+        q0.push(j0, o.key(k0mer));
         let min_pos = q0.pop(j).unwrap().0;
         if min_pos == j || min_pos == j + w0 {
-            q.push(j, (min_pos == j, h(&text[min_pos..min_pos + k0]), h(kmer)));
+            q.push(j, o.key(kmer));
         }
 
         q.pop(i).unwrap().0
     })
 }
 
-pub fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
+/// Sort filtered kmers by:
+/// - first prefixes by h(k0), then suffixes by h(k0)
+///
+/// For small k, other orderings are worse, such as:
+/// - first prefixes by h(k0), then suffixes by -h(k0)
+/// - first prefixes by -h(k0), then suffixes by h(k0)
+/// - first prefixes by -h(k0), then suffixes by -h(k0)
+///
+/// Sorting by h(k0) directly is same as mod_minimizers and best for large k.
+pub fn miniception_new(s: &[u8], k: usize, k0: usize, o: &impl Order) -> usize {
+    let w = s.len() - k + 1;
+    assert!(k0 >= k.saturating_sub(w));
+    assert!(k0 <= k);
+
+    let w0 = k - k0;
+    let _l0 = w0 + k0 - 1;
+
+    s.windows(k)
+        .enumerate()
+        .filter_map(|(i, kmer)| {
+            let j = random_minimizer(kmer, k0);
+            assert!(j <= k - k0);
+            if j == 0 || j == k - k0 {
+                Some((i, kmer, j == 0, o.key(&kmer[j..j + k0])))
+            } else {
+                None
+            }
+        })
+        .min_by_key(|&(_i, w, b, hk0)| (b, hk0, o.key(w)))
+        .unwrap()
+        .0
+}
+
+// TODO: dedup
+pub fn text_miniception_new<'a>(
+    text: &'a [u8],
+    w: usize,
+    k: usize,
+    k0: usize,
+    o: &'a impl Order,
+) -> impl Minimizers + 'a {
+    // The number of k0-mers in a kmer.
+    let w0 = k - k0;
+    assert!(k0 >= k.saturating_sub(w));
+    assert!(k0 <= k);
+
+    // Queue of all k0-mers.
+    let mut q0 = MonotoneQueue::new();
+    // Queue of filtered k-mers.
+    let mut q = MonotoneQueue::new();
+
+    // i: position of lmer
+    // j: position of kmer
+    // j0: position of k0mer
+
+    // 1: init k0-mers.
+    let mut k0mers = text.windows(k0).enumerate();
+    for (j0, k0mer) in k0mers.by_ref().take(w0) {
+        q0.push(j0, o.key(k0mer));
+    }
+
+    // 2: init k-mers.
+    let mut kmers = text.windows(k).enumerate().zip(k0mers);
+    for ((j, kmer), (j0, k0mer)) in kmers.by_ref().take(w - 1) {
+        q0.push(j0, o.key(k0mer));
+        let min_pos = q0.pop(j).unwrap().0;
+        assert!(j <= min_pos && min_pos <= j + w0);
+        if min_pos == j || min_pos == j + w0 {
+            // TODO: Test without h(kmer)?
+            q.push(
+                j,
+                (
+                    min_pos == j,
+                    o.key(&text[min_pos..min_pos + k0]),
+                    o.key(kmer),
+                ),
+            );
+        }
+    }
+
+    // 3: Iterate l-mers.
+    kmers.enumerate().map(move |(i, ((j, kmer), (j0, k0mer)))| {
+        q0.push(j0, o.key(k0mer));
+        let min_pos = q0.pop(j).unwrap().0;
+        if min_pos == j || min_pos == j + w0 {
+            q.push(
+                j,
+                (
+                    min_pos == j,
+                    o.key(&text[min_pos..min_pos + k0]),
+                    o.key(kmer),
+                ),
+            );
+        }
+
+        q.pop(i).unwrap().0
+    })
+}
+
+pub fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize, o: &impl Order) -> usize {
     let mut vals = s
         .windows(k)
         .enumerate()
-        .map(|(i, w)| (h(w), i))
+        .map(|(i, w)| (o.key(w), i))
         .collect_vec();
     vals.sort();
     let i1 = vals[0].1;
@@ -231,13 +271,13 @@ pub fn robust_biminimizer(s: &[u8], k: usize, last: &mut usize) -> usize {
 
 /// Find minimal t-mer at pos idx. Then select idx % w.
 /// NOTE: THIS IS NOT A FORWARD SCHEME.
-pub fn lr_minimizer(s: &[u8], k: usize, t: usize) -> usize {
+pub fn lr_minimizer(s: &[u8], k: usize, t: usize, o: &impl Order) -> usize {
     let l = s.len();
     let w = l - k + 1;
     let idx = s
         .windows(t)
         .enumerate()
-        .min_by_key(|&(_i, w)| h(w))
+        .min_by_key(|&(_i, w)| o.key(w))
         .unwrap()
         .0;
     let i = if idx >= w { idx - w } else { idx };
@@ -251,6 +291,7 @@ pub fn text_lr_minimizers<'a>(
     w: usize,
     k: usize,
     t: usize,
+    o: &'a impl Order,
 ) -> impl Minimizers + 'a {
     let mut q = MonotoneQueue::new();
     let l = w + k - 1;
@@ -258,12 +299,12 @@ pub fn text_lr_minimizers<'a>(
     let mut tmers = text.windows(t).enumerate();
 
     for (j, tmer) in tmers.by_ref().take(wt - 1) {
-        q.push(j, h(tmer));
+        q.push(j, o.key(tmer));
     }
     // i: position of lmer
     // j: position of tmer
     tmers.enumerate().map(move |(i, (j, tmer))| {
-        q.push(j, h(tmer));
+        q.push(j, o.key(tmer));
         let idx = q.pop(i).unwrap().0 - i;
         i + if idx >= w { idx - w } else { idx }
     })
@@ -271,13 +312,13 @@ pub fn text_lr_minimizers<'a>(
 
 /// Find minimal t-mer at pos idx. Then select idx % w.
 /// NOTE: THIS IS NOT A FORWARD SCHEME.
-pub fn mod_minimizer(s: &[u8], k: usize, t: usize) -> usize {
+pub fn mod_minimizer(s: &[u8], k: usize, t: usize, o: &impl Order) -> usize {
     let l = s.len();
     let w = l - k + 1;
     let idx = s
         .windows(t)
         .enumerate()
-        .min_by_key(|&(_i, w)| h(w))
+        .min_by_key(|&(_i, w)| o.key(w))
         .unwrap()
         .0;
     idx % w
@@ -310,6 +351,7 @@ pub fn text_mod_minimizers<'a>(
     w: usize,
     k: usize,
     t: usize,
+    o: &'a impl Order,
 ) -> impl Minimizers + 'a {
     let mut q = MonotoneQueue::new();
     let l = w + k - 1;
@@ -319,12 +361,12 @@ pub fn text_mod_minimizers<'a>(
     let fastmod_w = FM32::new(w);
 
     for (j, tmer) in tmers.by_ref().take(wt - 1) {
-        q.push(j, h(tmer));
+        q.push(j, o.key(tmer));
     }
     // i: position of lmer
     // j: position of tmer
     tmers.enumerate().map(move |(i, (j, tmer))| {
-        q.push(j, h(tmer));
+        q.push(j, o.key(tmer));
         i + fastmod_w.reduce(q.pop(i).unwrap().0 - i)
     })
 }
@@ -377,23 +419,23 @@ pub fn is_in_double_decycling_set(kmer: &[u8], cs: &Vec<f32>) -> bool {
 }
 
 /// Decycling minimizer using Mykkelvelt embedding
-pub fn decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
+pub fn decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>, o: &impl Order) -> usize {
     s.windows(k)
         .enumerate()
-        .min_by_key(|&(_i, kmer)| (!is_in_decycling_set(kmer, cs), h(kmer)))
+        .min_by_key(|&(_i, kmer)| (!is_in_decycling_set(kmer, cs), o.key(kmer)))
         .unwrap()
         .0
 }
 
 /// Decycling minimizer using Mykkelvelt embedding
-pub fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
+pub fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>, o: &impl Order) -> usize {
     s.windows(k)
         .enumerate()
         .min_by_key(|&(_i, kmer)| {
             (
                 !is_in_decycling_set(kmer, cs),
                 !is_in_double_decycling_set(kmer, cs),
-                h(kmer),
+                o.key(kmer),
             )
         })
         .unwrap()
