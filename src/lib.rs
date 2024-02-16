@@ -6,9 +6,14 @@ use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;
 use std::{f32::consts::PI, iter::zip};
 
+pub trait Minimizers: Iterator<Item = usize> {}
+impl<T: Iterator<Item = usize>> Minimizers for T {}
+
 fn h(kmer: &[u8]) -> u64 {
     fxhash::hash64(kmer)
 }
+
+// TODO: Make `random_minimizer` take an `Order`.
 
 pub fn random_minimizer(s: &[u8], k: usize) -> usize {
     assert!(k > 0);
@@ -20,7 +25,7 @@ pub fn random_minimizer(s: &[u8], k: usize) -> usize {
         .0
 }
 
-pub fn text_minimizers<'a>(text: &'a [u8], w: usize, k: usize) -> impl Iterator<Item = usize> + 'a {
+pub fn text_minimizers<'a>(text: &'a [u8], w: usize, k: usize) -> impl Minimizers + 'a {
     let mut q = monotone_queue::MonotoneQueue::new();
     let mut kmers = text.windows(k).enumerate();
     for (j, kmer) in kmers.by_ref().take(w - 1) {
@@ -73,12 +78,7 @@ pub fn miniception(s: &[u8], k: usize, k0: usize) -> usize {
         .0
 }
 
-pub fn text_miniception<'a>(
-    text: &'a [u8],
-    w: usize,
-    k: usize,
-    k0: usize,
-) -> impl Iterator<Item = usize> + 'a {
+pub fn text_miniception<'a>(text: &'a [u8], w: usize, k: usize, k0: usize) -> impl Minimizers + 'a {
     // The number of k0-mers in a kmer.
     let w0 = k - k0;
     assert!(k0 >= k.saturating_sub(w));
@@ -160,7 +160,7 @@ pub fn text_miniception_new<'a>(
     w: usize,
     k: usize,
     k0: usize,
-) -> impl Iterator<Item = usize> + 'a {
+) -> impl Minimizers + 'a {
     // The number of k0-mers in a kmer.
     let w0 = k - k0;
     assert!(k0 >= k.saturating_sub(w));
@@ -248,7 +248,7 @@ pub fn text_lr_minimizers<'a>(
     w: usize,
     k: usize,
     t: usize,
-) -> impl Iterator<Item = usize> + 'a {
+) -> impl Minimizers + 'a {
     let mut q = MonotoneQueue::new();
     let l = w + k - 1;
     let wt = l - t + 1;
@@ -307,7 +307,7 @@ pub fn text_mod_minimizers<'a>(
     w: usize,
     k: usize,
     t: usize,
-) -> impl Iterator<Item = usize> + 'a {
+) -> impl Minimizers + 'a {
     let mut q = MonotoneQueue::new();
     let l = w + k - 1;
     let wt = l - t + 1;
@@ -395,4 +395,57 @@ pub fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>) -> usize {
         })
         .unwrap()
         .0
+}
+
+pub struct SuperKmer {
+    /// Start position in text of the first basepair.
+    pub start: usize,
+    /// Past-the-end index of the start of the last kmer.
+    pub kmer_end: usize,
+    /// Past-the-end index of the full super-kmer.
+    pub super_kmer_end: usize,
+    /// The position of the minimizer in the super-kmer.
+    pub minimizer_pos: usize,
+}
+
+/// Takes an iterator over the minimize positions in a string and returns an
+/// iterator over super kmers, i.e. substrings sharing the same minimizer.
+///
+/// Returns (start, end, &[u8])
+pub fn super_kmers<'a>(
+    text: &'a [u8],
+    k: usize,
+    minimizer_positions: impl Minimizers + 'a,
+) -> impl Iterator<Item = SuperKmer> + 'a {
+    let mut first = None;
+    minimizer_positions.enumerate().filter_map(move |(i, pos)| {
+        let Some((first_i, first_pos)) = first else {
+            // Initial set.
+            first = Some((i, pos));
+            return None;
+        };
+        if i + 1 == text.len() {
+            // Save last.
+            return Some(SuperKmer {
+                start: first_i,
+                kmer_end: i + 1,
+                super_kmer_end: i + 1 + k,
+                minimizer_pos: first_pos,
+            });
+        }
+        // Extend?
+        if pos == first_pos {
+            return None;
+        } else {
+            // Start new.
+            first = Some((i, pos));
+            // Save previous.
+            return Some(SuperKmer {
+                start: first_i,
+                kmer_end: i,
+                super_kmer_end: i + k,
+                minimizer_pos: first_pos,
+            });
+        }
+    })
 }
