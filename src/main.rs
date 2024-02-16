@@ -111,7 +111,7 @@ impl MinimizerType {
     #[inline(never)]
     fn stats(&self, text: &[u8], w: usize, k: usize) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
         match self {
-            MinimizerType::Minimizer => collect_stats(w, text_minimizers(text, w, k)),
+            MinimizerType::Minimizer => collect_stats(w, text_random_minimizers(text, w, k)),
             MinimizerType::BdAnchor { r } => {
                 collect_stats(w, stream(text, w, k, |lmer| bd_anchor(lmer, *r)))
             }
@@ -366,7 +366,7 @@ mod test {
                 let anchors = stream(&text, w, k, |lmer| random_minimizer(lmer, k))
                     .dedup()
                     .collect_vec();
-                let minimizers = text_minimizers(&text, w, k).dedup().collect_vec();
+                let minimizers = text_random_minimizers(&text, w, k).dedup().collect_vec();
                 assert_eq!(anchors, minimizers);
             }
         }

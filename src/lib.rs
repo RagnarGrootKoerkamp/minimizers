@@ -25,7 +25,9 @@ pub fn random_minimizer(s: &[u8], k: usize) -> usize {
         .0
 }
 
-pub fn text_minimizers<'a>(text: &'a [u8], w: usize, k: usize) -> impl Minimizers + 'a {
+/// TODO: Rolling hash using NtHash.
+/// TODO: Take an iterator over u8 instead?
+pub fn text_random_minimizers<'a>(text: &'a [u8], w: usize, k: usize) -> impl Minimizers + 'a {
     let mut q = monotone_queue::MonotoneQueue::new();
     let mut kmers = text.windows(k).enumerate();
     for (j, kmer) in kmers.by_ref().take(w - 1) {
