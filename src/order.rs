@@ -22,7 +22,7 @@ pub struct ExplicitOrder {
 }
 
 impl ExplicitOrder {
-    pub fn new(k: usize, sigma: usize) -> Self {
+    pub fn lexicographic(k: usize, sigma: usize) -> Self {
         let n = sigma.pow(k as u32);
         Self {
             k,
@@ -30,7 +30,10 @@ impl ExplicitOrder {
             idx: (0..n).collect(),
         }
     }
-    pub fn key(&self, kmer: &[u8]) -> usize {
+}
+
+impl Order for ExplicitOrder {
+    fn key(&self, kmer: &[u8]) -> usize {
         assert_eq!(kmer.len(), self.k);
         // Find index of kmer.
         self.idx[pack(kmer, self.sigma)]

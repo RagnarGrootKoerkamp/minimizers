@@ -5,8 +5,10 @@ pub mod monotone_queue;
 pub mod order;
 
 use crate::monotone_queue::MonotoneQueue;
+use de_bruijn_seq::de_bruijn_sequence;
 use itertools::Itertools;
-use order::Order;
+use order::{ExplicitOrder, Order};
+use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::{f32::consts::PI, iter::zip};
 
 pub trait Minimizers: Iterator<Item = usize> {}
@@ -440,6 +442,29 @@ pub fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>, o: &impl Or
         })
         .unwrap()
         .0
+}
+
+pub fn bruteforce_minimizer(k: usize, w: usize, sigma: usize) -> ((usize, usize), ExplicitOrder) {
+    // TODO: or k+w-1?
+    let text = de_bruijn_sequence(sigma, k + w);
+    let num_kmers = sigma.pow(k as u32);
+
+    let best = (0..num_kmers)
+        .permutations(num_kmers)
+        .par_bridge()
+        .map(|perm| {
+            let o = ExplicitOrder {
+                k,
+                sigma,
+                idx: perm,
+            };
+            let cnt = text_minimizers(&text, w, k, &o).dedup().count();
+            (cnt, o)
+        })
+        .min_by_key(|x| x.0)
+        .unwrap();
+    let (cnt, o) = best;
+    ((cnt, text.windows(k).len()), o)
 }
 
 pub struct SuperKmer {

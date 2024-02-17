@@ -91,6 +91,7 @@ enum MinimizerType {
     RotMinimizer,
     DecyclingMinimizer,
     DoubleDecyclingMinimizer,
+    Bruteforce,
 }
 
 #[derive(Clone, Debug, Serialize, Default)]
@@ -109,7 +110,13 @@ struct Result {
 /// TODO: Analyze non-forward schemes.
 impl MinimizerType {
     #[inline(never)]
-    fn stats(&self, text: &[u8], w: usize, k: usize) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
+    fn stats(
+        &self,
+        text: &[u8],
+        w: usize,
+        k: usize,
+        sigma: usize,
+    ) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
         let o = &order::RandomOrder;
         match self {
             MinimizerType::Minimizer => collect_stats(w, text_random_minimizers(text, w, k)),
@@ -154,6 +161,10 @@ impl MinimizerType {
                     }),
                 )
             }
+            MinimizerType::Bruteforce => {
+                let o = bruteforce_minimizer(k, w, sigma).1;
+                collect_stats(w, text_minimizers(text, w, k, &o))
+            }
         }
     }
 
@@ -163,7 +174,8 @@ impl MinimizerType {
             MinimizerType::Minimizer
             | MinimizerType::BiMinimizer
             | MinimizerType::DecyclingMinimizer
-            | MinimizerType::DoubleDecyclingMinimizer => {
+            | MinimizerType::DoubleDecyclingMinimizer
+            | MinimizerType::Bruteforce => {
                 vec![*self]
             }
             MinimizerType::BdAnchor { .. } => {
@@ -236,6 +248,12 @@ enum Command {
         #[clap(subcommand)]
         tp: MinimizerType,
     },
+    Compare {
+        #[clap(short, default_value_t = 40)]
+        w: usize,
+        #[arg(short, default_value_t = 10)]
+        k: usize,
+    },
     Eval {
         /// Write to file.
         #[clap(short, long)]
@@ -243,6 +261,8 @@ enum Command {
         /// Run in statistics mode.
         #[clap(short, long)]
         stats: bool,
+        #[clap(short, long)]
+        small: bool,
     },
 }
 
@@ -266,17 +286,23 @@ fn main() {
     match args.command {
         Command::Run { tp, w, k } => {
             eprintln!("Running {tp:?}:");
-            let (d, ps, ds, transfer) = tp.stats(text, w, k);
+            let (d, _ps, _ds, _transfer) = tp.stats(text, w, k, args.sigma);
             eprintln!("  Density : {d:.3}");
-            eprintln!("  Poss    : {ps:.5?}");
-            eprintln!("  Dists<0 : {:.5?}", &ds[0..w]);
-            eprintln!("  Dists>0 : {:.5?}", &ds[w + 1..]);
-            eprintln!("  Transfer:");
-            for row in &transfer {
-                eprintln!("    {row:.5?}");
-            }
+            // eprintln!("  Poss    : {ps:.5?}");
+            // eprintln!("  Dists<0 : {:.5?}", &ds[0..w]);
+            // eprintln!("  Dists>0 : {:.5?}", &ds[w + 1..]);
+            // eprintln!("  Transfer:");
+            // for row in &transfer {
+            // eprintln!("    {row:.5?}");
+            // }
         }
-        Command::Eval { output, stats } => {
+        Command::Compare { w, k } => compare_methods(text, k, w, args.sigma),
+
+        Command::Eval {
+            output,
+            stats,
+            small,
+        } => {
             let base_types = [
                 MinimizerType::Minimizer,
                 // MinimizerType::BdAnchor { r: 0 },
@@ -290,7 +316,9 @@ fn main() {
                 MinimizerType::DoubleDecyclingMinimizer,
             ];
 
-            let ks = if stats {
+            let ks = if small {
+                &[2, 3][..]
+            } else if stats {
                 &[4, 8, 16, 32][..]
             } else {
                 &[
@@ -298,7 +326,9 @@ fn main() {
                     23, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64,
                 ][..]
             };
-            let ws = if stats {
+            let ws = if small {
+                &[2, 3][..]
+            } else if stats {
                 &[8, 16, 32, 64][..]
             } else {
                 &[8, 16, 32][..]
@@ -315,11 +345,14 @@ fn main() {
                 .par_iter()
                 .zip(&mut results)
                 .for_each(|(&((&k, &w), tp), result)| {
+                    if small && k == 3 && w == 3 {
+                        return;
+                    }
                     let l = w + k - 1;
                     let tps = tp.try_params(w, k);
                     let Some(((density, positions, dists, transfer), tp)) = tps
                         .iter()
-                        .map(|tp| (tp.stats(text, w, k), tp))
+                        .map(|tp| (tp.stats(text, w, k, args.sigma), tp))
                         .min_by(|(ld, _), (rd, _)| {
                             if ld.0 < rd.0 {
                                 std::cmp::Ordering::Less
@@ -354,6 +387,44 @@ fn main() {
             }
         }
     }
+}
+
+fn compare_methods(text: &[u8], k: usize, w: usize, sigma: usize) {
+    let base_types = [
+        MinimizerType::Minimizer,
+        // MinimizerType::BdAnchor { r: 0 },
+        MinimizerType::Miniception { k0: 0 },
+        MinimizerType::MiniceptionNew { k0: 0 },
+        // MinimizerType::BiMinimizer,
+        MinimizerType::LrMinimizer { k0: 0 },
+        MinimizerType::ModMinimizer { k0: 0 },
+        MinimizerType::RotMinimizer,
+        MinimizerType::DecyclingMinimizer,
+        MinimizerType::DoubleDecyclingMinimizer,
+    ];
+
+    base_types.par_iter().for_each(|&tp| {
+        let l = w + k - 1;
+        let tps = tp.try_params(w, k);
+        let Some(((density, _positions, _dists, _transfer), tp)) = tps
+            .iter()
+            .map(|tp| (tp.stats(text, w, k, sigma), tp))
+            .min_by(|(ld, _), (rd, _)| {
+                if ld.0 < rd.0 {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Greater
+                }
+            })
+        else {
+            return;
+        };
+        eprintln!("k={k} w={w} l={l} d={density:.3} tp={tp:?}");
+    });
+
+    let best = bruteforce_minimizer(k, w, sigma);
+    let d = (best.0 .0) as f32 / best.0 .1 as f32;
+    eprintln!("k={k} w={w} l={} d={d:.3} tp=Bruteforce", k + w - 1);
 }
 
 #[cfg(test)]
