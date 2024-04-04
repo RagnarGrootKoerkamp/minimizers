@@ -1,6 +1,7 @@
-#![feature(exclusive_range_pattern, type_alias_impl_trait)]
+#![feature(exclusive_range_pattern, type_alias_impl_trait, iter_repeat_n)]
 
 pub mod de_bruijn_seq;
+pub mod ilp_scheme;
 pub mod monotone_queue;
 pub mod order;
 
