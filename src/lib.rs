@@ -8,9 +8,12 @@ pub mod order;
 use crate::monotone_queue::MonotoneQueue;
 use de_bruijn_seq::de_bruijn_sequence;
 use itertools::Itertools;
-use order::{ExplicitOrder, Order};
+use order::*;
 use rayon::iter::{ParallelBridge, ParallelIterator};
-use std::{f32::consts::PI, iter::zip};
+use std::{
+    f32::consts::PI,
+    iter::{repeat_n, zip},
+};
 
 pub trait Minimizers: Iterator<Item = usize> {}
 impl<T: Iterator<Item = usize>> Minimizers for T {}
@@ -23,9 +26,7 @@ fn pack(kmer: &[u8], sigma: usize) -> usize {
     v
 }
 
-// TODO: Make `random_minimizer` take an `Order`.
-
-pub fn minimizer(s: &[u8], k: usize, o: &impl Order) -> usize {
+pub fn minimizer(s: &[u8], k: usize, o: &impl DirectedOrder) -> usize {
     assert!(k > 0);
     assert!(k <= s.len());
     s.windows(k)
@@ -45,7 +46,7 @@ pub fn text_minimizers<'a>(
     text: &'a [u8],
     w: usize,
     k: usize,
-    o: &'a impl Order,
+    o: &'a impl DirectedOrder,
 ) -> impl Minimizers + 'a {
     let mut q = monotone_queue::MonotoneQueue::new();
     let mut kmers = text.windows(k).enumerate();
@@ -62,6 +63,168 @@ pub fn text_minimizers<'a>(
 
 pub fn text_random_minimizers<'a>(text: &'a [u8], w: usize, k: usize) -> impl Minimizers + 'a {
     text_minimizers(text, w, k, &order::RandomOrder)
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalScheme {
+    pub k: usize,
+    pub w: usize,
+    pub sigma: usize,
+    /// The index in [w] to choose for each of sigma^(k+w-1) possible l-mers.
+    pub map: Vec<u8>,
+}
+
+impl LocalScheme {
+    pub fn get(&self, lmer: &[u8]) -> usize {
+        debug_assert_eq!(self.map.len(), self.sigma.pow((self.k + self.w - 1) as u32));
+        debug_assert_eq!(lmer.len(), self.k + self.w - 1);
+        let mut v = 0;
+        for c in lmer {
+            assert!(*c < self.sigma as u8);
+            v = self.sigma * v + *c as usize;
+        }
+        // eprintln!("lmer {lmer:?} sigma {} => v {v}", self.sigma);
+        self.map[v] as usize
+    }
+
+    /// Check if the local scheme corresponds to a directed order on kmers.
+    /// If so, return one such order.
+    pub fn to_directed_order(&self) -> Option<ExplicitDirectedOrder> {
+        let l = self.k + self.w - 1;
+        let num_lmers = self.sigma.pow(l as u32);
+        assert_eq!(self.map.len(), num_lmers);
+        let num_kmers = self.sigma.pow(self.k as u32);
+        // smaller[i] is a list of kmers j with i < j, indicating that i comes before j in the toposort.
+        let mut smaller = vec![vec![]; num_kmers];
+        // direction in which kmer i should be compared in case of equality.
+        let mut directions = vec![None; num_kmers];
+
+        for lmer in 0..num_lmers {
+            let mut chars = vec![];
+            {
+                let mut lmer = lmer;
+                for _ in 0..l {
+                    chars.push((lmer % self.sigma) as u8);
+                    lmer /= self.sigma;
+                }
+                chars.reverse();
+            }
+
+            let kmers = {
+                let mut lmer = lmer;
+                let mut kmers = (0..self.w)
+                    .map(|_| {
+                        let kmer = lmer % num_kmers;
+                        lmer /= self.sigma;
+                        kmer
+                    })
+                    .collect_vec();
+                kmers.reverse();
+                kmers
+            };
+
+            let chosen_idx = self.map[lmer] as usize;
+            let chosen_kmer = kmers[chosen_idx];
+            // eprintln!("lmer {lmer:>3}: {:?} => {chosen_idx}", chars);
+            for i in 0..self.w {
+                if i == chosen_idx {
+                    continue;
+                }
+                let kmer = kmers[i];
+                if kmer != chosen_kmer {
+                    smaller[chosen_kmer].push(kmer);
+                    // eprintln!(
+                    //     "{:?} < {:?}",
+                    //     &chars[chosen_idx..chosen_idx + self.k],
+                    //     &chars[i..i + self.k]
+                    // );
+                } else {
+                    let wanted_direction = if i < chosen_idx {
+                        Some(Direction::Rightmost)
+                    } else {
+                        Some(Direction::Leftmost)
+                    };
+                    if directions[chosen_kmer].is_none() {
+                        directions[chosen_kmer] = wanted_direction;
+                    } else {
+                        if directions[chosen_kmer] != wanted_direction {
+                            eprintln!(
+                                "Inconsistent direction for kmer {:?}",
+                                &chars[i..i + self.k]
+                            );
+                            // return None;
+                        }
+                    }
+                }
+            }
+        }
+
+        for x in &mut smaller {
+            x.sort();
+            x.dedup();
+        }
+
+        // Toposort the 'smaller' graph.
+        let mut order = vec![];
+        {
+            let mut visited = vec![0; num_kmers];
+            fn dfs(
+                i: usize,
+                smaller: &Vec<Vec<usize>>,
+                visited: &mut Vec<u8>,
+                order: &mut Vec<usize>,
+            ) -> Option<()> {
+                if visited[i] == 1 {
+                    eprintln!("Cycle detected");
+                    return None;
+                }
+                if visited[i] == 2 {
+                    return Some(());
+                }
+                visited[i] = 1;
+                for &j in &smaller[i] {
+                    dfs(j, smaller, visited, order)?;
+                }
+                visited[i] = 2;
+                order.push(i);
+                Some(())
+            }
+            for i in 0..num_kmers {
+                dfs(i, &smaller, &mut visited, &mut order)?;
+            }
+            order.reverse();
+        }
+
+        let mut idx = vec![(0, Direction::Leftmost); num_kmers];
+        for (i, &x) in order.iter().enumerate() {
+            idx[x].0 = i;
+            idx[x].1 = directions[x].unwrap_or(Direction::Leftmost);
+        }
+
+        Some(ExplicitDirectedOrder {
+            k: self.k,
+            sigma: self.sigma,
+            idx,
+        })
+    }
+}
+
+/// returns number of selected positions in the text.
+pub fn text_localscheme(text: &[u8], w: usize, k: usize, ls: &LocalScheme) -> usize {
+    assert_eq!(w, ls.w);
+    assert_eq!(k, ls.k);
+    let l = k + w - 1;
+    // eprintln!("k: {}", k);
+    // eprintln!("w: {}", w);
+    // eprintln!("l: {}", l);
+    let mut taken = vec![];
+    for (i, lmer) in text.windows(l).enumerate() {
+        let j = ls.get(lmer);
+        taken.push(i + j);
+    }
+    taken.sort();
+    taken.dedup();
+    taken.len()
 }
 
 pub fn bd_anchor(s: &[u8], r: usize) -> usize {
@@ -445,10 +608,20 @@ pub fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>, o: &impl Or
         .0
 }
 
+/// Finds the best order for a minimizer scheme.
+///
+/// Returns (# selected, # total), order.
 pub fn bruteforce_minimizer(k: usize, w: usize, sigma: usize) -> ((usize, usize), ExplicitOrder) {
-    // TODO: or k+w-1?
-    let text = de_bruijn_sequence(sigma, k + w);
+    let extra = 1;
+    let text = de_bruijn_sequence(sigma, k + w + extra);
+    let text = &text[..text.len() - extra - w];
     let num_kmers = sigma.pow(k as u32);
+
+    let mut perms = 1;
+    for i in 1..=num_kmers {
+        perms *= i;
+    }
+    eprintln!("Num permutations: {num_kmers}! = {perms}");
 
     let best = (0..num_kmers)
         .permutations(num_kmers)
@@ -466,6 +639,76 @@ pub fn bruteforce_minimizer(k: usize, w: usize, sigma: usize) -> ((usize, usize)
         .unwrap();
     let (cnt, o) = best;
     ((cnt, text.windows(k).len()), o)
+}
+
+/// Finds the best directed minimizer scheme.
+///
+/// Returns (# selected, # total), order.
+pub fn bruteforce_directed_minimizer(
+    k: usize,
+    w: usize,
+    sigma: usize,
+) -> ((usize, usize), ExplicitDirectedOrder) {
+    let extra = 1;
+    let text = de_bruijn_sequence(sigma, k + w + extra);
+    let text = &text[..text.len() - extra - w];
+    let num_kmers = sigma.pow(k as u32);
+
+    let mut perms = 1;
+    for i in 1..=num_kmers {
+        perms *= i * 2;
+    }
+    eprintln!("Num permutations: {num_kmers}! * 2^{num_kmers} = {perms}");
+
+    let best = (0..num_kmers)
+        .permutations(num_kmers)
+        .par_bridge()
+        .map(|perm| {
+            repeat_n([Direction::Leftmost, Direction::Rightmost], num_kmers)
+                .multi_cartesian_product()
+                .map(|directions| {
+                    let o = ExplicitDirectedOrder {
+                        k,
+                        sigma,
+                        idx: zip(perm.iter().copied(), directions.iter().copied()).collect_vec(),
+                    };
+                    let cnt = text_minimizers(&text, w, k, &o).dedup().count();
+                    (cnt, o)
+                })
+                .min_by_key(|x| x.0)
+                .unwrap()
+        })
+        .min_by_key(|x| x.0)
+        .unwrap();
+    let (cnt, o) = best;
+    ((cnt, text.windows(k).len()), o)
+}
+
+/// Finds the best local scheme by trying all mappings sigma^l -> [w].
+///
+/// Returns (# selected, # total), mapping.
+pub fn bruteforce_local_scheme(k: usize, w: usize, sigma: usize) -> ((usize, usize), LocalScheme) {
+    let l = k + w - 1;
+    let num_lmers = sigma.pow(l as u32);
+    // TODO: or k+w-1?
+    let extra = 1;
+    let text = de_bruijn_sequence(sigma, k + w + extra);
+    let text = &text[..text.len() - extra - w];
+    eprintln!("Num lmers: {}", num_lmers);
+    eprintln!("Num maps : {}", w.pow(num_lmers as u32));
+    eprintln!("text len : {}", text.len());
+    let best = repeat_n(0..w as u8, num_lmers)
+        .multi_cartesian_product()
+        .par_bridge()
+        .map(|map| {
+            let ls = LocalScheme { k, w, sigma, map };
+            let cnt = text_localscheme(&text, w, k, &ls);
+            (cnt, ls)
+        })
+        .min_by_key(|x| x.0)
+        .unwrap();
+    let (cnt, m) = best;
+    ((cnt, text.windows(k).len()), m)
 }
 
 pub struct SuperKmer {
