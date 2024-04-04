@@ -3,7 +3,7 @@ use std::{io::Write, path::PathBuf, sync::atomic::AtomicUsize};
 
 use clap::Parser;
 use itertools::Itertools;
-use minimizers::*;
+use minimizers::{de_bruijn_seq::de_bruijn_sequence, *};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde_derive::Serialize;
 
@@ -303,7 +303,7 @@ fn main() {
             stats,
             small,
         } => {
-            let base_types = [
+            let mut base_types = vec![
                 MinimizerType::Minimizer,
                 // MinimizerType::BdAnchor { r: 0 },
                 MinimizerType::Miniception { k0: 0 },
@@ -315,9 +315,12 @@ fn main() {
                 MinimizerType::DecyclingMinimizer,
                 MinimizerType::DoubleDecyclingMinimizer,
             ];
+            if small {
+                base_types.push(MinimizerType::Bruteforce);
+            }
 
             let ks = if small {
-                &[2, 3][..]
+                &[1, 2, 3][..]
             } else if stats {
                 &[4, 8, 16, 32][..]
             } else {
@@ -327,7 +330,7 @@ fn main() {
                 ][..]
             };
             let ws = if small {
-                &[2, 3][..]
+                &[2][..]
             } else if stats {
                 &[8, 16, 32, 64][..]
             } else {
@@ -338,14 +341,16 @@ fn main() {
                 .cartesian_product(ws)
                 .cartesian_product(base_types)
                 .collect_vec();
-            let mut results = vec![Result::default(); k_w_tp.len()];
+            let mut results = vec![None; k_w_tp.len()];
             let done = AtomicUsize::new(0);
             let total = k_w_tp.len();
+            let dbs = &de_bruijn_sequence(args.sigma, 8);
+            let text = if small { dbs } else { text };
             k_w_tp
                 .par_iter()
                 .zip(&mut results)
                 .for_each(|(&((&k, &w), tp), result)| {
-                    if small && k == 3 && w == 3 {
+                    if small && k == 3 && args.sigma == 3 {
                         return;
                     }
                     let l = w + k - 1;
@@ -364,7 +369,7 @@ fn main() {
                         done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         return;
                     };
-                    *result = Result {
+                    *result = Some(Result {
                         sigma: args.sigma,
                         k,
                         w,
@@ -374,14 +379,16 @@ fn main() {
                         positions,
                         dists,
                         transfer,
-                    };
+                    });
                     let done = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     eprint!("{done:>3}/{total:>3}: k={k} w={w} l={l} tp={tp:?} d={density:.3}\r");
                 });
             eprintln!();
 
             if let Some(output) = output {
-                let result_json = serde_json::to_string(&results).unwrap();
+                let result_json =
+                    serde_json::to_string(&results.into_iter().filter_map(|x| x).collect_vec())
+                        .unwrap();
                 let mut file = std::fs::File::create(output).unwrap();
                 file.write_all(result_json.as_bytes()).unwrap();
             }
@@ -390,7 +397,7 @@ fn main() {
 }
 
 fn compare_methods(text: &[u8], k: usize, w: usize, sigma: usize) {
-    let base_types = [
+    let base_types = vec![
         MinimizerType::Minimizer,
         // MinimizerType::BdAnchor { r: 0 },
         MinimizerType::Miniception { k0: 0 },
