@@ -5,8 +5,7 @@ pub mod ilp_scheme;
 pub mod monotone_queue;
 pub mod order;
 
-use crate::monotone_queue::MonotoneQueue;
-use de_bruijn_seq::de_bruijn_sequence;
+use crate::{de_bruijn_seq::exact_density_string, monotone_queue::MonotoneQueue};
 use itertools::Itertools;
 use order::*;
 use rayon::iter::{ParallelBridge, ParallelIterator};
@@ -612,9 +611,7 @@ pub fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>, o: &impl Or
 ///
 /// Returns (# selected, # total), order.
 pub fn bruteforce_minimizer(k: usize, w: usize, sigma: usize) -> ((usize, usize), ExplicitOrder) {
-    let extra = 1;
-    let text = de_bruijn_sequence(sigma, k + w + extra);
-    let text = &text[..text.len() - extra - w];
+    let text = exact_density_string(k, w, sigma, true);
     let num_kmers = sigma.pow(k as u32);
 
     let mut perms = 1;
@@ -649,9 +646,7 @@ pub fn bruteforce_directed_minimizer(
     w: usize,
     sigma: usize,
 ) -> ((usize, usize), ExplicitDirectedOrder) {
-    let extra = 1;
-    let text = de_bruijn_sequence(sigma, k + w + extra);
-    let text = &text[..text.len() - extra - w];
+    let text = exact_density_string(k, w, sigma, true);
     let num_kmers = sigma.pow(k as u32);
 
     let mut perms = 1;
@@ -690,10 +685,7 @@ pub fn bruteforce_directed_minimizer(
 pub fn bruteforce_local_scheme(k: usize, w: usize, sigma: usize) -> ((usize, usize), LocalScheme) {
     let l = k + w - 1;
     let num_lmers = sigma.pow(l as u32);
-    // TODO: or k+w-1?
-    let extra = 1;
-    let text = de_bruijn_sequence(sigma, k + w + extra);
-    let text = &text[..text.len() - extra - w];
+    let text = exact_density_string(k, w, sigma, false);
     eprintln!("Num lmers: {}", num_lmers);
     eprintln!("Num maps : {}", w.pow(num_lmers as u32));
     eprintln!("text len : {}", text.len());

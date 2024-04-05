@@ -28,6 +28,18 @@ pub fn de_bruijn_sequence(sigma: usize, order: usize) -> Vec<u8> {
     s
 }
 
+/// Returns a string that measures the exact density.
+///
+/// Following Marcais' 2017 and 2018:
+/// For forward schemes: De Bruijn seq of order w+k.
+/// For local schemes: De Bruijn seq of order 2w+k-2.
+pub fn exact_density_string(k: usize, w: usize, sigma: usize, forward: bool) -> Vec<u8> {
+    let order = if forward { w + k } else { 2 * w + k - 2 };
+    let mut s = de_bruijn_sequence(sigma, order);
+    s.truncate(s.len() - (order - 1) + (k - 1));
+    s
+}
+
 mod test {
     #[test]
     fn test_de_bruin_sequence() {

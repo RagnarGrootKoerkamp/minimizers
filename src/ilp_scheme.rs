@@ -10,7 +10,7 @@ use std::iter::{repeat_n, zip};
 use good_lp::*;
 use itertools::Itertools;
 
-use crate::{de_bruijn_seq::de_bruijn_sequence, pack, LocalScheme};
+use crate::{de_bruijn_seq::exact_density_string, pack, LocalScheme};
 
 pub fn best_local_scheme(
     k: usize,
@@ -34,9 +34,7 @@ pub fn best_local_scheme(
         })
         .collect();
 
-    let extra = 1;
-    let text = de_bruijn_sequence(sigma, k + w + extra);
-    let text = &text[..text.len() - extra - w];
+    let text = exact_density_string(k, w, sigma, forward);
 
     let selected_vars = text
         .windows(k)
