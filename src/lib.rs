@@ -5,7 +5,10 @@ pub mod ilp_scheme;
 pub mod monotone_queue;
 pub mod order;
 
-use crate::{de_bruijn_seq::exact_density_string, monotone_queue::MonotoneQueue};
+use crate::{
+    de_bruijn_seq::{cyclic_exact_density_string, exact_density_string},
+    monotone_queue::MonotoneQueue,
+};
 use itertools::Itertools;
 use order::*;
 use rayon::iter::{ParallelBridge, ParallelIterator};
@@ -58,6 +61,33 @@ pub fn text_minimizers<'a>(
         q.push(j, o.key(kmer));
         q.pop(i).unwrap().0
     })
+}
+
+pub fn cyclic_minimizers<'a>(
+    text: &'a [u8],
+    len: usize,
+    w: usize,
+    k: usize,
+    o: &'a impl DirectedOrder,
+) -> usize {
+    let mut q = monotone_queue::MonotoneQueue::new();
+    let mut kmers = text.windows(k).take(len + w - 1).enumerate();
+    for (j, kmer) in kmers.by_ref().take(w - 1) {
+        q.push(j, o.key(kmer));
+    }
+    // i: position of lmer
+    // j: position of kmer
+    let mut poss = kmers
+        .enumerate()
+        .map(move |(i, (j, kmer))| {
+            q.push(j, o.key(kmer));
+            q.pop(i).unwrap().0 % len
+        })
+        .dedup()
+        .collect_vec();
+    poss.sort();
+    poss.dedup();
+    poss.len()
 }
 
 pub fn text_random_minimizers<'a>(text: &'a [u8], w: usize, k: usize) -> impl Minimizers + 'a {
@@ -611,7 +641,7 @@ pub fn double_decycling_minimizer(s: &[u8], k: usize, cs: &Vec<f32>, o: &impl Or
 ///
 /// Returns (# selected, # total), order.
 pub fn bruteforce_minimizer(k: usize, w: usize, sigma: usize) -> ((usize, usize), ExplicitOrder) {
-    let text = exact_density_string(k, w, sigma, true);
+    let (text, len) = cyclic_exact_density_string(k, w, sigma, true);
     let num_kmers = sigma.pow(k as u32);
 
     let mut perms = 1;
@@ -629,13 +659,13 @@ pub fn bruteforce_minimizer(k: usize, w: usize, sigma: usize) -> ((usize, usize)
                 sigma,
                 idx: perm,
             };
-            let cnt = text_minimizers(&text, w, k, &o).dedup().count();
+            let cnt = cyclic_minimizers(&text, len, w, k, &o);
             (cnt, o)
         })
         .min_by_key(|x| x.0)
         .unwrap();
     let (cnt, o) = best;
-    ((cnt, text.windows(k).len()), o)
+    ((cnt, len), o)
 }
 
 /// Finds the best directed minimizer scheme.
@@ -646,7 +676,7 @@ pub fn bruteforce_directed_minimizer(
     w: usize,
     sigma: usize,
 ) -> ((usize, usize), ExplicitDirectedOrder) {
-    let text = exact_density_string(k, w, sigma, true);
+    let (text, len) = cyclic_exact_density_string(k, w, sigma, true);
     let num_kmers = sigma.pow(k as u32);
 
     let mut perms = 1;
@@ -667,7 +697,7 @@ pub fn bruteforce_directed_minimizer(
                         sigma,
                         idx: zip(perm.iter().copied(), directions.iter().copied()).collect_vec(),
                     };
-                    let cnt = text_minimizers(&text, w, k, &o).dedup().count();
+                    let cnt = cyclic_minimizers(&text, len, w, k, &o);
                     (cnt, o)
                 })
                 .min_by_key(|x| x.0)
@@ -676,7 +706,7 @@ pub fn bruteforce_directed_minimizer(
         .min_by_key(|x| x.0)
         .unwrap();
     let (cnt, o) = best;
-    ((cnt, text.windows(k).len()), o)
+    ((cnt, len), o)
 }
 
 /// Finds the best local scheme by trying all mappings sigma^l -> [w].

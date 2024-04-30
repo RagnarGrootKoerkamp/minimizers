@@ -5,12 +5,12 @@
 //! 3. Each kmer selected by the local scheme must be true.
 //! 4. Minimizer the number of selected kmers.
 
-use std::iter::{repeat_n, zip};
+use std::iter::repeat_n;
 
 use good_lp::*;
 use itertools::Itertools;
 
-use crate::{de_bruijn_seq::exact_density_string, pack, LocalScheme};
+use crate::{de_bruijn_seq::cyclic_exact_density_string, pack, LocalScheme};
 
 pub fn best_local_scheme(
     k: usize,
@@ -34,12 +34,16 @@ pub fn best_local_scheme(
         })
         .collect();
 
-    let text = exact_density_string(k, w, sigma, forward);
+    // len sigma^order + (k-1)
+    let (text, chars) = cyclic_exact_density_string(k, w, sigma, forward);
+    // eprintln!("#text: {text:?}");
+    eprintln!("dBG len: {chars}");
+    // double the text.
 
-    let selected_vars = text
-        .windows(k)
+    let selected_vars = (0..chars)
         .map(|_| problem.add(variable().integer().bounds(0..1)))
         .collect_vec();
+    eprintln!("#selected_vars: {}", selected_vars.len());
 
     let mut objective = Expression::default();
     for selected in &selected_vars {
@@ -59,9 +63,11 @@ pub fn best_local_scheme(
     }
 
     // Set selected kmers.
-    for (i, lmer) in text.windows(l).enumerate() {
+    for (i, lmer) in text.windows(l).take(chars).enumerate() {
         let lmer_id = pack(lmer, sigma);
-        for (lmer_var, selected_var) in zip(&lmer_vars[lmer_id], &selected_vars[i..]) {
+        for (j, lmer_var) in lmer_vars[lmer_id].iter().enumerate() {
+            let selected_var = &selected_vars[(i + j) % chars];
+            // eprintln!("{:?} <= {:?}", lmer_var, selected_var);
             problem.add_constraint(lmer_var.into_expression().leq(selected_var));
             num_constraints += 1;
         }
@@ -76,7 +82,7 @@ pub fn best_local_scheme(
         //
         // Thus:
         // yi <= x0 + x1 + ... + x(i+1) for all 0<=i<w-2. (i=w-2 is redundant.)
-        for (lmer1, lmer2) in text.windows(l).tuple_windows() {
+        for (lmer1, lmer2) in text.windows(l).tuple_windows().take(chars) {
             let lmer1_id = pack(lmer1, sigma);
             let lmer2_id = pack(lmer2, sigma);
             for i in 0..w - 2 {
@@ -114,5 +120,5 @@ pub fn best_local_scheme(
             .collect(),
     };
 
-    ((selected as usize, text.windows(k).len()), ls)
+    ((selected as usize, chars), ls)
 }

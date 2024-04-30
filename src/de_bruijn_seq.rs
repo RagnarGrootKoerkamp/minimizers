@@ -34,10 +34,23 @@ pub fn de_bruijn_sequence(sigma: usize, order: usize) -> Vec<u8> {
 /// For forward schemes: De Bruijn seq of order w+k.
 /// For local schemes: De Bruijn seq of order 2w+k-2.
 pub fn exact_density_string(k: usize, w: usize, sigma: usize, forward: bool) -> Vec<u8> {
-    let order = if forward { w + k } else { 2 * w + k - 2 };
+    // BUG FIXME: We should measure density on a cyclic string instead!
+    let order = if forward { w + k } else { 2 * w + k - 2 } + 1;
     let mut s = de_bruijn_sequence(sigma, order);
     s.truncate(s.len() - (order - 1) + (k - 1));
     s
+}
+
+/// Same, but returns a string of length exactly sigma^order.
+pub fn cyclic_exact_density_string(
+    k: usize,
+    w: usize,
+    sigma: usize,
+    forward: bool,
+) -> (Vec<u8>, usize) {
+    let order = if forward { w + k } else { 2 * w + k - 2 } + 1;
+    let s = de_bruijn_sequence(sigma, order);
+    (s, sigma.pow(order as u32))
 }
 
 mod test {
