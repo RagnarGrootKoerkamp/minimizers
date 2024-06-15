@@ -74,6 +74,8 @@ enum MinimizerType {
     ModSampling {
         k0: usize,
     },
+    LrMinimizer,
+    ModMinimizer,
     RotMinimizer,
     AltRotMinimizer,
     DecyclingMinimizer,
@@ -117,6 +119,8 @@ impl MinimizerType {
             MinimizerType::ModSampling { k0 } => {
                 collect_stats(w, text, ModSampling::new(k, w, *k0, o))
             }
+            MinimizerType::LrMinimizer => collect_stats(w, text, ModSampling::lr_minimizer(k, w)),
+            MinimizerType::ModMinimizer => collect_stats(w, text, ModSampling::mod_minimizer(k, w)),
             MinimizerType::RotMinimizer => collect_stats(w, text, RotMinimizer::new(k, w, o)),
             MinimizerType::AltRotMinimizer => collect_stats(w, text, AltRotMinimizer::new(k, w, o)),
             MinimizerType::DecyclingMinimizer => {
@@ -179,6 +183,20 @@ impl MinimizerType {
                 (k0_min..=k0_max)
                     .map(|k0| MinimizerType::ModSampling { k0 })
                     .collect()
+            }
+            MinimizerType::LrMinimizer => {
+                if k > w {
+                    vec![*self]
+                } else {
+                    vec![]
+                }
+            }
+            MinimizerType::ModMinimizer => {
+                if k > 5 {
+                    vec![*self]
+                } else {
+                    vec![]
+                }
             }
             MinimizerType::RotMinimizer => {
                 if k % w == 0 {
@@ -267,8 +285,10 @@ fn main() {
                 MinimizerType::Minimizer,
                 // MinimizerType::BdAnchor { r: 0 },
                 MinimizerType::Miniception { k0: 0 },
-                MinimizerType::MiniceptionNew { k0: 0 },
-                MinimizerType::ModSampling { k0: 0 },
+                // MinimizerType::MiniceptionNew { k0: 0 },
+                // MinimizerType::ModSampling { k0: 0 },
+                MinimizerType::LrMinimizer,
+                MinimizerType::ModMinimizer,
                 MinimizerType::RotMinimizer,
                 MinimizerType::AltRotMinimizer,
                 MinimizerType::DecyclingMinimizer,
@@ -285,7 +305,8 @@ fn main() {
             } else {
                 &[
                     5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26,
-                    28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64,
+                    28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84,
+                    88, 92, 96, 100,
                 ][..]
             };
             let ws = if small {
@@ -293,7 +314,7 @@ fn main() {
             } else if stats {
                 &[8, 16, 32, 64][..]
             } else {
-                &[8][..]
+                &[8, 24][..]
             };
             let k_w_tp = ks
                 .iter()

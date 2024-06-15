@@ -422,7 +422,7 @@ impl ModSampling<RandomOrder> {
         Self::new(k, w, t, RandomOrder)
     }
     pub fn mod_minimizer(k: usize, w: usize) -> Self {
-        let r = 5;
+        let r = 4;
         assert!(k > r);
         let t = (k - r) % w + r;
         Self::new(k, w, t, RandomOrder)
