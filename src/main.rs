@@ -185,14 +185,14 @@ impl MinimizerType {
                     .collect()
             }
             MinimizerType::LrMinimizer => {
-                if k > w {
+                if k > w + 4 {
                     vec![*self]
                 } else {
                     vec![]
                 }
             }
             MinimizerType::ModMinimizer => {
-                if k > 5 {
+                if k > 4 {
                     vec![*self]
                 } else {
                     vec![]

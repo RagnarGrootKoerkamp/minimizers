@@ -1,25 +1,23 @@
-* Minimizer comparison
+* Minimizer reference implementations
 
-This repo implements various types of minimizers and compares their density.
-See also the [[https://curiouscoding.nl/posts/minimizers/][corresponding blogpost]].
+This repository implements various types of sampling schemes and accompanies
+the mod-minimizer preprint:
 
-Minimizer types:
-- plain minimizers,
-- robust minimizers,
-- bidirectional anchors ([[https://doi.org/10.1109/tkde.2022.3231780][Loukides, Pissis, and Sweering]]),
-- miniception,
-- 'robust minimizers' (see blog).
+- *Ragnar Groot Korekamp, Giulio Ermanno Pibiri.* "The mod-minimizer: a simple
+  and efficient sampling algorithm for long $k$-mers". bioRxiv (2024). [[https://doi.org/10.1101/2024.05.25.595898][10.1101/2024.05.25.595898]]
 
+See also my corresponding blogpost: [[https://curiouscoding.nl/posts/minimizers/][curiouscoding.nl/posts/minimizers]].
 
+Implemented sampling schemes:
+- *Random minimizers*.
+- two versions of asymptotically optimal *Rotational minimizers* (Marçais et al., 2018) .
+- *Miniception*, and a small slightly improved variant of it.
+- *Decycling* and *double decycling* based minimizers (Pellow et al., 2023).
+- *Bidirectional anchors* (Loukides et al., 2023)
+- *Mod-sampling*, with *lr-minimizers* and *mod-minimizers* (our work).
 
-Results for bidirectional anchors:
-- For large alphabet (256): density equals $2/(l+1-r)$, and $r=0$ has lowest density for
-  $l\leq 40$.
-- For small alphabet (4): density is over $2\times$ worse than $2/(l+1-r)$ for
-  $r=0$ and $l$ large, and around 10% worse for large $r$.
-  The best $r$ increases slowly, roughly linear in $\log_2(l)$:
-  - $l\leq 8$: $r=0$
-  - $l\leq 15$: $r=1$
-  - $l\leq 27$: $r=2$
-  - $l\leq 52$: $r=3$
-  - $53 \leq l \leq 100$: $r=4$
+Density plot for $\sigma=4$. Reproduce using:
+- ~cargo run -r -- -n 5000000 -s 4 eval -o data/density_4.json~
+- ~plot.ipynb~
+
+[[file:./fig/density_4.svg]]
