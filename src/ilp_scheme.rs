@@ -10,14 +10,14 @@ use std::iter::repeat_n;
 use good_lp::*;
 use itertools::Itertools;
 
-use crate::{de_bruijn_seq::cyclic_exact_density_string, pack, LocalScheme};
+use crate::{de_bruijn_seq::cyclic_exact_density_string, pack, ExplicitLocalScheme};
 
 pub fn best_local_scheme(
     k: usize,
     w: usize,
     sigma: usize,
     forward: bool,
-) -> ((usize, usize), LocalScheme) {
+) -> ((usize, usize), ExplicitLocalScheme) {
     let l = k + w - 1;
     let lmers = repeat_n(0..sigma, l)
         .multi_cartesian_product()
@@ -103,7 +103,7 @@ pub fn best_local_scheme(
     let selected = solution.eval(&objective);
     eprintln!("#selected: {selected}");
 
-    let ls = LocalScheme {
+    let ls = ExplicitLocalScheme {
         k,
         w,
         sigma,

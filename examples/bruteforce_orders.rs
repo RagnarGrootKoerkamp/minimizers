@@ -13,10 +13,7 @@
 //! 4   3   2   30/67   = 0.447
 
 use clap::Parser;
-use minimizers::{
-    bruteforce_directed_minimizer, bruteforce_local_scheme, bruteforce_minimizer, ilp_scheme,
-    LocalScheme,
-};
+use minimizers::{bruteforce, ilp_scheme, ExplicitLocalScheme};
 
 #[derive(clap::ValueEnum, Clone)]
 enum Method {
@@ -52,19 +49,19 @@ fn main() {
 
     match method {
         Method::BFMinimizer => {
-            let best = bruteforce_minimizer(k, w, sigma);
+            let best = bruteforce::bruteforce_minimizer(k, w, sigma);
             eprintln!("  best cnt : {} / {}", best.0 .0, best.0 .1);
             eprintln!("  density  : {}", (best.0 .0) as f32 / (best.0 .1) as f32);
-            eprintln!("  best perm: {:?}", best.1.idx);
+            eprintln!("  best perm: {:?}", best.1.ord().idx);
         }
         Method::BFDirectedMinimizer => {
-            let best = bruteforce_directed_minimizer(k, w, sigma);
+            let best = bruteforce::bruteforce_directed_minimizer(k, w, sigma);
             eprintln!("  best cnt : {} / {}", best.0 .0, best.0 .1);
             eprintln!("  density  : {}", (best.0 .0) as f32 / (best.0 .1) as f32);
-            eprintln!("  best perm: {:?}", best.1.idx);
+            eprintln!("  best perm: {:?}", best.1.ord().idx);
         }
         Method::BFLocalScheme => {
-            let best = bruteforce_local_scheme(k, w, sigma);
+            let best = bruteforce::bruteforce_local_scheme(k, w, sigma);
             eprintln!("  best cnt : {} / {}", best.0 .0, best.0 .1);
             eprintln!("  density  : {}", (best.0 .0) as f32 / (best.0 .1) as f32);
             eprintln!("  best map: {:?}", best.1.map);
@@ -77,13 +74,13 @@ fn main() {
         }
         Method::Verify => {
             let best = vec![
-                LocalScheme {
+                ExplicitLocalScheme {
                     k: 2,
                     w: 2,
                     sigma: 2,
                     map: vec![0, 1, 0, 0, 1, 1, 0, 1],
                 },
-                LocalScheme {
+                ExplicitLocalScheme {
                     k: 2,
                     w: 2,
                     sigma: 3,
@@ -92,7 +89,7 @@ fn main() {
                         0, 1,
                     ],
                 },
-                LocalScheme {
+                ExplicitLocalScheme {
                     k: 2,
                     w: 2,
                     sigma: 4,
@@ -102,19 +99,19 @@ fn main() {
                         0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1,
                     ],
                 },
-                LocalScheme {
+                ExplicitLocalScheme {
                     k: 2,
                     w: 3,
                     sigma: 2,
                     map: vec![0, 2, 1, 1, 0, 2, 0, 0, 1, 2, 1, 1, 2, 2, 1, 2],
                 },
-                LocalScheme {
+                ExplicitLocalScheme {
                     k: 2,
                     w: 3,
                     sigma: 2,
                     map: vec![0, 2, 1, 1, 0, 0, 0, 0, 1, 2, 1, 1, 2, 2, 0, 1],
                 },
-                LocalScheme {
+                ExplicitLocalScheme {
                     k: 2,
                     w: 4,
                     sigma: 2,
@@ -123,7 +120,7 @@ fn main() {
                         3, 2, 2, 0, 3, 1, 2,
                     ],
                 },
-                LocalScheme {
+                ExplicitLocalScheme {
                     k: 2,
                     w: 4,
                     sigma: 2,
@@ -132,7 +129,7 @@ fn main() {
                         1, 3, 1, 2, 2, 3, 1,
                     ],
                 },
-                LocalScheme {
+                ExplicitLocalScheme {
                     k: 2,
                     w: 3,
                     sigma: 3,
@@ -143,7 +140,7 @@ fn main() {
                         2, 0, 2, 1, 1, 2,
                     ],
                 },
-                LocalScheme {
+                ExplicitLocalScheme {
                     k: 2,
                     w: 3,
                     sigma: 3,

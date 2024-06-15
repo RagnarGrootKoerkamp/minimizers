@@ -8,7 +8,6 @@ Minimizer types:
 - robust minimizers,
 - bidirectional anchors ([[https://doi.org/10.1109/tkde.2022.3231780][Loukides, Pissis, and Sweering]]),
 - miniception,
-- 'biminimizers' (see blog),
 - 'robust minimizers' (see blog).
 
 

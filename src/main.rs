@@ -1,9 +1,10 @@
-#![feature(exclusive_range_pattern, type_alias_impl_trait)]
+#![feature(type_alias_impl_trait)]
 use std::{io::Write, path::PathBuf, sync::atomic::AtomicUsize};
 
 use clap::Parser;
 use itertools::Itertools;
 use minimizers::{de_bruijn_seq::de_bruijn_sequence, *};
+use order::RandomOrder;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde_derive::Serialize;
 
@@ -14,20 +15,6 @@ fn generate_random_string(n: usize, sigma: usize) -> Vec<u8> {
         .collect()
 }
 
-/// scheme must return a value in [0, l - k].
-///
-/// Returns anchors and position distribution.
-fn stream<'a>(
-    text: &'a [u8],
-    w: usize,
-    k: usize,
-    mut scheme: impl FnMut(&[u8]) -> usize + 'a,
-) -> impl Iterator<Item = usize> + 'a {
-    text.windows(w + k - 1)
-        .enumerate()
-        .map(move |(i, w)| i + scheme(w))
-}
-
 /// Returns:
 /// - density
 /// - position distribution
@@ -35,8 +22,11 @@ fn stream<'a>(
 /// - transfer distribution
 fn collect_stats(
     w: usize,
-    it: impl Iterator<Item = usize>,
+    text: &[u8],
+    scheme: impl SamplingScheme,
 ) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
+    let it = scheme.stream(text);
+
     let mut n = 0;
     let mut anchors = 0;
     let mut ps = vec![0; w];
@@ -81,14 +71,11 @@ enum MinimizerType {
     MiniceptionNew {
         k0: usize,
     },
-    BiMinimizer,
-    ModMinimizer {
-        k0: usize,
-    },
-    LrMinimizer {
+    ModSampling {
         k0: usize,
     },
     RotMinimizer,
+    AltRotMinimizer,
     DecyclingMinimizer,
     DoubleDecyclingMinimizer,
     Bruteforce,
@@ -117,53 +104,30 @@ impl MinimizerType {
         k: usize,
         sigma: usize,
     ) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
-        let o = &order::RandomOrder;
+        let o = RandomOrder;
         match self {
-            MinimizerType::Minimizer => collect_stats(w, text_random_minimizers(text, w, k)),
-            MinimizerType::BdAnchor { r } => {
-                collect_stats(w, stream(text, w, k, |lmer| bd_anchor(lmer, *r)))
-            }
+            MinimizerType::Minimizer => collect_stats(w, text, Minimizer::new(k, w, o)),
+            MinimizerType::BdAnchor { r } => collect_stats(w, text, BdAnchor::new(w + k - 1, *r)),
             MinimizerType::Miniception { k0 } => {
-                collect_stats(w, text_miniception(text, w, k, *k0, o))
+                collect_stats(w, text, Miniception::new(w, k, *k0, o))
             }
             MinimizerType::MiniceptionNew { k0 } => {
-                collect_stats(w, text_miniception_new(text, w, k, *k0, o))
+                collect_stats(w, text, MiniceptionNew::new(w, k, *k0, o))
             }
-            MinimizerType::BiMinimizer => {
-                let last = &mut 0;
-                collect_stats(
-                    w,
-                    stream(text, w, k, move |lmer| robust_biminimizer(lmer, k, last, o)),
-                )
+            MinimizerType::ModSampling { k0 } => {
+                collect_stats(w, text, ModSampling::new(k, w, *k0, o))
             }
-            MinimizerType::ModMinimizer { k0 } => {
-                collect_stats(w, text_mod_minimizers(text, w, k, *k0, o))
-            }
-            MinimizerType::LrMinimizer { k0 } => {
-                collect_stats(w, text_lr_minimizers(text, w, k, *k0, o))
-            }
-            MinimizerType::RotMinimizer => {
-                collect_stats(w, stream(text, w, k, move |lmer| rot_minimizer(lmer, k)))
-            }
+            MinimizerType::RotMinimizer => collect_stats(w, text, RotMinimizer::new(k, w, o)),
+            MinimizerType::AltRotMinimizer => collect_stats(w, text, AltRotMinimizer::new(k, w, o)),
             MinimizerType::DecyclingMinimizer => {
-                let cs = decycling_minimizer_init(k);
-                collect_stats(
-                    w,
-                    stream(text, w, k, move |lmer| decycling_minimizer(lmer, k, &cs, o)),
-                )
+                collect_stats(w, text, Decycling::new(k, w, o, false))
             }
             MinimizerType::DoubleDecyclingMinimizer => {
-                let cs = decycling_minimizer_init(k);
-                collect_stats(
-                    w,
-                    stream(text, w, k, move |lmer| {
-                        double_decycling_minimizer(lmer, k, &cs, o)
-                    }),
-                )
+                collect_stats(w, text, Decycling::new(k, w, o, true))
             }
             MinimizerType::Bruteforce => {
-                let o = bruteforce_minimizer(k, w, sigma).1;
-                collect_stats(w, text_minimizers(text, w, k, &o))
+                let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
+                collect_stats(w, text, m)
             }
         }
     }
@@ -172,7 +136,6 @@ impl MinimizerType {
         let l = w + k - 1;
         match self {
             MinimizerType::Minimizer
-            | MinimizerType::BiMinimizer
             | MinimizerType::DecyclingMinimizer
             | MinimizerType::DoubleDecyclingMinimizer
             | MinimizerType::Bruteforce => {
@@ -210,24 +173,21 @@ impl MinimizerType {
                     .map(|k0| MinimizerType::MiniceptionNew { k0 })
                     .collect()
             }
-            MinimizerType::ModMinimizer { .. } => {
+            MinimizerType::ModSampling { .. } => {
                 let k0_min = 1;
                 let k0_max = l;
                 (k0_min..=k0_max)
-                    .map(|k0| MinimizerType::ModMinimizer { k0 })
-                    .collect()
-            }
-            MinimizerType::LrMinimizer { .. } => {
-                // k <= (l+k0+1)/2
-                // 2k <= l + k0 + 1
-                // 2k - l - 1 <= k0
-                let k0_min = 1.max((2 * k - 1).saturating_sub(l));
-                let k0_max = k;
-                (k0_min..=k0_max)
-                    .map(|k0| MinimizerType::LrMinimizer { k0 })
+                    .map(|k0| MinimizerType::ModSampling { k0 })
                     .collect()
             }
             MinimizerType::RotMinimizer => {
+                if k > w {
+                    vec![*self]
+                } else {
+                    vec![]
+                }
+            }
+            MinimizerType::AltRotMinimizer => {
                 if k > w {
                     vec![*self]
                 } else {
@@ -308,10 +268,9 @@ fn main() {
                 // MinimizerType::BdAnchor { r: 0 },
                 MinimizerType::Miniception { k0: 0 },
                 MinimizerType::MiniceptionNew { k0: 0 },
-                // MinimizerType::BiMinimizer,
-                MinimizerType::LrMinimizer { k0: 0 },
-                MinimizerType::ModMinimizer { k0: 0 },
+                MinimizerType::ModSampling { k0: 0 },
                 MinimizerType::RotMinimizer,
+                MinimizerType::AltRotMinimizer,
                 MinimizerType::DecyclingMinimizer,
                 MinimizerType::DoubleDecyclingMinimizer,
             ];
@@ -402,9 +361,7 @@ fn compare_methods(text: &[u8], k: usize, w: usize, sigma: usize) {
         // MinimizerType::BdAnchor { r: 0 },
         MinimizerType::Miniception { k0: 0 },
         MinimizerType::MiniceptionNew { k0: 0 },
-        // MinimizerType::BiMinimizer,
-        MinimizerType::LrMinimizer { k0: 0 },
-        MinimizerType::ModMinimizer { k0: 0 },
+        MinimizerType::ModSampling { k0: 0 },
         MinimizerType::RotMinimizer,
         MinimizerType::DecyclingMinimizer,
         MinimizerType::DoubleDecyclingMinimizer,
@@ -429,24 +386,24 @@ fn compare_methods(text: &[u8], k: usize, w: usize, sigma: usize) {
         eprintln!("k={k} w={w} l={l} d={density:.3} tp={tp:?}");
     });
 
-    let best = bruteforce_minimizer(k, w, sigma);
+    let best = bruteforce::bruteforce_minimizer(k, w, sigma);
     let d = (best.0 .0) as f32 / best.0 .1 as f32;
     eprintln!("k={k} w={w} l={} d={d:.3} tp=Bruteforce", k + w - 1);
 }
 
 #[cfg(test)]
 mod test {
+
     use super::*;
     #[test]
     fn minimizers() {
         let text = generate_random_string(1000, 4);
         for k in 1..=20 {
             for w in 1..=20 {
-                let anchors = stream(&text, w, k, |lmer| random_minimizer(lmer, k))
-                    .dedup()
-                    .collect_vec();
-                let minimizers = text_random_minimizers(&text, w, k).dedup().collect_vec();
-                assert_eq!(anchors, minimizers);
+                let m = RandomMinimizer::new(k, w, RandomOrder);
+                let stream = m.stream(&text).collect_vec();
+                let stream_naive = m.stream_naive(&text).collect_vec();
+                assert_eq!(stream, stream_naive);
             }
         }
     }
@@ -458,38 +415,10 @@ mod test {
             for w in 1..=20 {
                 let l = k + w - 1;
                 for t in 1..=l {
-                    let anchors = stream(&text, w, k, |lmer| {
-                        mod_minimizer(lmer, k, t, &order::RandomOrder)
-                    })
-                    .dedup()
-                    .collect_vec();
-                    let minimizers = text_mod_minimizers(&text, w, k, t, &order::RandomOrder)
-                        .dedup()
-                        .collect_vec();
-                    assert_eq!(anchors, minimizers);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn lr_minimizers() {
-        let text = generate_random_string(1000, 4);
-        for k in 1..=20usize {
-            for w in 1..=20 {
-                let l = k + w - 1;
-                let k0_min = 1.max((2 * k - 1).saturating_sub(l));
-                let k0_max = k;
-                for t in k0_min..=k0_max {
-                    let anchors = stream(&text, w, k, |lmer| {
-                        lr_minimizer(lmer, k, t, &order::RandomOrder)
-                    })
-                    .dedup()
-                    .collect_vec();
-                    let minimizers = text_lr_minimizers(&text, w, k, t, &order::RandomOrder)
-                        .dedup()
-                        .collect_vec();
-                    assert_eq!(anchors, minimizers);
+                    let m = ModSampling::new(k, w, t, RandomOrder);
+                    let stream = m.stream(&text).collect_vec();
+                    let stream_naive = m.stream_naive(&text).collect_vec();
+                    assert_eq!(stream, stream_naive);
                 }
             }
         }
@@ -501,15 +430,10 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let anchors = stream(&text, w, k, |lmer| {
-                        super::miniception(lmer, k, k0, &order::RandomOrder)
-                    })
-                    .dedup()
-                    .collect_vec();
-                    let minimizers = text_miniception(&text, w, k, k0, &order::RandomOrder)
-                        .dedup()
-                        .collect_vec();
-                    assert_eq!(anchors, minimizers);
+                    let m = Miniception::new(w, k, k0, RandomOrder);
+                    let stream = m.stream(&text).collect_vec();
+                    let stream_naive = m.stream_naive(&text).collect_vec();
+                    assert_eq!(stream, stream_naive);
                 }
             }
         }
@@ -521,15 +445,10 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let anchors = stream(&text, w, k, |lmer| {
-                        super::miniception_new(lmer, k, k0, &order::RandomOrder)
-                    })
-                    .dedup()
-                    .collect_vec();
-                    let minimizers = text_miniception_new(&text, w, k, k0, &order::RandomOrder)
-                        .dedup()
-                        .collect_vec();
-                    assert_eq!(anchors, minimizers);
+                    let m = MiniceptionNew::new(w, k, k0, RandomOrder);
+                    let stream = m.stream(&text).collect_vec();
+                    let stream_naive = m.stream_naive(&text).collect_vec();
+                    assert_eq!(stream, stream_naive);
                 }
             }
         }

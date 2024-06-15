@@ -1,5 +1,3 @@
-use super::pack;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Ord)]
 pub enum Direction {
     Leftmost,
@@ -18,20 +16,26 @@ impl PartialOrd for Direction {
     }
 }
 
+/// A directed order: each kmer is mapped to its priority value.
+/// Additionally, each kmer is mapped to a direction, determining whether the
+/// leftmost or rightmost kmer of this priority is taken in case of ties.
 pub trait DirectedOrder {
     fn key(&self, kmer: &[u8]) -> (usize, Direction);
 }
 
+/// Maps a kmer to its priority value. Lower is higher priority.
 pub trait Order {
     fn key(&self, kmer: &[u8]) -> usize;
 }
 
+/// Every order implies a basic directed order.
 impl<T: Order> DirectedOrder for T {
     fn key(&self, kmer: &[u8]) -> (usize, Direction) {
         (self.key(kmer), Direction::Leftmost)
     }
 }
 
+/// A random order than hashes each kmer using `fxhash64`.
 pub struct RandomOrder;
 
 impl Order for RandomOrder {
@@ -40,6 +44,8 @@ impl Order for RandomOrder {
     }
 }
 
+/// An order given by explicit enumeration of all kmers.
+#[derive(Clone)]
 pub struct ExplicitOrder {
     /// The kmer length of this order.
     pub k: usize,
@@ -60,6 +66,15 @@ impl ExplicitOrder {
     }
 }
 
+/// Returns the integer value of a kmer.
+pub fn pack(kmer: &[u8], sigma: usize) -> usize {
+    let mut v = 0;
+    for c in kmer {
+        v = sigma * v + *c as usize;
+    }
+    v
+}
+
 impl Order for ExplicitOrder {
     fn key(&self, kmer: &[u8]) -> usize {
         assert_eq!(kmer.len(), self.k);
@@ -68,6 +83,7 @@ impl Order for ExplicitOrder {
     }
 }
 
+/// A directed order given by explicit enumeration of all kmers.
 pub struct ExplicitDirectedOrder {
     /// The kmer length of this order.
     pub k: usize,
