@@ -181,7 +181,7 @@ impl MinimizerType {
                     .collect()
             }
             MinimizerType::RotMinimizer => {
-                if k > w {
+                if k % w == 0 {
                     vec![*self]
                 } else {
                     vec![]
@@ -284,8 +284,8 @@ fn main() {
                 &[4, 8, 16, 32][..]
             } else {
                 &[
-                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                    23, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64,
+                    5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26,
+                    28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64,
                 ][..]
             };
             let ws = if small {
@@ -293,7 +293,7 @@ fn main() {
             } else if stats {
                 &[8, 16, 32, 64][..]
             } else {
-                &[8, 16, 32][..]
+                &[8][..]
             };
             let k_w_tp = ks
                 .iter()
@@ -303,8 +303,11 @@ fn main() {
             let mut results = vec![None; k_w_tp.len()];
             let done = AtomicUsize::new(0);
             let total = k_w_tp.len();
-            let dbs = &de_bruijn_sequence(args.sigma, 8);
-            let text = if small { dbs } else { text };
+            let text = if small {
+                &de_bruijn_sequence(args.sigma, 8)
+            } else {
+                text
+            };
             k_w_tp
                 .par_iter()
                 .zip(&mut results)

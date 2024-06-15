@@ -13,7 +13,7 @@ use num::{complex::Complex64, Zero};
 use order::*;
 use std::{cmp::Reverse, f64::consts::PI};
 
-/// An iterator over deduplicated minimizer positions.
+/// An iterator over *all* minimizer positions. Not yet deduplicated.
 ///
 /// NOTE: For non-forward schemes, positions may be returned twice.
 pub trait MinimizerIt = Iterator<Item = usize>;
@@ -22,7 +22,7 @@ pub trait SamplingScheme {
     fn l(&self) -> usize;
     /// Sample a single lmer.
     fn sample(&self, lmer: &[u8]) -> usize;
-    /// Sample all lmers in a text, and deduplicate.
+    /// Sample all lmers in a text.
     /// This default implementation simply calls `sample` on each lmer.
     // TODO: Take an iterator over u8 instead?
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
@@ -40,13 +40,12 @@ pub trait SamplingScheme {
         poss.dedup();
         poss.len()
     }
-    /// Sample all lmers in a text, and deduplicate.
+    /// Sample all lmers in a text.
     /// This default implementation simply calls `sample` on each lmer.
     fn stream_naive(&self, text: &[u8]) -> impl MinimizerIt {
         text.windows(self.l())
             .enumerate()
             .map(|(i, lmer)| i + self.sample(lmer))
-            .dedup()
     }
 }
 
@@ -97,13 +96,10 @@ impl<O: DirectedOrder> SamplingScheme for Minimizer<O> {
         }
         // i: position of lmer
         // j: position of kmer
-        kmers
-            .enumerate()
-            .map(move |(i, (j, kmer))| {
-                q.push(j, self.o.key(kmer));
-                q.pop(i).unwrap().0
-            })
-            .dedup()
+        kmers.enumerate().map(move |(i, (j, kmer))| {
+            q.push(j, self.o.key(kmer));
+            q.pop(i).unwrap().0
+        })
     }
 }
 
@@ -244,18 +240,15 @@ impl<O: Order> SamplingScheme for Miniception<O> {
         }
 
         // 3: Iterate l-mers.
-        kmers
-            .enumerate()
-            .map(move |(i, ((j, kmer), (j0, k0mer)))| {
-                q0.push(j0, Order::key(o0, k0mer));
-                let min_pos = q0.pop(j).unwrap().0;
-                if min_pos == j || min_pos == j + self.w0 {
-                    q.push(j, self.o.key(kmer));
-                }
+        kmers.enumerate().map(move |(i, ((j, kmer), (j0, k0mer)))| {
+            q0.push(j0, Order::key(o0, k0mer));
+            let min_pos = q0.pop(j).unwrap().0;
+            if min_pos == j || min_pos == j + self.w0 {
+                q.push(j, self.o.key(kmer));
+            }
 
-                q.pop(i).unwrap().0
-            })
-            .dedup()
+            q.pop(i).unwrap().0
+        })
     }
 }
 
@@ -350,25 +343,22 @@ impl<O: Order> SamplingScheme for MiniceptionNew<O> {
         }
 
         // 3: Iterate l-mers.
-        kmers
-            .enumerate()
-            .map(move |(i, ((j, kmer), (j0, k0mer)))| {
-                q0.push(j0, Order::key(o0, k0mer));
-                let min_pos = q0.pop(j).unwrap().0;
-                if min_pos == j || min_pos == j + self.w0 {
-                    q.push(
-                        j,
-                        (
-                            min_pos == j,
-                            Order::key(o0, &text[min_pos..min_pos + self.k0]),
-                            self.o.key(kmer),
-                        ),
-                    );
-                }
+        kmers.enumerate().map(move |(i, ((j, kmer), (j0, k0mer)))| {
+            q0.push(j0, Order::key(o0, k0mer));
+            let min_pos = q0.pop(j).unwrap().0;
+            if min_pos == j || min_pos == j + self.w0 {
+                q.push(
+                    j,
+                    (
+                        min_pos == j,
+                        Order::key(o0, &text[min_pos..min_pos + self.k0]),
+                        self.o.key(kmer),
+                    ),
+                );
+            }
 
-                q.pop(i).unwrap().0
-            })
-            .dedup()
+            q.pop(i).unwrap().0
+        })
     }
 }
 
@@ -464,13 +454,10 @@ impl<O: Order> SamplingScheme for ModSampling<O> {
         }
         // i: position of lmer
         // j: position of tmer
-        tmers
-            .enumerate()
-            .map(move |(i, (j, tmer))| {
-                q.push(j, self.o.key(tmer));
-                i + self.fastmod_w.reduce(q.pop(i).unwrap().0 - i)
-            })
-            .dedup()
+        tmers.enumerate().map(move |(i, (j, tmer))| {
+            q.push(j, self.o.key(tmer));
+            i + self.fastmod_w.reduce(q.pop(i).unwrap().0 - i)
+        })
     }
 }
 
