@@ -1,5 +1,5 @@
 eval:
-    cargo run -r -- -n 500000 -s 256 eval -o data/density_256.json
+    cargo run -r -- -n 5000000 -s 256 eval -o data/density_256.json
 eval-4:
     cargo run -r -- -n 5000000 -s 4 eval -o data/density_4.json
 
