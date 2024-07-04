@@ -293,12 +293,6 @@ enum Command {
         #[clap(subcommand)]
         tp: MinimizerType,
     },
-    Compare {
-        #[clap(short, default_value_t = 40)]
-        w: usize,
-        #[arg(short, default_value_t = 10)]
-        k: usize,
-    },
     Eval {
         /// Write to file.
         #[clap(short, long)]
@@ -341,7 +335,6 @@ fn main() {
             // eprintln!("    {row:.5?}");
             // }
         }
-        Command::Compare { w, k } => compare_methods(text, k, w, args.sigma),
 
         Command::Eval {
             output,
@@ -427,35 +420,7 @@ fn main() {
                         dists,
                         transfer,
                     }));
-                    // let done = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    // eprint!("{done:>3}/{total:>3}: k={k} w={w} l={l} tp={tp:?} d={density:.3}\r");
                 }
-                // let Some(((density, positions, dists, transfer), tp)) = tps
-                //     .iter()
-                //     .map(|tp| (tp.stats(text, w, k, args.sigma), tp))
-                //     .min_by(|(ld, _), (rd, _)| {
-                //         if ld.0 < rd.0 {
-                //             std::cmp::Ordering::Less
-                //         } else {
-                //             std::cmp::Ordering::Greater
-                //         }
-                //     })
-                // else {
-                //     done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                //     return;
-                // };
-                // let mut results = results.lock().unwrap();
-                // results.push(Some(Result {
-                //     sigma: args.sigma,
-                //     k,
-                //     w,
-                //     l,
-                //     tp: *tp,
-                //     density,
-                //     positions,
-                //     dists,
-                //     transfer,
-                // }));
                 let done = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 eprint!("{done:>3}/{total:>3}: k={k} w={w} l={l} tp={tp:?}\r");
             });
@@ -476,42 +441,6 @@ fn main() {
             }
         }
     }
-}
-
-fn compare_methods(text: &[u8], k: usize, w: usize, sigma: usize) {
-    let base_types = vec![
-        MinimizerType::Minimizer,
-        // MinimizerType::BdAnchor { r: 0 },
-        MinimizerType::Miniception { k0: 0 },
-        MinimizerType::MiniceptionNew { k0: 0 },
-        MinimizerType::ModSampling { k0: 0 },
-        MinimizerType::RotMinimizer,
-        MinimizerType::DecyclingMinimizer,
-        MinimizerType::DoubleDecyclingMinimizer,
-    ];
-
-    base_types.par_iter().for_each(|&tp| {
-        let l = w + k - 1;
-        let tps = tp.try_params(w, k);
-        let Some(((density, _positions, _dists, _transfer), tp)) = tps
-            .iter()
-            .map(|tp| (tp.stats(text, w, k, sigma), tp))
-            .min_by(|(ld, _), (rd, _)| {
-                if ld.0 < rd.0 {
-                    std::cmp::Ordering::Less
-                } else {
-                    std::cmp::Ordering::Greater
-                }
-            })
-        else {
-            return;
-        };
-        eprintln!("k={k} w={w} l={l} d={density:.3} tp={tp:?}");
-    });
-
-    let best = bruteforce::bruteforce_minimizer(k, w, sigma);
-    let d = (best.0 .0) as f32 / best.0 .1 as f32;
-    eprintln!("k={k} w={w} l={} d={d:.3} tp=Bruteforce", k + w - 1);
 }
 
 #[cfg(test)]
