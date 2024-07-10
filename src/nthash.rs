@@ -35,20 +35,12 @@ const RC_LOOKUP: [u64; 4] = {
 
 #[inline(always)]
 fn h(c: u8) -> u64 {
-    let val = H_LOOKUP[c as usize];
-    if val == 1 {
-        panic!("Non-ACGTN nucleotide encountered! {}", c as char)
-    }
-    val
+    unsafe { *H_LOOKUP.get_unchecked(c as usize) }
 }
 
 #[inline(always)]
-fn rc(nt: u8) -> u64 {
-    let val = RC_LOOKUP[nt as usize];
-    if val == 1 {
-        panic!("Non-ACGTN nucleotide encountered! {}", nt as char)
-    }
-    val
+fn rc(c: u8) -> u64 {
+    unsafe { *RC_LOOKUP.get_unchecked(c as usize) }
 }
 
 /// Calculate the hash for a k-mer in the forward strand of a sequence.
@@ -281,8 +273,8 @@ impl<'a> Iterator for NtHashForwardIterator<'a> {
 
         if self.current_idx != 0 {
             let i = self.current_idx - 1;
-            let seqi = self.seq[i];
-            let seqk = self.seq[i + self.k];
+            let seqi = unsafe { *self.seq.get_unchecked(i) };
+            let seqk = unsafe { *self.seq.get_unchecked(i + self.k) };
 
             self.fh = self.fh.rotate_left(1) ^ h(seqi).rotate_left(self.k as u32) ^ h(seqk);
         }
