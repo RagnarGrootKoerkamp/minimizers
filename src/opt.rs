@@ -250,7 +250,74 @@ impl SamplingScheme for MinimizerStacks {
     }
 }
 
+/// Idea based on https://codeforces.com/blog/entry/71687:
+/// Every w positions, compute suffix minimimums for the w suffixes ending there.
+pub struct MinimizerStacksBuf {
+    pub k: usize,
+    pub w: usize,
+}
+
+impl SamplingScheme for MinimizerStacksBuf {
+    #[inline(always)]
+    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+        let kmer_hashes = nthash::NtHashForwardIterator::new(text, self.k).unwrap();
+        // .map(|x| x >> 58);
+        let mut kmers = kmer_hashes.enumerate();
+
+        // Rolling window containing (pos hash, suffix hash, pos).
+        let mut hashes = vec![(0, 0, 0); 3 * self.w];
+        let mut read = 0;
+        let mut update = self.w;
+        let mut write = 2 * self.w;
+
+        // Process the first w-1 kmers.
+        for (j, h) in kmers.by_ref().take(self.w - 1) {
+            hashes[write + j] = (h, h, j);
+        }
+        let mut hash_idx = self.w - 1;
+
+        let mut rmin = (u64::MAX, usize::MAX);
+        let mut lmin = (u64::MAX, usize::MAX);
+
+        let cmp = |x: (u64, usize), y: (u64, usize)| std::cmp::min_by_key(x, y, |x| x.0);
+
+        // i: absolute position of lmer
+        // j: absolute position of kmer
+        kmers.enumerate().map(
+            #[inline(always)]
+            move |(_i, (j, h))| {
+                // write
+                unsafe { *hashes.get_unchecked_mut(write + hash_idx) = (h, h, j) };
+                // update
+                let entry =
+                    unsafe { &mut *hashes.get_unchecked_mut(update + self.w - 1 - hash_idx) };
+                lmin = cmp((entry.1, entry.2), lmin);
+                (entry.1, entry.2) = lmin;
+
+                // read rmin
+                let entry = unsafe { *hashes.get_unchecked(update + hash_idx) };
+                rmin = cmp(rmin, (entry.0, j - 1 * self.w));
+
+                hash_idx += 1;
+                if hash_idx == self.w {
+                    (read, update, write) = (update, write, read);
+                    hash_idx = 0;
+                    lmin = (u64::MAX, usize::MAX);
+                    rmin = (u64::MAX, usize::MAX);
+                }
+
+                // read lmin
+                let entry = unsafe { *hashes.get_unchecked(read + hash_idx) };
+                let ans = cmp((entry.1, entry.2), rmin);
+
+                ans.1
+            },
+        )
+    }
+}
+
 // TODO: Buffered, doing the reverse loop w steps ahead.
 // TODO: SIMD? Processing 4 chunks/sequences in parallel?
 // TODO: Precompute 4^2 lookup table.
 // TODO: Alternative hash: take xor of t=8-mers multiplied by constant C.
+// TODO: https://en.algorithmica.org/hpc/algorithms/prefix/

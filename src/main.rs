@@ -551,4 +551,18 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn minimizers_buf() {
+        let text = generate_random_dna(1000);
+        for k in 1..=20 {
+            for w in 1..=20 {
+                let m = Minimizer::new(k, w, NtOrder);
+                let m2 = MinimizerStacksBuf { k, w };
+                let stream = m.stream(&text).collect_vec();
+                let stream2 = m2.stream(&text).collect_vec();
+                assert_eq!(&stream2[w..], &stream[..stream.len() - w]);
+            }
+        }
+    }
 }

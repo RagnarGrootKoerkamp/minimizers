@@ -3,39 +3,43 @@ use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use minimizers::*;
-use order::RandomOrder;
+// use order::RandomOrder;
 
 fn bench(c: &mut Criterion) {
     let string = generate_random_dna(1000000);
-    let k = 10;
-    let w = 10;
-    let o = RandomOrder;
-    let mini = RandomMinimizer::new(k, w, o);
-    c.bench_function("random_minimizer_simple", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
-    });
-    let mini = MinimizerRehash { k, w, o };
-    c.bench_function("random_minimizer_rehash", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
-    });
-    let mini = MinimizerRescan { k, w, o };
-    c.bench_function("random_minimizer_rescan", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
-    });
-    let mini = MinimizerRescanNt { k, w };
-    c.bench_function("random_minimizer_rescan_nt_0", |b| {
-        b.iter(|| mini.stream_dedup_0(&string).count());
-    });
+    let k = 30;
+    let w = 20;
+    // let o = RandomOrder;
+    // let mini = RandomMinimizer::new(k, w, o);
+    // c.bench_function("random_minimizer_simple", |b| {
+    //     b.iter(|| mini.stream_dedup_1(&string).count());
+    // });
+    // let mini = MinimizerRehash { k, w, o };
+    // c.bench_function("random_minimizer_rehash", |b| {
+    //     b.iter(|| mini.stream_dedup_1(&string).count());
+    // });
+    // let mini = MinimizerRescan { k, w, o };
+    // c.bench_function("random_minimizer_rescan", |b| {
+    //     b.iter(|| mini.stream_dedup_1(&string).count());
+    // });
+    // let mini = MinimizerRescanNt { k, w };
+    // c.bench_function("random_minimizer_rescan_nt_0", |b| {
+    //     b.iter(|| mini.stream_dedup_0(&string).count());
+    // });
     let mini = MinimizerRescanNt { k, w };
     c.bench_function("random_minimizer_rescan_nt_1", |b| {
         b.iter(|| mini.stream_dedup_1(&string).count());
     });
-    let mini = MinimizerRescanNt { k, w };
-    c.bench_function("random_minimizer_rescan_nt_2", |b| {
-        b.iter(|| mini.stream_dedup_2(&string).count());
-    });
+    // let mini = MinimizerRescanNt { k, w };
+    // c.bench_function("random_minimizer_rescan_nt_2", |b| {
+    //     b.iter(|| mini.stream_dedup_2(&string).count());
+    // });
     let mini = MinimizerStacks { k, w };
     c.bench_function("random_minimizer_stacks", |b| {
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
+    let mini = MinimizerStacksBuf { k, w };
+    c.bench_function("random_minimizer_buf", |b| {
         b.iter(|| mini.stream_dedup_1(&string).count());
     });
 }
