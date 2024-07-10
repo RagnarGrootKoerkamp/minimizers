@@ -20,12 +20,18 @@ use std::{cmp::Reverse, f64::consts::PI};
 pub trait MinimizerIt = Iterator<Item = usize>;
 
 pub trait SamplingScheme {
-    fn l(&self) -> usize;
+    fn l(&self) -> usize {
+        unimplemented!("l() is needed for stream_naive() and cyclic_text_density().");
+    }
     /// Sample a single lmer.
-    fn sample(&self, lmer: &[u8]) -> usize;
+    fn sample(&self, _lmer: &[u8]) -> usize {
+        unimplemented!("Use stream() instead.");
+    }
+
     /// Sample all lmers in a text.
     /// This default implementation simply calls `sample` on each lmer.
     // TODO: Take an iterator over u8 instead?
+    #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         self.stream_naive(text)
     }
@@ -61,12 +67,8 @@ pub struct Minimizer<O: DirectedOrder> {
 impl<O: DirectedOrder> Minimizer<O> {
     pub fn new(k: usize, w: usize, o: O) -> Self {
         assert!(k > 0);
-        Self {
-            k,
-            w,
-            l: k + w - 1,
-            o,
-        }
+        let l = k + w - 1;
+        Self { k, w, l, o }
     }
     pub fn ord(&self) -> &O {
         &self.o
@@ -88,6 +90,7 @@ impl<O: DirectedOrder> SamplingScheme for Minimizer<O> {
     }
 
     // TODO: Rolling hash using NtHash.
+    #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         let mut q = monotone_queue::MonotoneQueue::new();
         let mut kmers = text.windows(self.k).enumerate();
@@ -212,6 +215,7 @@ impl<O: Order> SamplingScheme for Miniception<O> {
             .0
     }
 
+    #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         // Queue of all k0-mers.
         let mut q0 = MonotoneQueue::new();
@@ -308,6 +312,7 @@ impl<O: Order> SamplingScheme for MiniceptionNew<O> {
             .0
     }
 
+    #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         // Queue of all k0-mers.
         let mut q0 = MonotoneQueue::new();
@@ -446,6 +451,7 @@ impl<O: Order> SamplingScheme for ModSampling<O> {
     }
 
     /// NOTE: This is not always a forward scheme.
+    #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         let mut q = MonotoneQueue::new();
         let mut tmers = text.windows(self.t).enumerate();
@@ -679,6 +685,7 @@ impl SamplingScheme for OpenSyncmer {
             .0
     }
 
+    #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         // Queue of t-mers.
         let mut qt = MonotoneQueue::new();
