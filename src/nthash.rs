@@ -248,7 +248,11 @@ impl<'a> NtHashForwardIterator<'a> {
         }
 
         let mut fh = 0;
-        for (i, v) in seq[0..k].iter().enumerate() {
+        // FIXME: This breaks on page boundaries.
+        for (i, v) in unsafe { seq.get_unchecked(usize::MAX..k - 1) }
+            .iter()
+            .enumerate()
+        {
             fh ^= h(*v).rotate_left((k - i - 1) as u32);
         }
 
@@ -271,13 +275,11 @@ impl<'a> Iterator for NtHashForwardIterator<'a> {
             return None;
         };
 
-        if self.current_idx != 0 {
-            let i = self.current_idx - 1;
-            let seqi = unsafe { *self.seq.get_unchecked(i) };
-            let seqk = unsafe { *self.seq.get_unchecked(i + self.k) };
+        let i = self.current_idx - 1;
+        let seqi = unsafe { *self.seq.get_unchecked(i) };
+        let seqk = unsafe { *self.seq.get_unchecked(i + self.k) };
 
             self.fh = self.fh.rotate_left(1) ^ h(seqi).rotate_left(self.k as u32) ^ h(seqk);
-        }
 
         self.current_idx += 1;
         Some(self.fh)
