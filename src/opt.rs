@@ -197,3 +197,60 @@ impl SamplingScheme for MinimizerRescanNt {
         )
     }
 }
+
+/// Idea based on https://codeforces.com/blog/entry/71687:
+/// Every w positions, compute suffix minimimums for the w suffixes ending there.
+pub struct MinimizerStacks {
+    pub k: usize,
+    pub w: usize,
+}
+
+impl SamplingScheme for MinimizerStacks {
+    #[inline(always)]
+    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+        let kmer_hashes = nthash::NtHashForwardIterator::new(text, self.k).unwrap();
+        let mut kmers = kmer_hashes.enumerate();
+
+        // Rolling window of last w hashes.
+        let mut hashes = vec![(0, 0); self.w];
+
+        // Process the first w-1 kmers.
+        for (j, h) in kmers.by_ref().take(self.w - 1) {
+            hashes[j] = (h, j);
+        }
+        let mut hash_idx = self.w - 1;
+
+        let mut rmin = (u64::MAX, usize::MAX);
+
+        // i: absolute position of lmer
+        // j: absolute position of kmer
+        kmers.enumerate().map(
+            #[inline(always)]
+            move |(_i, (j, h))| {
+                unsafe { *hashes.get_unchecked_mut(hash_idx) = (h, j) };
+                rmin = std::cmp::min_by_key(rmin, (h, j), |x| x.0);
+                hash_idx += 1;
+                if hash_idx == self.w {
+                    hash_idx = 0;
+
+                    // Rolling suffix minima over the prefix.
+                    for i in (0..self.w - 1).rev() {
+                        unsafe {
+                            let y = *hashes.get_unchecked(i + 1);
+                            let x = &mut *hashes.get_unchecked_mut(i);
+                            *x = std::cmp::min_by_key(*x, y, |x| x.0);
+                        }
+                    }
+
+                    rmin = (u64::MAX, usize::MAX);
+                }
+                std::cmp::min_by_key(unsafe { *hashes.get_unchecked(hash_idx) }, rmin, |x| x.0).1
+            },
+        )
+    }
+}
+
+// TODO: Buffered, doing the reverse loop w steps ahead.
+// TODO: SIMD? Processing 4 chunks/sequences in parallel?
+// TODO: Precompute 4^2 lookup table.
+// TODO: Alternative hash: take xor of t=8-mers multiplied by constant C.

@@ -34,6 +34,10 @@ fn bench(c: &mut Criterion) {
     c.bench_function("random_minimizer_rescan_nt_2", |b| {
         b.iter(|| mini.stream_dedup_2(&string).count());
     });
+    let mini = MinimizerStacks { k, w };
+    c.bench_function("random_minimizer_stacks", |b| {
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
 }
 
 criterion_group!(
