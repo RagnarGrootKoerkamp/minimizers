@@ -40,13 +40,14 @@ pub trait SamplingScheme {
     /// characters must equal a prefix of the text.
     ///
     /// Returns the number of selected minimizers.
-    fn sample_cyclic_text(&self, text: &[u8], len: usize) -> usize {
+    fn cyclic_text_density(&self, text: &[u8], len: usize) -> usize {
         let text = &text[..len + self.l() - 1];
         let mut poss: Vec<_> = self.stream(text).map(|p| p % len).collect();
         poss.sort();
         poss.dedup();
         poss.len()
     }
+
     /// Sample all lmers in a text.
     /// This default implementation simply calls `sample` on each lmer.
     fn stream_naive(&self, text: &[u8]) -> impl MinimizerIt {
