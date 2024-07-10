@@ -626,18 +626,10 @@ pub struct OpenSyncmer {
 }
 
 impl OpenSyncmer {
-    pub fn new(
-        k: usize,
-        w: usize,
-        t: usize,
-        tiebreak: bool,
-        closed: bool,
-        transfer: usize,
-    ) -> Self {
-        assert!(transfer < w);
+    pub fn new(k: usize, w: usize, t: usize, tiebreak: bool, closed: bool) -> Self {
         Self {
-            k: k + transfer,
-            w: w - transfer,
+            k,
+            w,
             t,
             o: RandomOrder,
             rand_mini: Minimizer::new(t, k - t + 1, RandomOrder),

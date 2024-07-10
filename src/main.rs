@@ -92,12 +92,10 @@ enum MinimizerType {
     OpenSyncmerMinimizer {
         t: usize,
         tiebreak: bool,
-        transfer: usize,
     },
     OpenClosedSyncmerMinimizer {
         t: usize,
         tiebreak: bool,
-        transfer: usize,
     },
     FracMin {
         f: usize,
@@ -154,24 +152,14 @@ impl MinimizerType {
                 let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
                 collect_stats(w, text, m)
             }
-            MinimizerType::OpenSyncmerMinimizer {
-                t,
-                tiebreak,
-                transfer,
-            } => collect_stats(
+            MinimizerType::OpenSyncmerMinimizer { t, tiebreak } => collect_stats(
                 w,
                 text,
-                OpenSyncmer::new(k, w, *t, *tiebreak, false, *transfer),
+                OpenSyncmer::new(k + t - 1, w, *t, *tiebreak, false),
             ),
-            MinimizerType::OpenClosedSyncmerMinimizer {
-                t,
-                tiebreak,
-                transfer,
-            } => collect_stats(
-                w,
-                text,
-                OpenSyncmer::new(k, w, *t, *tiebreak, true, *transfer),
-            ),
+            MinimizerType::OpenClosedSyncmerMinimizer { t, tiebreak } => {
+                collect_stats(w, text, OpenSyncmer::new(k + t - 1, w, *t, *tiebreak, true))
+            }
             MinimizerType::FracMin { f } => collect_stats(w, text, FracMin::new(k, w, *f)),
         }
     }
@@ -257,25 +245,15 @@ impl MinimizerType {
                 }
             }
             MinimizerType::OpenSyncmerMinimizer { .. } => {
-                let t_min = 1;
-                // FIXME: For large k, t>1 is better. But we focus on small k for now.
-                let t_max = k.min(1);
-                (t_min..=t_max)
-                    .step_by(3)
-                    .cartesian_product([true])
-                    // .cartesian_product(0..w)
-                    .map(|(t, tiebreak)| MinimizerType::OpenSyncmerMinimizer {
-                        t,
-                        tiebreak,
-                        transfer: 0,
-                    })
-                    .collect()
+                vec![MinimizerType::OpenSyncmerMinimizer {
+                    t: 1,
+                    tiebreak: true,
+                }]
             }
             MinimizerType::OpenClosedSyncmerMinimizer { .. } => {
                 vec![MinimizerType::OpenClosedSyncmerMinimizer {
                     t: 1,
                     tiebreak: true,
-                    transfer: 0,
                 }]
             }
             MinimizerType::FracMin { .. } => (1..w).map(|f| MinimizerType::FracMin { f }).collect(),
@@ -330,7 +308,6 @@ fn main() {
             // eprintln!("  Poss    : {ps:.5?}");
             // eprintln!("  Dists<0 : {:.5?}", &ds[0..w]);
             // eprintln!("  Dists>0 : {:.5?}", &ds[w + 1..]);
-            // eprintln!("  Transfer:");
             // for row in &transfer {
             // eprintln!("    {row:.5?}");
             // }
@@ -343,26 +320,25 @@ fn main() {
         } => {
             let mut base_types = vec![
                 MinimizerType::Minimizer,
-                // MinimizerType::BdAnchor { r: 0 },
+                MinimizerType::BdAnchor { r: 0 },
                 MinimizerType::Miniception { k0: 0 },
                 // MinimizerType::MiniceptionNew { k0: 0 },
                 // MinimizerType::ModSampling { k0: 0 },
                 MinimizerType::LrMinimizer,
                 MinimizerType::ModMinimizer,
-                MinimizerType::RotMinimizer,
-                MinimizerType::AltRotMinimizer,
+                // NOTE: These Rotmini/AltRotmini assume alphabet size 4.
+                // MinimizerType::RotMinimizer,
+                // MinimizerType::AltRotMinimizer,
                 MinimizerType::DecyclingMinimizer,
                 MinimizerType::DoubleDecyclingMinimizer,
                 MinimizerType::OpenSyncmerMinimizer {
                     t: 0,
                     tiebreak: false,
-                    transfer: 0,
                 },
-                // MinimizerType::OpenClosedSyncmerMinimizer {
-                //     t: 0,
-                //     tiebreak: false,
-                //     transfer: 0,
-                // },
+                MinimizerType::OpenClosedSyncmerMinimizer {
+                    t: 0,
+                    tiebreak: false,
+                },
                 // MinimizerType::FracMin { f: 0 },
             ];
             if small {
@@ -513,7 +489,7 @@ mod test {
             for w in 1..=20 {
                 for t in 1..k {
                     eprintln!("k {k} w {w} t {t}");
-                    let m = OpenSyncmer::new(k, w, t, true, false, 0);
+                    let m = OpenSyncmer::new(k, w, t, true, false);
                     let stream = m.stream(&text).collect_vec();
                     let stream_naive = m.stream_naive(&text).collect_vec();
                     assert_eq!(stream, stream_naive);
