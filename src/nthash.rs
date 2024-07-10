@@ -15,23 +15,21 @@
 
 pub(crate) const MAXIMUM_K_SIZE: usize = u32::max_value() as usize;
 
-const H_LOOKUP: [u64; 256] = {
-    let mut lookup = [1; 256];
-    lookup[b'A' as usize] = 0x3c8b_fbb3_95c6_0474;
-    lookup[b'C' as usize] = 0x3193_c185_62a0_2b4c;
-    lookup[b'G' as usize] = 0x2032_3ed0_8257_2324;
-    lookup[b'T' as usize] = 0x2955_49f5_4be2_4456;
-    lookup[b'N' as usize] = 0;
+const H_LOOKUP: [u64; 4] = {
+    let mut lookup = [0; 4];
+    lookup[0] = 0x3c8b_fbb3_95c6_0474;
+    lookup[1] = 0x3193_c185_62a0_2b4c;
+    lookup[2] = 0x2032_3ed0_8257_2324;
+    lookup[3] = 0x2955_49f5_4be2_4456;
     lookup
 };
 
-const RC_LOOKUP: [u64; 256] = {
-    let mut lookup = [1; 256];
-    lookup[b'A' as usize] = 0x2955_49f5_4be2_4456;
-    lookup[b'C' as usize] = 0x2032_3ed0_8257_2324;
-    lookup[b'G' as usize] = 0x3193_c185_62a0_2b4c;
-    lookup[b'T' as usize] = 0x3c8b_fbb3_95c6_0474;
-    lookup[b'N' as usize] = 0;
+const RC_LOOKUP: [u64; 4] = {
+    let mut lookup = [0; 4];
+    lookup[0] = 0x2955_49f5_4be2_4456;
+    lookup[1] = 0x2032_3ed0_8257_2324;
+    lookup[2] = 0x3193_c185_62a0_2b4c;
+    lookup[3] = 0x3c8b_fbb3_95c6_0474;
     lookup
 };
 
