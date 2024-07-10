@@ -5,6 +5,7 @@ pub enum Direction {
 }
 
 impl PartialOrd for Direction {
+    #[inline(always)]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self != other {
             None
@@ -15,6 +16,8 @@ impl PartialOrd for Direction {
         }
     }
 }
+
+// TODO: Unify Order and DirectedOrder by returning an associated type O: Ord.
 
 /// A directed order: each kmer is mapped to its priority value.
 /// Additionally, each kmer is mapped to a direction, determining whether the
@@ -30,15 +33,18 @@ pub trait Order {
 
 /// Every order implies a basic directed order.
 impl<T: Order> DirectedOrder for T {
+    #[inline(always)]
     fn key(&self, kmer: &[u8]) -> (usize, Direction) {
         (self.key(kmer), Direction::Leftmost)
     }
 }
 
 /// A random order than hashes each kmer using `fxhash64`.
+#[derive(Clone, Copy)]
 pub struct RandomOrder;
 
 impl Order for RandomOrder {
+    #[inline(always)]
     fn key(&self, kmer: &[u8]) -> usize {
         fxhash::hash64(kmer) as usize
     }
@@ -56,6 +62,7 @@ pub struct ExplicitOrder {
 }
 
 impl ExplicitOrder {
+    #[inline(always)]
     pub fn lexicographic(k: usize, sigma: usize) -> Self {
         let n = sigma.pow(k as u32);
         Self {
@@ -67,6 +74,7 @@ impl ExplicitOrder {
 }
 
 /// Returns the integer value of a kmer.
+#[inline(always)]
 pub fn pack(kmer: &[u8], sigma: usize) -> usize {
     let mut v = 0;
     for c in kmer {
@@ -76,6 +84,7 @@ pub fn pack(kmer: &[u8], sigma: usize) -> usize {
 }
 
 impl Order for ExplicitOrder {
+    #[inline(always)]
     fn key(&self, kmer: &[u8]) -> usize {
         assert_eq!(kmer.len(), self.k);
         // Find index of kmer.
@@ -94,6 +103,7 @@ pub struct ExplicitDirectedOrder {
 }
 
 impl DirectedOrder for ExplicitDirectedOrder {
+    #[inline(always)]
     fn key(&self, kmer: &[u8]) -> (usize, Direction) {
         assert_eq!(kmer.len(), self.k);
         // Find index of kmer.

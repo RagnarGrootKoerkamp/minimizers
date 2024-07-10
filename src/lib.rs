@@ -5,6 +5,7 @@ pub mod de_bruijn_seq;
 pub mod ilp_scheme;
 pub mod local_scheme;
 pub mod monotone_queue;
+pub mod opt;
 pub mod order;
 
 use crate::monotone_queue::MonotoneQueue;
