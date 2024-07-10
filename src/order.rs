@@ -1,3 +1,5 @@
+use crate::nthash;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Ord)]
 pub enum Direction {
     Leftmost,
@@ -108,5 +110,13 @@ impl DirectedOrder for ExplicitDirectedOrder {
         assert_eq!(kmer.len(), self.k);
         // Find index of kmer.
         self.idx[pack(kmer, self.sigma)]
+    }
+}
+
+pub struct NtOrder;
+
+impl Order for NtOrder {
+    fn key(&self, kmer: &[u8]) -> usize {
+        nthash::ntf64(kmer, 0, kmer.len()) as usize
     }
 }

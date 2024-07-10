@@ -415,7 +415,10 @@ fn main() {
 #[cfg(test)]
 mod test {
 
+    use order::NtOrder;
+
     use super::*;
+
     #[test]
     fn minimizers() {
         let text = generate_random_string(1000, 4);
@@ -514,6 +517,20 @@ mod test {
             for w in 2..=20 {
                 let m = Minimizer::new(k, w, RandomOrder);
                 let m2 = MinimizerRescan { k, w, o };
+                let stream = m.stream(&text).collect_vec();
+                let stream2 = m2.stream(&text).collect_vec();
+                assert_eq!(stream2, stream);
+            }
+        }
+    }
+
+    #[test]
+    fn minimizers_rescan_nt() {
+        let text = generate_random_dna(1000);
+        for k in 1..=20 {
+            for w in 2..=20 {
+                let m = Minimizer::new(k, w, NtOrder);
+                let m2 = MinimizerRescanNt { k, w };
                 let stream = m.stream(&text).collect_vec();
                 let stream2 = m2.stream(&text).collect_vec();
                 assert_eq!(stream2, stream);

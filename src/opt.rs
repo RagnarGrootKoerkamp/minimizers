@@ -124,3 +124,76 @@ impl<O: Order> SamplingScheme for MinimizerRescan<O> {
         })
     }
 }
+
+pub struct MinimizerRescanNt {
+    pub k: usize,
+    pub w: usize,
+}
+
+impl SamplingScheme for MinimizerRescanNt {
+    #[inline(always)]
+    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+        let mut min = u64::MAX;
+        let mut min_idx = 0;
+        let kmer_hashes = nthash::NtHashForwardIterator::new(text, self.k).unwrap();
+        let mut kmers = kmer_hashes.enumerate();
+
+        // Rolling window of last w hashes.
+        let mut hashes = vec![0; self.w];
+
+        // Process the first w-1 kmers.
+        for (j, h) in kmers.by_ref().take(self.w - 1) {
+            hashes[j] = h;
+            if h < min {
+                min = h;
+                min_idx = j;
+            }
+        }
+        let mut hash_idx = self.w - 1;
+
+        // i: absolute position of lmer
+        // j: absolute position of kmer
+        kmers.enumerate().map(
+            #[inline(always)]
+            move |(i, (j, h))| {
+                unsafe { *hashes.get_unchecked_mut(hash_idx) = h };
+                let cur_hash_idx = hash_idx;
+                hash_idx += 1;
+                if hash_idx == self.w {
+                    hash_idx = 0;
+                }
+
+                if min_idx >= i {
+                    // Shift in the new one.
+                    if h < min {
+                        min = h;
+                        min_idx = j;
+                    }
+                } else {
+                    // The old minimum is dropped; re-scan the window.
+                    let p1 = hashes[cur_hash_idx + 1..].iter().position_min().map_or(
+                        (u64::MAX, usize::MAX),
+                        |pos| {
+                            (
+                                unsafe { *hashes.get_unchecked(cur_hash_idx + 1 + pos) },
+                                j + pos + 1 - self.w,
+                            )
+                        },
+                    );
+                    let p2 = hashes[..=cur_hash_idx].iter().position_min().map_or(
+                        (u64::MAX, usize::MAX),
+                        |pos| {
+                            (
+                                unsafe { *hashes.get_unchecked(pos) },
+                                j - (cur_hash_idx - pos),
+                            )
+                        },
+                    );
+                    (min, min_idx) = std::cmp::min_by_key(p1, p2, |x| x.0);
+                }
+
+                min_idx
+            },
+        )
+    }
+}

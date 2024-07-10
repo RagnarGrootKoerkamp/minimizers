@@ -22,6 +22,17 @@ fn bench(c: &mut Criterion) {
     c.bench_function("random_minimizer_rescan", |b| {
         b.iter(|| mini.stream_dedup_1(&string).count());
     });
+    let mini = MinimizerRescanNt { k, w };
+    c.bench_function("random_minimizer_rescan_nt_0", |b| {
+        b.iter(|| mini.stream_dedup_0(&string).count());
+    });
+    let mini = MinimizerRescanNt { k, w };
+    c.bench_function("random_minimizer_rescan_nt_1", |b| {
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
+    let mini = MinimizerRescanNt { k, w };
+    c.bench_function("random_minimizer_rescan_nt_2", |b| {
+        b.iter(|| mini.stream_dedup_2(&string).count());
     });
 }
 
