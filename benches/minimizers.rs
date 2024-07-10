@@ -12,7 +12,16 @@ fn bench(c: &mut Criterion) {
     let o = RandomOrder;
     let mini = RandomMinimizer::new(k, w, o);
     c.bench_function("random_minimizer_simple", |b| {
-        b.iter(|| mini.stream_dedup_0(&string).count());
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
+    let mini = MinimizerRehash { k, w, o };
+    c.bench_function("random_minimizer_rehash", |b| {
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
+    let mini = MinimizerRescan { k, w, o };
+    c.bench_function("random_minimizer_rescan", |b| {
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
     });
 }
 

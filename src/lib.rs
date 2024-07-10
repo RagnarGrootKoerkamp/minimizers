@@ -11,6 +11,7 @@ pub mod order;
 use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;
 use num::{complex::Complex64, Zero};
+pub use opt::*;
 use order::*;
 use std::{cmp::Reverse, f64::consts::PI};
 
@@ -50,6 +51,21 @@ pub trait SamplingScheme {
     #[inline(always)]
     fn stream_dedup_0(&self, text: &[u8]) -> impl MinimizerIt {
         self.stream(text).dedup()
+    }
+
+    /// Streams and returns deduplicated positions.
+    #[inline(always)]
+    fn stream_dedup_1(&self, text: &[u8]) -> impl MinimizerIt {
+        let mut it = self.stream(text);
+        let mut last = it.next().unwrap();
+        std::iter::once(last).chain(it.filter(move |&x| {
+            if x == last {
+                false
+            } else {
+                last = x;
+                true
+            }
+        }))
     }
     /// Sample all lmers in a cyclic text of length `len`.
     /// Text must have length at least `len + l-1`, and the additional

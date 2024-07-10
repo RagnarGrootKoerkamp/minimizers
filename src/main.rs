@@ -490,4 +490,34 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn minimizers_rehash() {
+        let text = generate_random_string(1000, 4);
+        let o = RandomOrder;
+        for k in 1..=20 {
+            for w in 1..=20 {
+                let m = Minimizer::new(k, w, RandomOrder);
+                let m2 = MinimizerRehash { k, w, o };
+                let stream = m.stream(&text).collect_vec();
+                let stream2 = m2.stream(&text).collect_vec();
+                assert_eq!(stream2, stream);
+            }
+        }
+    }
+
+    #[test]
+    fn minimizers_rescan() {
+        let text = generate_random_string(1000, 4);
+        let o = RandomOrder;
+        for k in 1..=20 {
+            for w in 2..=20 {
+                let m = Minimizer::new(k, w, RandomOrder);
+                let m2 = MinimizerRescan { k, w, o };
+                let stream = m.stream(&text).collect_vec();
+                let stream2 = m2.stream(&text).collect_vec();
+                assert_eq!(stream2, stream);
+            }
+        }
+    }
 }
