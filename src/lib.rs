@@ -67,6 +67,25 @@ pub trait SamplingScheme {
             }
         }))
     }
+
+    #[inline(always)]
+    fn stream_dedup_2(&self, text: &[u8]) -> impl MinimizerIt {
+        let mut it = self.stream(text);
+        let mut v = vec![it.next().unwrap()];
+        v.resize(text.len(), 0);
+        let mut i = 0;
+        let mut last = v[0];
+        for p in it {
+            i += (p != last) as usize;
+            unsafe {
+                *v.get_unchecked_mut(i) = p;
+            }
+            last = p;
+        }
+        v.resize(i + 1, 0);
+        v.into_iter()
+    }
+
     /// Sample all lmers in a cyclic text of length `len`.
     /// Text must have length at least `len + l-1`, and the additional
     /// characters must equal a prefix of the text.
