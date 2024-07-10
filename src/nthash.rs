@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+//! This file is mostly copied directly from the nthash crate, with modifications for higher performance.
+
 //! ntHash is a hash function tuned for genomic data.
 //! It performs best when calculating hash values for adjacent k-mers in
 //! an input sequence, operating an order of magnitude faster than the best
@@ -9,10 +12,6 @@
 //!
 //! This crate is based on ntHash [1.0.4](https://github.com/bcgsc/ntHash/releases/tag/v1.0.4).
 //!
-
-mod error;
-
-pub use crate::error::{Error, Result};
 
 pub(crate) const MAXIMUM_K_SIZE: usize = u32::max_value() as usize;
 
@@ -150,15 +149,12 @@ pub struct NtHashIterator<'a> {
 
 impl<'a> NtHashIterator<'a> {
     /// Creates a new NtHashIterator with internal state properly initialized.
-    pub fn new(seq: &'a [u8], k: usize) -> Result<NtHashIterator<'a>> {
+    pub fn new(seq: &'a [u8], k: usize) -> Option<NtHashIterator<'a>> {
         if k > seq.len() {
-            return Err(Error::KSizeOutOfRange {
-                ksize: k,
-                seq_size: seq.len(),
-            });
+            return None;
         }
         if k > MAXIMUM_K_SIZE {
-            return Err(Error::KSizeTooBig(k));
+            return None;
         }
         let mut fh = 0;
         for (i, v) in seq[0..k].iter().enumerate() {
@@ -170,7 +166,7 @@ impl<'a> NtHashIterator<'a> {
             rh ^= rc(*v).rotate_left((k - i - 1) as u32);
         }
 
-        Ok(NtHashIterator {
+        Some(NtHashIterator {
             seq,
             k,
             fh,
@@ -253,15 +249,12 @@ pub struct NtHashForwardIterator<'a> {
 
 impl<'a> NtHashForwardIterator<'a> {
     /// Creates a new NtHashForwardIterator with internal state properly initialized.
-    pub fn new(seq: &'a [u8], k: usize) -> Result<NtHashForwardIterator<'a>> {
+    pub fn new(seq: &'a [u8], k: usize) -> Option<NtHashForwardIterator<'a>> {
         if k > seq.len() {
-            return Err(Error::KSizeOutOfRange {
-                ksize: k,
-                seq_size: seq.len(),
-            });
+            return None;
         }
         if k > MAXIMUM_K_SIZE {
-            return Err(Error::KSizeTooBig(k));
+            return None;
         }
 
         let mut fh = 0;
@@ -269,7 +262,7 @@ impl<'a> NtHashForwardIterator<'a> {
             fh ^= h(*v).rotate_left((k - i - 1) as u32);
         }
 
-        Ok(NtHashForwardIterator {
+        Some(NtHashForwardIterator {
             seq,
             k,
             fh,
