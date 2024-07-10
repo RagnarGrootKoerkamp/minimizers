@@ -266,15 +266,16 @@ impl SamplingScheme for MinimizerStacksBuf {
 
         // Rolling window containing (pos hash, suffix hash, pos).
         let mut hashes = vec![(0, 0, 0); 3 * self.w];
-        let mut read = 0;
-        let mut update = self.w;
-        let mut write = 2 * self.w;
+        let mut i = self.w - 1;
+        let mut read_l = 0 + i;
+        let mut read_r = self.w + i;
+        let mut update = 2 * self.w - 1 - i;
+        let mut write = 2 * self.w + i;
 
         // Process the first w-1 kmers.
         for (j, h) in kmers.by_ref().take(self.w - 1) {
-            hashes[write + j] = (h, h, j);
+            hashes[2 * self.w + j] = (h, h, j);
         }
-        let mut hash_idx = self.w - 1;
 
         let mut rmin = (u64::MAX, usize::MAX);
         let mut lmin = (u64::MAX, usize::MAX);
@@ -287,27 +288,31 @@ impl SamplingScheme for MinimizerStacksBuf {
             #[inline(always)]
             move |(_i, (j, h))| {
                 // write
-                unsafe { *hashes.get_unchecked_mut(write + hash_idx) = (h, h, j) };
+                unsafe { *hashes.get_unchecked_mut(write) = (h, h, j) };
                 // update
-                let entry =
-                    unsafe { &mut *hashes.get_unchecked_mut(update + self.w - 1 - hash_idx) };
+                let entry = unsafe { &mut *hashes.get_unchecked_mut(update) };
                 lmin = cmp((entry.1, entry.2), lmin);
                 (entry.1, entry.2) = lmin;
 
                 // read rmin
-                let entry = unsafe { *hashes.get_unchecked(update + hash_idx) };
+                let entry = unsafe { *hashes.get_unchecked(read_r) };
                 rmin = cmp(rmin, (entry.0, j - 1 * self.w));
 
-                hash_idx += 1;
-                if hash_idx == self.w {
-                    (read, update, write) = (update, write, read);
-                    hash_idx = 0;
-                    lmin = (u64::MAX, usize::MAX);
-                    rmin = (u64::MAX, usize::MAX);
+                i += 1;
+                read_l += 1;
+                read_r += 1;
+                update -= 1;
+                write += 1;
+                if i == self.w {
+                    i = 0;
+                    (read_l, read_r, update, write) =
+                        (read_r - self.w, write - self.w, write - 1, read_l - self.w);
+                    lmin.0 = u64::MAX;
+                    rmin.0 = u64::MAX;
                 }
 
                 // read lmin
-                let entry = unsafe { *hashes.get_unchecked(read + hash_idx) };
+                let entry = unsafe { *hashes.get_unchecked(read_l) };
                 let ans = cmp((entry.1, entry.2), rmin);
 
                 ans.1

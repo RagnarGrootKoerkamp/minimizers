@@ -23,3 +23,6 @@ perf test='':
 
 stat test='':
     perf stat -d cargo criterion -- --profile-time 5 {{test}}
+
+test test='':
+    cargo test -r {{test}}
