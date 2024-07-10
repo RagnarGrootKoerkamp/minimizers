@@ -8,6 +8,7 @@ license = "MIT"
 
 [profile.release]
 debug = true
+opt-level = 3
 
 [dependencies]
 clap = { version = "4.4.17", features = ["derive"] }
@@ -29,3 +30,13 @@ ctor = "0.2.8"
 
 [[example]]
 name = "lp"
+
+[dev-dependencies]
+criterion = "*"
+
+[lib]
+bench = false
+
+[[bench]]
+name = "minimizers"
+harness = false

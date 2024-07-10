@@ -14,6 +14,16 @@ use num::{complex::Complex64, Zero};
 use order::*;
 use std::{cmp::Reverse, f64::consts::PI};
 
+pub fn generate_random_string(n: usize, sigma: usize) -> Vec<u8> {
+    (0..n)
+        .map(|_| (rand::random::<usize>() % sigma) as u8)
+        .collect()
+}
+
+pub fn generate_random_dna(n: usize) -> Vec<u8> {
+    (0..n).map(|_| rand::random::<u8>() % 4).collect()
+}
+
 /// An iterator over *all* minimizer positions. Not yet deduplicated.
 ///
 /// NOTE: For non-forward schemes, positions may be returned twice.
@@ -34,6 +44,12 @@ pub trait SamplingScheme {
     #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         self.stream_naive(text)
+    }
+
+    /// Streams and returns deduplicated positions.
+    #[inline(always)]
+    fn stream_dedup_0(&self, text: &[u8]) -> impl MinimizerIt {
+        self.stream(text).dedup()
     }
     /// Sample all lmers in a cyclic text of length `len`.
     /// Text must have length at least `len + l-1`, and the additional

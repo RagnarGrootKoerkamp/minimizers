@@ -6,11 +6,20 @@ eval-4:
 stats:
     cargo run -r -- -n 5000000 -s 256 eval --stats -o data/stats_256.json
 
-stat:
-    cargo build -r
-    perf stat cargo run -r -- -n 100000 -s 256 eval
-
 flame:
     cargo flamegraph --open --skip-after minimizers::MinimizerType::stats -- -n 100000 -s 256 eval
 flame-stat:
     cargo flamegraph --open --skip-after minimizers::MinimizerType::stats -- -n 100000 -s 256 eval --stats
+
+bench:
+    cargo criterion --plotting-backend disabled -- --quick --significance-level 0.01
+
+profile test='':
+    cargo criterion -- --profile-time 2 {{test}}
+
+perf test='':
+    perf record cargo criterion -- --profile-time 2 {{test}}
+    perf report
+
+stat test='':
+    perf stat -d cargo criterion -- --profile-time 5 {{test}}

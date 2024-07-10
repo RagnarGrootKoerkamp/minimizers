@@ -12,13 +12,6 @@ use order::RandomOrder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_derive::Serialize;
 
-/// Generate a random string.
-fn generate_random_string(n: usize, sigma: usize) -> Vec<u8> {
-    (0..n)
-        .map(|_| (rand::random::<usize>() % sigma) as u8)
-        .collect()
-}
-
 /// Returns:
 /// - density
 /// - position distribution
