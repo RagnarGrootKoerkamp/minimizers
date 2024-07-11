@@ -448,10 +448,10 @@ impl SamplingScheme for MinimizerStacksSimd {
         // split text in 4 chunks
         // TODO: Edge cases.
         let len = text.len() / 4;
-        let text_chunks: [&[u8]; 4] = text.chunks(len).collect_vec().try_into().unwrap();
+        // let text_chunks: [&[u8]; 4] = text.chunks(len).collect_vec().try_into().unwrap();
         let num_kmers = len - self.k + 1;
 
-        let mut kmers = nthash::NtHashForwardIteratorSimd::new(text_chunks, self.k)
+        let mut kmers = nthash::NtHashForwardIteratorSimd::new(text, len, self.k)
             .unwrap()
             .enumerate();
 
@@ -460,7 +460,7 @@ impl SamplingScheme for MinimizerStacksSimd {
 
         // Process the first w-1 kmers.
         kmers.by_ref().take(self.w - 1).for_each(|(j, h)| {
-            hashes[j] = h;
+            hashes[j] = h.as_array().map(|h| T::new(h as u64, j)).into();
         });
         let mut hash_idx = self.w - 1;
 
@@ -472,6 +472,7 @@ impl SamplingScheme for MinimizerStacksSimd {
         // i: absolute position of lmer
         // j: absolute position of kmer
         kmers.for_each(|(j, h)| {
+            let h = h.as_array().map(|h| T::new(h as u64, j)).into();
             unsafe { *hashes.get_unchecked_mut(hash_idx) = h };
             rmin = rmin.simd_min(h);
             hash_idx += 1;

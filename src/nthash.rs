@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 //! This file is mostly copied directly from the nthash crate, with modifications for higher performance.
 
 //! ntHash is a hash function tuned for genomic data.
@@ -13,7 +13,11 @@
 //! This crate is based on ntHash [1.0.4](https://github.com/bcgsc/ntHash/releases/tag/v1.0.4).
 //!
 
-use std::{array::from_fn, simd::Simd};
+use std::{
+    arch::x86_64::{_mm_castps_si128, _mm_castsi128_ps, _mm_permutevar_ps},
+    array::from_fn,
+    simd::Simd,
+};
 
 pub(crate) const MAXIMUM_K_SIZE: usize = u32::max_value() as usize;
 
@@ -301,27 +305,26 @@ impl<'a> Iterator for NtHashForwardIterator<'a> {
 
 impl<'a> ExactSizeIterator for NtHashForwardIterator<'a> {}
 
-type S = Simd<u64, 4>;
+/// 32-bit NtHash vector type.
+type SH = Simd<u32, 4>;
+/// Index type.
+type SI = Simd<usize, 4>;
 
 #[derive(Debug)]
 pub struct NtHashForwardIteratorSimd<'a> {
-    seqs: [&'a [u8]; 4],
+    seq: &'a [u8],
+    offsets: SI,
     k: usize,
-    fh: S,
-    current_idx: usize,
+    fh: SH,
+    i: usize,
     max_idx: usize,
-    h0: [u64; 4],
-    hk: [u64; 4],
+    h0: SH,
+    hk: SH,
 }
 
 impl<'a> NtHashForwardIteratorSimd<'a> {
     /// Creates a new NtHashForwardIterator with internal state properly initialized.
-    pub fn new(seqs: [&'a [u8]; 4], k: usize) -> Option<Self> {
-        let len = seqs[0].len();
-        if seqs.iter().any(|x| x.len() != len) {
-            return None;
-        }
-
+    pub fn new(seq: &'a [u8], len: usize, k: usize) -> Option<Self> {
         if k > len {
             return None;
         }
@@ -329,51 +332,82 @@ impl<'a> NtHashForwardIteratorSimd<'a> {
             return None;
         }
 
-        let mut fh = S::splat(0);
+        let mut fh = SH::splat(0);
         // FIXME: This breaks on page boundaries.
         for i in 0..k {
             unsafe {
-                let x: S =
-                    from_fn(|l| h(*seqs[l].get_unchecked(i - 1)).rotate_left((k - i - 1) as u32))
-                        .into();
+                let x: SH = from_fn(|l| {
+                    (h(*seq.get_unchecked(l * len + i)) as u32).rotate_left((k - i - 1) as u32)
+                })
+                .into();
                 fh ^= x;
             }
         }
 
         Some(Self {
-            seqs,
+            seq,
+            offsets: from_fn(|l| l * len).into(),
             k,
             fh,
-            current_idx: 0,
-            max_idx: len - k + 1,
-            h0: H_LOOKUP,
-            hk: H_LOOKUP.map(|x| x.rotate_left(k as u32)),
+            i: 0,
+            max_idx: len - k,
+            h0: H_LOOKUP.map(|x| x as u32).into(),
+            hk: H_LOOKUP.map(|x| (x as u32).rotate_left(k as u32)).into(),
         })
     }
 }
 
 impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
-    type Item = S;
+    type Item = SH;
 
     #[inline(always)]
-    fn next(&mut self) -> Option<S> {
-        if self.current_idx == self.max_idx {
+    fn next(&mut self) -> Option<SH> {
+        if self.i == self.max_idx {
             return None;
         };
 
-        let i = self.current_idx - 1;
-        let seqi: Simd<usize, 4> =
-            from_fn(|l| unsafe { *self.seqs[l].get_unchecked(i) as usize }).into();
-        let seqk: Simd<usize, 4> =
-            from_fn(|l| unsafe { *self.seqs[l].get_unchecked(i + self.k) as usize }).into();
+        // let idxi: [_; 4] = unsafe { from_fn(|l| self.offsets[l].offset(self.i as isize)).into() };
+        // let idxk: [_; 4] = unsafe { from_fn(|l[l].offset(self.i as isize)).into() };
 
-        let x: S = from_fn(|l| unsafe {
-            *self.hk.get_unchecked(seqi[l]) ^ *self.h0.get_unchecked(seqk[l])
-        })
-        .into();
-        self.fh = self.fh.rotate_elements_left::<1>() ^ x;
+        let oi = self.offsets + SI::splat(self.i);
+        let ok = oi + SI::splat(self.k);
 
-        self.current_idx += 1;
+        // Fast but ugly
+        let seqi = oi.as_array().map(|o| unsafe { *self.seq.get_unchecked(o) });
+        let seqk = ok.as_array().map(|o| unsafe { *self.seq.get_unchecked(o) });
+        let x0: SH = seqi
+            .map(|c| unsafe { *self.hk.as_array().get_unchecked(c as usize) })
+            .into();
+        let x1: SH = seqk
+            .map(|c| unsafe { *self.hk.as_array().get_unchecked(c as usize) })
+            .into();
+
+        // Clean `gather` SIMD, but very slow.
+        // let p = self.seq.as_ptr() as *const u32;
+        // let seqi: Simd<u32, 4> = oi
+        //     .as_array()
+        //     .map(|o| unsafe { *p.byte_offset(o as isize) })
+        //     .into();
+        // let seqk: Simd<u32, 4> = ok
+        //     .as_array()
+        //     .map(|o| unsafe { *p.byte_offset(o as isize) })
+        //     .into();
+        // let x0: SH = unsafe {
+        //     std::mem::transmute(_mm_castps_si128(_mm_permutevar_ps(
+        //         _mm_castsi128_ps(std::mem::transmute(self.hk)),
+        //         std::mem::transmute(seqi),
+        //     )))
+        // };
+        // let x1: SH = unsafe {
+        //     std::mem::transmute(_mm_castps_si128(_mm_permutevar_ps(
+        //         _mm_castsi128_ps(std::mem::transmute(self.hk)),
+        //         std::mem::transmute(seqk),
+        //     )))
+        // };
+
+        self.fh = (self.fh << Simd::splat(1)) ^ x0 ^ x1;
+
+        self.i += 1;
         Some(self.fh)
     }
 
