@@ -146,6 +146,7 @@ pub trait HashPos: Clone + Copy {
 
 pub type Tuple = (u64, usize);
 pub type Pack = u64;
+pub type SignedPack = i64;
 
 impl HashPos for (u64, usize) {
     const MAX: Self = (u64::MAX, usize::MAX);
@@ -203,6 +204,33 @@ impl HashPos for u64 {
         if (hash >> 32) < (*self >> 32) {
             *self = Self::new(hash, pos);
         }
+    }
+}
+
+impl HashPos for i64 {
+    const MAX: Self = i64::MAX;
+    #[inline(always)]
+    fn new(hash: u64, pos: usize) -> Self {
+        ((hash << 32) | pos as u64) as i64
+    }
+
+    #[inline(always)]
+    fn pos(&self) -> usize {
+        *self as u32 as usize
+    }
+
+    #[inline(always)]
+    fn min(&self, other: &Self) -> Self {
+        if *other < *self {
+            *other
+        } else {
+            *self
+        }
+    }
+
+    #[inline(always)]
+    fn update_with(&mut self, _hash: u64, _pos: usize) {
+        unimplemented!();
     }
 }
 
@@ -435,6 +463,7 @@ pub struct MinimizerStacksSimd {
 
 impl MinimizerStacksSimd {
     pub fn new(k: usize, w: usize) -> Self {
+        assert!(w <= 256);
         Self { k, w }
     }
 }
@@ -442,7 +471,7 @@ impl MinimizerStacksSimd {
 impl SamplingScheme for MinimizerStacksSimd {
     #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
-        type T = u64;
+        type T = i64;
         type S = Simd<T, 4>;
 
         // split text in 4 chunks
@@ -468,6 +497,8 @@ impl SamplingScheme for MinimizerStacksSimd {
 
         let pos_offset: Simd<usize, 4> = from_fn(|l| l * len).into();
         let mut poss = vec![0; num_kmers * 4];
+
+        assert!(self.w > 1);
 
         // i: absolute position of lmer
         // j: absolute position of kmer
