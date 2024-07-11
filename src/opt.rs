@@ -125,16 +125,102 @@ impl<O: Order> SamplingScheme for MinimizerRescan<O> {
     }
 }
 
-pub struct MinimizerRescanNt {
-    pub k: usize,
-    pub w: usize,
+pub trait HashPos: Clone + Copy {
+    const MAX: Self;
+    fn new(hash: u64, pos: usize) -> Self;
+    fn pos(&self) -> usize;
+    fn min(&self, other: &Self) -> Self;
+    fn min_with(&mut self, other: &Self)
+    where
+        Self: Sized,
+    {
+        *self = self.min(other);
+    }
+    fn update_with(&mut self, hash: u64, pos: usize);
 }
 
-impl SamplingScheme for MinimizerRescanNt {
+pub type Tuple = (u64, usize);
+pub type Pack = u64;
+
+impl HashPos for (u64, usize) {
+    const MAX: Self = (u64::MAX, usize::MAX);
+    #[inline(always)]
+    fn new(hash: u64, pos: usize) -> Self {
+        (hash, pos)
+    }
+
+    #[inline(always)]
+    fn pos(&self) -> usize {
+        self.1
+    }
+
+    #[inline(always)]
+    fn min(&self, other: &Self) -> Self {
+        if *other < *self {
+            *other
+        } else {
+            *self
+        }
+    }
+
+    #[inline(always)]
+    fn update_with(&mut self, hash: u64, pos: usize) {
+        if hash < self.0 {
+            self.0 = hash;
+            self.1 = pos;
+        }
+    }
+}
+
+impl HashPos for u64 {
+    const MAX: Self = u64::MAX;
+    #[inline(always)]
+    fn new(hash: u64, pos: usize) -> Self {
+        ((hash >> 32) << 32) | pos as u64
+    }
+
+    #[inline(always)]
+    fn pos(&self) -> usize {
+        *self as u32 as usize
+    }
+
+    #[inline(always)]
+    fn min(&self, other: &Self) -> Self {
+        if *other < *self {
+            *other
+        } else {
+            *self
+        }
+    }
+
+    #[inline(always)]
+    fn update_with(&mut self, hash: u64, pos: usize) {
+        if (hash >> 32) < (*self >> 32) {
+            *self = Self::new(hash, pos);
+        }
+    }
+}
+
+pub struct MinimizerRescanNt<T: HashPos = Tuple> {
+    pub k: usize,
+    pub w: usize,
+    pub _t: std::marker::PhantomData<T>,
+}
+
+impl<T: HashPos> MinimizerRescanNt<T> {
+    pub fn new(k: usize, w: usize) -> Self {
+        Self {
+            k,
+            w,
+            _t: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T: HashPos> SamplingScheme for MinimizerRescanNt<T> {
     #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
-        let mut min = u64::MAX;
-        let mut min_idx = 0;
+        let mut min = T::MAX;
         let kmer_hashes = nthash::NtHashForwardIterator::new(text, self.k).unwrap();
         let mut kmers = kmer_hashes.enumerate();
 
@@ -144,10 +230,8 @@ impl SamplingScheme for MinimizerRescanNt {
         // Process the first w-1 kmers.
         for (j, h) in kmers.by_ref().take(self.w - 1) {
             hashes[j] = h;
-            if h < min {
-                min = h;
-                min_idx = j;
-            }
+            let h = T::new(h, j);
+            min.min_with(&h);
         }
         let mut hash_idx = self.w - 1;
 
@@ -163,36 +247,34 @@ impl SamplingScheme for MinimizerRescanNt {
                     hash_idx = 0;
                 }
 
-                if min_idx >= i {
+                if min.pos() >= i {
                     // Shift in the new one.
-                    if h < min {
-                        min = h;
-                        min_idx = j;
-                    }
+                    min.update_with(h, j);
                 } else {
                     // The old minimum is dropped; re-scan the window.
-                    let p1 = hashes[cur_hash_idx + 1..].iter().position_min().map_or(
-                        (u64::MAX, usize::MAX),
-                        |pos| {
-                            (
-                                unsafe { *hashes.get_unchecked(cur_hash_idx + 1 + pos) },
-                                j + pos + 1 - self.w,
-                            )
-                        },
-                    );
-                    let p2 = hashes[..=cur_hash_idx].iter().position_min().map_or(
-                        (u64::MAX, usize::MAX),
-                        |pos| {
-                            (
+                    let p1 =
+                        hashes[cur_hash_idx + 1..]
+                            .iter()
+                            .position_min()
+                            .map_or(T::MAX, |pos| {
+                                T::new(
+                                    unsafe { *hashes.get_unchecked(cur_hash_idx + 1 + pos) },
+                                    j + pos + 1 - self.w,
+                                )
+                            });
+                    let p2 = hashes[..=cur_hash_idx]
+                        .iter()
+                        .position_min()
+                        .map_or(T::MAX, |pos| {
+                            T::new(
                                 unsafe { *hashes.get_unchecked(pos) },
                                 j - (cur_hash_idx - pos),
                             )
-                        },
-                    );
-                    (min, min_idx) = std::cmp::min_by_key(p1, p2, |x| x.0);
+                        });
+                    min = p1.min(&p2);
                 }
 
-                min_idx
+                min.pos()
             },
         )
     }
@@ -200,35 +282,47 @@ impl SamplingScheme for MinimizerRescanNt {
 
 /// Idea based on https://codeforces.com/blog/entry/71687:
 /// Every w positions, compute suffix minimimums for the w suffixes ending there.
-pub struct MinimizerStacks {
+pub struct MinimizerStacks<T: HashPos = Tuple> {
     pub k: usize,
     pub w: usize,
+    pub _t: std::marker::PhantomData<T>,
 }
 
-impl SamplingScheme for MinimizerStacks {
+impl<T: HashPos> MinimizerStacks<T> {
+    pub fn new(k: usize, w: usize) -> Self {
+        Self {
+            k,
+            w,
+            _t: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T: HashPos> SamplingScheme for MinimizerStacks<T> {
     #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         let kmer_hashes = nthash::NtHashForwardIterator::new(text, self.k).unwrap();
         let mut kmers = kmer_hashes.enumerate();
 
         // Rolling window of last w hashes.
-        let mut hashes = vec![(0, 0); self.w];
+        let mut hashes = vec![T::MAX; self.w];
 
         // Process the first w-1 kmers.
         for (j, h) in kmers.by_ref().take(self.w - 1) {
-            hashes[j] = (h, j);
+            hashes[j] = T::new(h, j);
         }
         let mut hash_idx = self.w - 1;
 
-        let mut rmin = (u64::MAX, usize::MAX);
+        let mut rmin = T::MAX;
 
         // i: absolute position of lmer
         // j: absolute position of kmer
         kmers.enumerate().map(
             #[inline(always)]
             move |(_i, (j, h))| {
-                unsafe { *hashes.get_unchecked_mut(hash_idx) = (h, j) };
-                rmin = std::cmp::min_by_key(rmin, (h, j), |x| x.0);
+                let h = T::new(h, j);
+                unsafe { *hashes.get_unchecked_mut(hash_idx) = h };
+                rmin.min_with(&h);
                 hash_idx += 1;
                 if hash_idx == self.w {
                     hash_idx = 0;
@@ -237,14 +331,13 @@ impl SamplingScheme for MinimizerStacks {
                     for i in (0..self.w - 1).rev() {
                         unsafe {
                             let y = *hashes.get_unchecked(i + 1);
-                            let x = &mut *hashes.get_unchecked_mut(i);
-                            *x = std::cmp::min_by_key(*x, y, |x| x.0);
+                            hashes.get_unchecked_mut(i).min_with(&y);
                         }
                     }
 
-                    rmin = (u64::MAX, usize::MAX);
+                    rmin = T::MAX;
                 }
-                std::cmp::min_by_key(unsafe { *hashes.get_unchecked(hash_idx) }, rmin, |x| x.0).1
+                unsafe { hashes.get_unchecked(hash_idx) }.min(&rmin).pos()
             },
         )
     }
@@ -252,20 +345,30 @@ impl SamplingScheme for MinimizerStacks {
 
 /// Idea based on https://codeforces.com/blog/entry/71687:
 /// Every w positions, compute suffix minimimums for the w suffixes ending there.
-pub struct MinimizerStacksBuf {
+pub struct MinimizerStacksBuf<T: HashPos = Tuple> {
     pub k: usize,
     pub w: usize,
+    pub _t: std::marker::PhantomData<T>,
 }
 
-impl SamplingScheme for MinimizerStacksBuf {
+impl<T: HashPos> MinimizerStacksBuf<T> {
+    pub fn new(k: usize, w: usize) -> Self {
+        Self {
+            k,
+            w,
+            _t: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T: HashPos> SamplingScheme for MinimizerStacksBuf<T> {
     #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         let kmer_hashes = nthash::NtHashForwardIterator::new(text, self.k).unwrap();
-        // .map(|x| x >> 58);
         let mut kmers = kmer_hashes.enumerate();
 
         // Rolling window containing (pos hash, suffix hash, pos).
-        let mut hashes = vec![(0, 0, 0); 3 * self.w];
+        let mut hashes = vec![(0, T::MAX); 3 * self.w];
         let mut i = self.w - 1;
         let mut read_l = 0 + i;
         let mut read_r = self.w + i;
@@ -274,13 +377,12 @@ impl SamplingScheme for MinimizerStacksBuf {
 
         // Process the first w-1 kmers.
         for (j, h) in kmers.by_ref().take(self.w - 1) {
-            hashes[2 * self.w + j] = (h, h, j);
+            hashes[2 * self.w + j] = (h, T::new(h, j));
         }
 
-        let mut rmin = (u64::MAX, usize::MAX);
-        let mut lmin = (u64::MAX, usize::MAX);
-
-        let cmp = |x: (u64, usize), y: (u64, usize)| std::cmp::min_by_key(x, y, |x| x.0);
+        // NOTE: The hash is in the upper 32 bits, and the position in the lower 32 bits.
+        let mut rmin = T::MAX;
+        let mut lmin = T::MAX;
 
         // i: absolute position of lmer
         // j: absolute position of kmer
@@ -288,15 +390,15 @@ impl SamplingScheme for MinimizerStacksBuf {
             #[inline(always)]
             move |(_i, (j, h))| {
                 // write
-                unsafe { *hashes.get_unchecked_mut(write) = (h, h, j) };
+                unsafe { *hashes.get_unchecked_mut(write) = (h, T::new(h, j)) };
                 // update
                 let entry = unsafe { &mut *hashes.get_unchecked_mut(update) };
-                lmin = cmp((entry.1, entry.2), lmin);
-                (entry.1, entry.2) = lmin;
+                lmin = entry.1.min(&lmin);
+                entry.1 = lmin;
 
                 // read rmin
                 let entry = unsafe { *hashes.get_unchecked(read_r) };
-                rmin = cmp(rmin, (entry.0, j - 1 * self.w));
+                rmin.min_with(&T::new(entry.0, j - 1 * self.w));
 
                 i += 1;
                 read_l += 1;
@@ -307,15 +409,13 @@ impl SamplingScheme for MinimizerStacksBuf {
                     i = 0;
                     (read_l, read_r, update, write) =
                         (read_r - self.w, write - self.w, write - 1, read_l - self.w);
-                    lmin.0 = u64::MAX;
-                    rmin.0 = u64::MAX;
+                    lmin = T::MAX;
+                    rmin = T::MAX;
                 }
 
                 // read lmin
-                let entry = unsafe { *hashes.get_unchecked(read_l) };
-                let ans = cmp((entry.1, entry.2), rmin);
-
-                ans.1
+                let lmin = unsafe { hashes.get_unchecked(read_l).1 };
+                lmin.min(&rmin).pos()
             },
         )
     }
@@ -326,3 +426,10 @@ impl SamplingScheme for MinimizerStacksBuf {
 // TODO: Precompute 4^2 lookup table.
 // TODO: Alternative hash: take xor of t=8-mers multiplied by constant C.
 // TODO: https://en.algorithmica.org/hpc/algorithms/prefix/
+// TODO: Plack more with packing
+// TODO: 32bit NtHash
+// TODO: Fully buffered:
+//   1. forward minima
+//   2. backward minima
+//   3. merge
+//

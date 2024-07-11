@@ -11,35 +11,49 @@ fn bench(c: &mut Criterion) {
     let w = 20;
     // let o = RandomOrder;
     // let mini = RandomMinimizer::new(k, w, o);
-    // c.bench_function("random_minimizer_simple", |b| {
+    // c.bench_function("minimizer_simple", |b| {
     //     b.iter(|| mini.stream_dedup_1(&string).count());
     // });
     // let mini = MinimizerRehash { k, w, o };
-    // c.bench_function("random_minimizer_rehash", |b| {
+    // c.bench_function("minimizer_rehash", |b| {
     //     b.iter(|| mini.stream_dedup_1(&string).count());
     // });
     // let mini = MinimizerRescan { k, w, o };
-    // c.bench_function("random_minimizer_rescan", |b| {
+    // c.bench_function("minimizer_rescan", |b| {
     //     b.iter(|| mini.stream_dedup_1(&string).count());
     // });
     // let mini = MinimizerRescanNt { k, w };
-    // c.bench_function("random_minimizer_rescan_nt_0", |b| {
+    // c.bench_function("minimizer_rescan_nt_0", |b| {
     //     b.iter(|| mini.stream_dedup_0(&string).count());
     // });
-    let mini = MinimizerRescanNt { k, w };
-    c.bench_function("random_minimizer_rescan_nt_1", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
-    });
     // let mini = MinimizerRescanNt { k, w };
-    // c.bench_function("random_minimizer_rescan_nt_2", |b| {
+    // c.bench_function("minimizer_rescan_nt_2", |b| {
     //     b.iter(|| mini.stream_dedup_2(&string).count());
     // });
-    let mini = MinimizerStacks { k, w };
-    c.bench_function("random_minimizer_stacks", |b| {
+
+    let mini = MinimizerRescanNt::<Tuple>::new(k, w);
+    c.bench_function("minimizer_rescan_nt_1/tup", |b| {
         b.iter(|| mini.stream_dedup_1(&string).count());
     });
-    let mini = MinimizerStacksBuf { k, w };
-    c.bench_function("random_minimizer_buf", |b| {
+    let mini = MinimizerRescanNt::<Pack>::new(k, w);
+    c.bench_function("minimizer_rescan_nt_1/pack", |b| {
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
+
+    let mini = MinimizerStacks::<Tuple>::new(k, w);
+    c.bench_function("minimizer_stacks/tup", |b| {
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
+    let mini = MinimizerStacks::<Pack>::new(k, w);
+    c.bench_function("minimizer_stacks/pack", |b| {
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
+    let mini = MinimizerStacksBuf::<Tuple>::new(k, w);
+    c.bench_function("minimizer_buf/tup", |b| {
+        b.iter(|| mini.stream_dedup_1(&string).count());
+    });
+    let mini = MinimizerStacksBuf::<Pack>::new(k, w);
+    c.bench_function("minimizer_buf/pack", |b| {
         b.iter(|| mini.stream_dedup_1(&string).count());
     });
 }

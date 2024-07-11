@@ -530,7 +530,7 @@ mod test {
         for k in 1..=20 {
             for w in 2..=20 {
                 let m = Minimizer::new(k, w, NtOrder);
-                let m2 = MinimizerRescanNt { k, w };
+                let m2 = MinimizerRescanNt::<Tuple>::new(k, w);
                 let stream = m.stream(&text).collect_vec();
                 let stream2 = m2.stream(&text).collect_vec();
                 assert_eq!(stream2, stream);
@@ -544,7 +544,7 @@ mod test {
         for k in 1..=20 {
             for w in 2..=20 {
                 let m = Minimizer::new(k, w, NtOrder);
-                let m2 = MinimizerStacks { k, w };
+                let m2 = MinimizerStacks::<Tuple>::new(k, w);
                 let stream = m.stream(&text).collect_vec();
                 let stream2 = m2.stream(&text).collect_vec();
                 assert_eq!(stream2, stream);
@@ -558,7 +558,7 @@ mod test {
         for k in 1..=20 {
             for w in 1..=20 {
                 let m = Minimizer::new(k, w, NtOrder);
-                let m2 = MinimizerStacksBuf { k, w };
+                let m2 = MinimizerStacksBuf::<Tuple>::new(k, w);
                 let stream = m.stream(&text).collect_vec();
                 let stream2 = m2.stream(&text).collect_vec();
                 assert_eq!(&stream2[w..], &stream[..stream.len() - w]);
