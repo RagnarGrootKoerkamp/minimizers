@@ -451,28 +451,27 @@ impl SamplingScheme for MinimizerStacksSimd {
         let text_chunks: [&[u8]; 4] = text.chunks(len).collect_vec().try_into().unwrap();
         let num_kmers = len - self.k + 1;
 
-        let mut kmers =
-            text_chunks.map(|text| nthash::NtHashForwardIterator::new(text, self.k).unwrap());
+        let mut kmers = nthash::NtHashForwardIteratorSimd::new(text_chunks, self.k)
+            .unwrap()
+            .enumerate();
 
         // Rolling window of last w hashes.
-        let mut hashes: Vec<S> = vec![from_fn(|_| T::MAX).into(); self.w];
+        let mut hashes: Vec<S> = vec![S::splat(T::MAX); self.w];
 
         // Process the first w-1 kmers.
-        for j in 0..self.w - 1 {
-            hashes[j] = from_fn(|l| T::new(kmers[l].next().unwrap(), j)).into();
-        }
+        kmers.by_ref().take(self.w - 1).for_each(|(j, h)| {
+            hashes[j] = h;
+        });
         let mut hash_idx = self.w - 1;
 
-        let mut rmin: S = from_fn(|_| T::MAX).into();
+        let mut rmin: S = S::splat(T::MAX);
 
         let pos_offset: Simd<usize, 4> = from_fn(|l| l * len).into();
         let mut poss = vec![0; num_kmers * 4];
 
         // i: absolute position of lmer
         // j: absolute position of kmer
-        for j in self.w - 1..num_kmers {
-            // todo: unwrap_unchecked?
-            let h: S = from_fn(|l| T::new(kmers[l].next().unwrap(), j)).into();
+        kmers.for_each(|(j, h)| {
             unsafe { *hashes.get_unchecked_mut(hash_idx) = h };
             rmin = rmin.simd_min(h);
             hash_idx += 1;
@@ -488,7 +487,7 @@ impl SamplingScheme for MinimizerStacksSimd {
                     }
                 }
 
-                rmin = from_fn(|_| T::MAX).into();
+                rmin = S::splat(T::MAX);
             }
 
             let ps: Simd<usize, 4> = unsafe { hashes.get_unchecked(hash_idx) }
@@ -501,7 +500,7 @@ impl SamplingScheme for MinimizerStacksSimd {
                 // poss[j + l * num_kmers] = ps[l];
                 unsafe { *poss.get_unchecked_mut(j + l * num_kmers) = ps[l] };
             }
-        }
+        });
         poss.into_iter()
     }
 }

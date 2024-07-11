@@ -13,6 +13,8 @@
 //! This crate is based on ntHash [1.0.4](https://github.com/bcgsc/ntHash/releases/tag/v1.0.4).
 //!
 
+use std::{array::from_fn, simd::Simd};
+
 pub(crate) const MAXIMUM_K_SIZE: usize = u32::max_value() as usize;
 
 const H_LOOKUP: [u64; 4] = {
@@ -298,3 +300,86 @@ impl<'a> Iterator for NtHashForwardIterator<'a> {
 }
 
 impl<'a> ExactSizeIterator for NtHashForwardIterator<'a> {}
+
+type S = Simd<u64, 4>;
+
+#[derive(Debug)]
+pub struct NtHashForwardIteratorSimd<'a> {
+    seqs: [&'a [u8]; 4],
+    k: usize,
+    fh: S,
+    current_idx: usize,
+    max_idx: usize,
+    h0: [u64; 4],
+    hk: [u64; 4],
+}
+
+impl<'a> NtHashForwardIteratorSimd<'a> {
+    /// Creates a new NtHashForwardIterator with internal state properly initialized.
+    pub fn new(seqs: [&'a [u8]; 4], k: usize) -> Option<Self> {
+        let len = seqs[0].len();
+        if seqs.iter().any(|x| x.len() != len) {
+            return None;
+        }
+
+        if k > len {
+            return None;
+        }
+        if k > MAXIMUM_K_SIZE {
+            return None;
+        }
+
+        let mut fh = S::splat(0);
+        // FIXME: This breaks on page boundaries.
+        for i in 0..k {
+            unsafe {
+                let x: S =
+                    from_fn(|l| h(*seqs[l].get_unchecked(i - 1)).rotate_left((k - i - 1) as u32))
+                        .into();
+                fh ^= x;
+            }
+        }
+
+        Some(Self {
+            seqs,
+            k,
+            fh,
+            current_idx: 0,
+            max_idx: len - k + 1,
+            h0: H_LOOKUP,
+            hk: H_LOOKUP.map(|x| x.rotate_left(k as u32)),
+        })
+    }
+}
+
+impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
+    type Item = S;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<S> {
+        if self.current_idx == self.max_idx {
+            return None;
+        };
+
+        let i = self.current_idx - 1;
+        let seqi: Simd<usize, 4> =
+            from_fn(|l| unsafe { *self.seqs[l].get_unchecked(i) as usize }).into();
+        let seqk: Simd<usize, 4> =
+            from_fn(|l| unsafe { *self.seqs[l].get_unchecked(i + self.k) as usize }).into();
+
+        let x: S = from_fn(|l| unsafe {
+            *self.hk.get_unchecked(seqi[l]) ^ *self.h0.get_unchecked(seqk[l])
+        })
+        .into();
+        self.fh = self.fh.rotate_elements_left::<1>() ^ x;
+
+        self.current_idx += 1;
+        Some(self.fh)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.max_idx, Some(self.max_idx))
+    }
+}
+
+impl<'a> ExactSizeIterator for NtHashForwardIteratorSimd<'a> {}
