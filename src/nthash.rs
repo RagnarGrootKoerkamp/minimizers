@@ -309,11 +309,16 @@ impl<'a> ExactSizeIterator for NtHashForwardIterator<'a> {}
 type SH = Simd<u32, 4>;
 /// Index type.
 type SI = Simd<usize, 4>;
+/// Pre-read type.
+type BufT = u32;
+type Buf = Simd<BufT, 4>;
 
 #[derive(Debug)]
 pub struct NtHashForwardIteratorSimd<'a> {
     seq: &'a [u8],
     offsets: SI,
+    vals_i: Buf,
+    vals_k: Buf,
     k: usize,
     fh: SH,
     i: usize,
@@ -333,6 +338,7 @@ impl<'a> NtHashForwardIteratorSimd<'a> {
         }
 
         let mut fh = SH::splat(0);
+        // TODO: Process the first kmer; it is skipped currently.
         // FIXME: This breaks on page boundaries.
         for i in 0..k {
             unsafe {
@@ -347,6 +353,8 @@ impl<'a> NtHashForwardIteratorSimd<'a> {
         Some(Self {
             seq,
             offsets: from_fn(|l| l * len).into(),
+            vals_i: Buf::splat(0),
+            vals_k: Buf::splat(0),
             k,
             fh,
             i: 0,
@@ -366,21 +374,15 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
             return None;
         };
 
-        // let idxi: [_; 4] = unsafe { from_fn(|l| self.offsets[l].offset(self.i as isize)).into() };
-        // let idxk: [_; 4] = unsafe { from_fn(|l[l].offset(self.i as isize)).into() };
-
-        let oi = self.offsets + SI::splat(self.i);
-        let ok = oi + SI::splat(self.k);
-
         // Fast but ugly
-        let seqi = oi.as_array().map(|o| unsafe { *self.seq.get_unchecked(o) });
-        let seqk = ok.as_array().map(|o| unsafe { *self.seq.get_unchecked(o) });
-        let x0: SH = seqi
-            .map(|c| unsafe { *self.hk.as_array().get_unchecked(c as usize) })
-            .into();
-        let x1: SH = seqk
-            .map(|c| unsafe { *self.hk.as_array().get_unchecked(c as usize) })
-            .into();
+        // let seqi = oi.as_array().map(|o| unsafe { *self.seq.get_unchecked(o) });
+        // let seqk = ok.as_array().map(|o| unsafe { *self.seq.get_unchecked(o) });
+        // let x0: SH = seqi
+        //     .map(|c| unsafe { *self.hk.as_array().get_unchecked(c as usize) })
+        //     .into();
+        // let x1: SH = seqk
+        //     .map(|c| unsafe { *self.hk.as_array().get_unchecked(c as usize) })
+        //     .into();
 
         // Clean `gather` SIMD, but very slow.
         // let p = self.seq.as_ptr() as *const u32;
@@ -404,6 +406,36 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         //         std::mem::transmute(seqk),
         //     )))
         // };
+
+        if self.i % 4 == 0 {
+            let p = self.seq.as_ptr() as *const BufT;
+            let oi = self.offsets + SI::splat(self.i);
+            let ok = oi + SI::splat(self.k);
+            self.vals_i = oi
+                .as_array()
+                .map(|o| unsafe { *p.byte_offset(o as isize) })
+                .into();
+            self.vals_k = ok
+                .as_array()
+                .map(|o| unsafe { *p.byte_offset(o as isize) })
+                .into();
+        }
+        let seqi = self.vals_i & Buf::splat(0x03);
+        let seqk = self.vals_k & Buf::splat(0x03);
+        self.vals_i >>= Simd::splat(8);
+        self.vals_k >>= Simd::splat(8);
+        let x0: SH = unsafe {
+            std::mem::transmute(_mm_castps_si128(_mm_permutevar_ps(
+                _mm_castsi128_ps(std::mem::transmute(self.hk)),
+                std::mem::transmute(seqi),
+            )))
+        };
+        let x1: SH = unsafe {
+            std::mem::transmute(_mm_castps_si128(_mm_permutevar_ps(
+                _mm_castsi128_ps(std::mem::transmute(self.hk)),
+                std::mem::transmute(seqk),
+            )))
+        };
 
         self.fh = (self.fh << Simd::splat(1)) ^ x0 ^ x1;
 
