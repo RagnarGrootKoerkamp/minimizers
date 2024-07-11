@@ -756,3 +756,8 @@ impl SamplingScheme for FracMin {
             .0
     }
 }
+
+#[ctor::ctor]
+fn init_color_backtrace() {
+    color_backtrace::install();
+}
