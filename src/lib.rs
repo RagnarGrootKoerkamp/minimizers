@@ -1,4 +1,4 @@
-#![feature(type_alias_impl_trait, iter_repeat_n, trait_alias)]
+#![feature(type_alias_impl_trait, iter_repeat_n, trait_alias, portable_simd)]
 
 pub mod bruteforce;
 pub mod de_bruijn_seq;

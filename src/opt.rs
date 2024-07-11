@@ -1,3 +1,8 @@
+use std::{
+    array::from_fn,
+    simd::{cmp::SimdOrd, Simd},
+};
+
 use super::*;
 
 /// Rehashing, based on Daniel Lius implementation at
@@ -176,7 +181,7 @@ impl HashPos for u64 {
     const MAX: Self = u64::MAX;
     #[inline(always)]
     fn new(hash: u64, pos: usize) -> Self {
-        ((hash >> 32) << 32) | pos as u64
+        (hash << 32) | pos as u64
     }
 
     #[inline(always)]
@@ -317,9 +322,9 @@ impl<T: HashPos> SamplingScheme for MinimizerStacks<T> {
 
         // i: absolute position of lmer
         // j: absolute position of kmer
-        kmers.enumerate().map(
+        kmers.map(
             #[inline(always)]
-            move |(_i, (j, h))| {
+            move |(j, h)| {
                 let h = T::new(h, j);
                 unsafe { *hashes.get_unchecked_mut(hash_idx) = h };
                 rmin.min_with(&h);
@@ -418,6 +423,86 @@ impl<T: HashPos> SamplingScheme for MinimizerStacksBuf<T> {
                 lmin.min(&rmin).pos()
             },
         )
+    }
+}
+
+/////////////////////////////////////////////////////
+
+pub struct MinimizerStacksSimd {
+    pub k: usize,
+    pub w: usize,
+}
+
+impl MinimizerStacksSimd {
+    pub fn new(k: usize, w: usize) -> Self {
+        Self { k, w }
+    }
+}
+
+impl SamplingScheme for MinimizerStacksSimd {
+    #[inline(always)]
+    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+        type T = u64;
+        type S = Simd<T, 4>;
+
+        // split text in 4 chunks
+        // TODO: Edge cases.
+        let len = text.len() / 4;
+        let text_chunks: [&[u8]; 4] = text.chunks(len).collect_vec().try_into().unwrap();
+        let num_kmers = len - self.k + 1;
+
+        let mut kmers =
+            text_chunks.map(|text| nthash::NtHashForwardIterator::new(text, self.k).unwrap());
+
+        // Rolling window of last w hashes.
+        let mut hashes: Vec<S> = vec![from_fn(|_| T::MAX).into(); self.w];
+
+        // Process the first w-1 kmers.
+        for j in 0..self.w - 1 {
+            hashes[j] = from_fn(|l| T::new(kmers[l].next().unwrap(), j)).into();
+        }
+        let mut hash_idx = self.w - 1;
+
+        let mut rmin: S = from_fn(|_| T::MAX).into();
+
+        let pos_offset: Simd<usize, 4> = from_fn(|l| l * len).into();
+        let mut poss = vec![0; num_kmers * 4];
+
+        // i: absolute position of lmer
+        // j: absolute position of kmer
+        for j in self.w - 1..num_kmers {
+            // todo: unwrap_unchecked?
+            let h: S = from_fn(|l| T::new(kmers[l].next().unwrap(), j)).into();
+            unsafe { *hashes.get_unchecked_mut(hash_idx) = h };
+            rmin = rmin.simd_min(h);
+            hash_idx += 1;
+            if hash_idx == self.w {
+                hash_idx = 0;
+
+                // Rolling suffix minima over the prefix.
+                for i in (0..self.w - 1).rev() {
+                    unsafe {
+                        let y = *hashes.get_unchecked(i + 1);
+                        let x = hashes.get_unchecked_mut(i);
+                        *x = x.simd_min(y);
+                    }
+                }
+
+                rmin = from_fn(|_| T::MAX).into();
+            }
+
+            let ps: Simd<usize, 4> = unsafe { hashes.get_unchecked(hash_idx) }
+                .simd_min(rmin)
+                .to_array()
+                .map(|l| l.pos())
+                .into();
+            let ps = ps + pos_offset;
+            for l in 0..4 {
+                // poss[j + l * num_kmers] = ps[l];
+                unsafe { *poss.get_unchecked_mut(j + l * num_kmers) = ps[l] };
+            }
+        }
+        poss.into_iter()
     }
 }
 

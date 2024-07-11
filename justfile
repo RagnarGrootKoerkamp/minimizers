@@ -12,7 +12,8 @@ flame-stat:
     cargo flamegraph --open --skip-after minimizers::MinimizerType::stats -- -n 100000 -s 256 eval --stats
 
 bench:
-    cargo criterion --plotting-backend disabled -- --quick --significance-level 0.01
+    # cargo criterion --plotting-backend disabled -- --quick --significance-level 0.01
+    cargo criterion --plotting-backend disabled --
 
 profile test='':
     cargo criterion -- --profile-time 2 {{test}}

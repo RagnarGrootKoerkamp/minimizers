@@ -6,54 +6,67 @@ use minimizers::*;
 // use order::RandomOrder;
 
 fn bench(c: &mut Criterion) {
+    // make a  group
+    let mut g = c.benchmark_group("rand");
+
     let string = generate_random_dna(1000000);
     let k = 30;
     let w = 20;
     // let o = RandomOrder;
     // let mini = RandomMinimizer::new(k, w, o);
-    // c.bench_function("minimizer_simple", |b| {
+    // c.bench_function("simple", |b| {
     //     b.iter(|| mini.stream_dedup_1(&string).count());
     // });
     // let mini = MinimizerRehash { k, w, o };
-    // c.bench_function("minimizer_rehash", |b| {
+    // c.bench_function("rehash", |b| {
     //     b.iter(|| mini.stream_dedup_1(&string).count());
     // });
     // let mini = MinimizerRescan { k, w, o };
-    // c.bench_function("minimizer_rescan", |b| {
+    // c.bench_function("rescan", |b| {
     //     b.iter(|| mini.stream_dedup_1(&string).count());
     // });
     // let mini = MinimizerRescanNt { k, w };
-    // c.bench_function("minimizer_rescan_nt_0", |b| {
+    // c.bench_function("rescan_nt_0", |b| {
     //     b.iter(|| mini.stream_dedup_0(&string).count());
     // });
     // let mini = MinimizerRescanNt { k, w };
-    // c.bench_function("minimizer_rescan_nt_2", |b| {
+    // c.bench_function("rescan_nt_2", |b| {
     //     b.iter(|| mini.stream_dedup_2(&string).count());
     // });
 
-    let mini = MinimizerRescanNt::<Tuple>::new(k, w);
-    c.bench_function("minimizer_rescan_nt_1/tup", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
-    });
-    let mini = MinimizerRescanNt::<Pack>::new(k, w);
-    c.bench_function("minimizer_rescan_nt_1/pack", |b| {
+    // let mini = MinimizerRescanNt::<Tuple>::new(k, w);
+    // g.bench_function("rescan_nt_1/tup", |b| {
+    //     b.iter(|| mini.stream_dedup_1(&string).count());
+    // });
+    // let mini = MinimizerRescanNt::<Pack>::new(k, w);
+    // g.bench_function("rescan_nt_1/pack", |b| {
+    //     b.iter(|| mini.stream_dedup_1(&string).count());
+    // });
+
+    // let mini = MinimizerStacks::<Tuple>::new(k, w);
+    // g.bench_function("stacks/tup", |b| {
+    //     b.iter(|| mini.stream_dedup_1(&string).count());
+    // });
+    // let mini = MinimizerStacks::<Pack>::new(k, w);
+    // g.bench_function("stacks/pack", |b| {
+    //     b.iter(|| mini.stream_dedup_1(&string).count());
+    // });
+    // let mini = MinimizerStacksBuf::<Tuple>::new(k, w);
+    // g.bench_function("buf/tup", |b| {
+    //     b.iter(|| mini.stream_dedup_1(&string).count());
+    // });
+    // let mini = MinimizerStacksBuf::<Pack>::new(k, w);
+    // g.bench_function("buf/pack", |b| {
+    //     b.iter(|| mini.stream_dedup_1(&string).count());
+    // });
+
+    let mini = MinimizerStacks::<Pack>::new(k, w);
+    g.bench_function("stacks/pack", |b| {
         b.iter(|| mini.stream_dedup_1(&string).count());
     });
 
-    let mini = MinimizerStacks::<Tuple>::new(k, w);
-    c.bench_function("minimizer_stacks/tup", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
-    });
-    let mini = MinimizerStacks::<Pack>::new(k, w);
-    c.bench_function("minimizer_stacks/pack", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
-    });
-    let mini = MinimizerStacksBuf::<Tuple>::new(k, w);
-    c.bench_function("minimizer_buf/tup", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
-    });
-    let mini = MinimizerStacksBuf::<Pack>::new(k, w);
-    c.bench_function("minimizer_buf/pack", |b| {
+    let mini = MinimizerStacksSimd::new(k, w);
+    g.bench_function("stacks/simd", |b| {
         b.iter(|| mini.stream_dedup_1(&string).count());
     });
 }
@@ -63,7 +76,7 @@ criterion_group!(
     config = Criterion::default()
         .measurement_time(Duration::SECOND)
         .warm_up_time(Duration::MILLISECOND * 100)
-        .sample_size(20);
+        .sample_size(10);
     targets = bench
 );
 
