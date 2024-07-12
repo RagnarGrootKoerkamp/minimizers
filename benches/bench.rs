@@ -1,10 +1,13 @@
-mod random;
+mod randmini;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use itertools::Itertools;
-use random::daniel::ExtDaniel;
-use random::sliding_min::V3Queue;
-use random::{baseline::V0NaiveLex, baseline::V1NaiveFx, baseline::V2NaiveWy, Minimizer};
+use randmini::{
+    baseline::{V0NaiveLex, V1NaiveFx, V2NaiveWy},
+    daniel::ExtDaniel,
+    sliding_min::V3Queue,
+    Minimizer,
+};
 use std::time::Duration;
 
 /// Benchmark some functions.
