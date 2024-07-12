@@ -29,3 +29,13 @@ ctor = "0.2"
 
 [[example]]
 name = "lp"
+
+[dev-dependencies]
+criterion = "*"
+
+[lib]
+bench = false
+
+[[bench]]
+name = "bench"
+harness = false
