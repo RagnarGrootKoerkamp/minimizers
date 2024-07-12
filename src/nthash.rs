@@ -376,10 +376,12 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         };
 
         // Fast but ugly
+        // let oi = self.offsets + SI::splat(self.i / 4);
+        // let ok = oi + SI::splat(self.k);
         // let seqi = oi.as_array().map(|o| unsafe { *self.seq.get_unchecked(o) });
         // let seqk = ok.as_array().map(|o| unsafe { *self.seq.get_unchecked(o) });
         // let x0: SH = seqi
-        //     .map(|c| unsafe { *self.hk.as_array().get_unchecked(c as usize) })
+        //     .map(|c| unsafe { *self.h0.as_array().get_unchecked(c as usize) })
         //     .into();
         // let x1: SH = seqk
         //     .map(|c| unsafe { *self.hk.as_array().get_unchecked(c as usize) })
@@ -397,7 +399,7 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         //     .into();
         // let x0: SH = unsafe {
         //     std::mem::transmute(_mm_castps_si128(_mm_permutevar_ps(
-        //         _mm_castsi128_ps(std::mem::transmute(self.hk)),
+        //         _mm_castsi128_ps(std::mem::transmute(self.h0)),
         //         std::mem::transmute(seqi),
         //     )))
         // };
@@ -408,7 +410,7 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         //     )))
         // };
 
-        if self.i % 8 == 0 {
+        if self.i % 32 == 0 {
             let p = self.seq.as_ptr() as *const BufT;
             let oi = self.offsets + SI::splat(self.i);
             let ok = oi + SI::splat(self.k);
@@ -423,14 +425,14 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         }
         let seqi = self.vals_i & Buf::splat(0x03);
         let seqk = self.vals_k & Buf::splat(0x03);
-        self.vals_i >>= Simd::splat(8);
-        self.vals_k >>= Simd::splat(8);
+        self.vals_i >>= Simd::splat(2);
+        self.vals_k >>= Simd::splat(2);
         let x0: SH =
-            unsafe { transmute(_mm256_permutevar_pd(transmute(self.hk), transmute(seqi))) };
+            unsafe { transmute(_mm256_permutevar_pd(transmute(self.h0), transmute(seqi))) };
         let x1: SH =
             unsafe { transmute(_mm256_permutevar_pd(transmute(self.hk), transmute(seqk))) };
 
-        self.fh = (self.fh << Simd::splat(1)) ^ x0 ^ x1;
+        self.fh = (self.fh << Simd::splat(1)) ^ (self.fh >> Simd::splat(63)) ^ x0 ^ x1;
 
         self.i += 1;
         Some(self.fh)
