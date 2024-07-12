@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use criterion::{criterion_group, criterion_main, Criterion};
 
 /// Benchmark some functions.
@@ -16,7 +18,10 @@ fn bench(c: &mut Criterion) {
 
 criterion_group!(
     name = group;
-    config = Criterion::default();
+    config = Criterion::default()
+        .warm_up_time(Duration::from_millis(500))
+        .measurement_time(Duration::from_millis(2000))
+        .sample_size(10);
     targets = bench
 );
 

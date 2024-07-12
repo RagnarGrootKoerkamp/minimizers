@@ -14,3 +14,6 @@ flame:
     cargo flamegraph --open --skip-after minimizers::MinimizerType::stats -- -n 100000 -s 256 eval
 flame-stat:
     cargo flamegraph --open --skip-after minimizers::MinimizerType::stats -- -n 100000 -s 256 eval --stats
+
+bench:
+    cargo criterion --plotting-backend disabled --output-format quiet
