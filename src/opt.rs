@@ -565,15 +565,6 @@ impl SamplingScheme for MinimizerStacksSimd {
     }
 }
 
-// TODO: Buffered, doing the reverse loop w steps ahead.
-// TODO: SIMD? Processing 4 chunks/sequences in parallel?
-// TODO: Precompute 4^2 lookup table.
+// TODO: Precompute 4^2 lookup table -> not good with SIMD.
 // TODO: Alternative hash: take xor of t=8-mers multiplied by constant C.
 // TODO: https://en.algorithmica.org/hpc/algorithms/prefix/
-// TODO: Plack more with packing
-// TODO: 32bit NtHash
-// TODO: Fully buffered:
-//   1. forward minima
-//   2. backward minima
-//   3. merge
-//

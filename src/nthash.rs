@@ -445,11 +445,11 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         Some(self.fh)
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.max_idx, Some(self.max_idx))
-    }
+    // fn size_hint(&self) -> (usize, Option<usize>) {
+    //     (self.max_idx, Some(self.max_idx))
+    // }
 }
 
-impl<'a> ExactSizeIterator for NtHashForwardIteratorSimd<'a> {}
+// impl<'a> ExactSizeIterator for NtHashForwardIteratorSimd<'a> {}
 
 // TODO: u16 hash type
