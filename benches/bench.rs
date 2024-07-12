@@ -6,7 +6,7 @@ use itertools::Itertools;
 use randmini::{
     baseline::{V0NaiveLex, V1NaiveFx, V2NaiveWy},
     daniel::ExtDaniel,
-    sliding_min::V3Queue,
+    sliding_min::{V3AQueue, V3BQueue},
     Minimizer,
 };
 use std::time::Duration;
@@ -46,8 +46,12 @@ fn bench(c: &mut Criterion) {
         let m = ExtDaniel { w, k };
         b.iter(|| m.minimizers(text));
     });
-    g.bench_function("3_queue", |b| {
-        let m = V3Queue { w, k };
+    g.bench_function("3a_queue", |b| {
+        let m = V3AQueue { w, k };
+        b.iter(|| m.minimizers(text));
+    });
+    g.bench_function("3b_inlined_queue", |b| {
+        let m = V3BQueue { w, k };
         b.iter(|| m.minimizers(text));
     });
 }
