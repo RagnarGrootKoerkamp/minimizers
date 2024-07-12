@@ -451,3 +451,5 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
 }
 
 impl<'a> ExactSizeIterator for NtHashForwardIteratorSimd<'a> {}
+
+// TODO: u16 hash type

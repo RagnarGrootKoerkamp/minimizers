@@ -234,6 +234,33 @@ impl HashPos for i64 {
     }
 }
 
+impl HashPos for u32 {
+    const MAX: Self = u32::MAX;
+    #[inline(always)]
+    fn new(hash: u64, pos: usize) -> Self {
+        ((hash << 16) | (pos as u64) & 0xffff) as u32
+    }
+
+    #[inline(always)]
+    fn pos(&self) -> usize {
+        (*self & 0xffff) as usize
+    }
+
+    #[inline(always)]
+    fn min(&self, other: &Self) -> Self {
+        if *other < *self {
+            *other
+        } else {
+            *self
+        }
+    }
+
+    #[inline(always)]
+    fn update_with(&mut self, _hash: u64, _pos: usize) {
+        unimplemented!();
+    }
+}
+
 pub struct MinimizerRescanNt<T: HashPos = Tuple> {
     pub k: usize,
     pub w: usize,
@@ -471,7 +498,7 @@ impl MinimizerStacksSimd {
 impl SamplingScheme for MinimizerStacksSimd {
     #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
-        type T = i64;
+        type T = u32;
         type S = Simd<T, 4>;
 
         // split text in 4 chunks
@@ -528,6 +555,7 @@ impl SamplingScheme for MinimizerStacksSimd {
                 .map(|l| l.pos())
                 .into();
             let ps = ps + pos_offset;
+            // TODO: Gather 8-bit offsets into a u64 and scatter once every 8 iterations.
             for l in 0..4 {
                 // poss[j + l * num_kmers] = ps[l];
                 unsafe { *poss.get_unchecked_mut(j + l * num_kmers) = ps[l] };
