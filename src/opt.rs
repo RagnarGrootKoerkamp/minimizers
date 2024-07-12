@@ -1,11 +1,11 @@
 use std::{
     array::from_fn,
-    simd::{cmp::SimdOrd, Simd},
+    simd::{cmp::SimdOrd, LaneCount, Simd, SimdElement, SupportedLaneCount},
 };
 
 use super::*;
 
-/// Rehashing, based on Daniel Lius implementation at
+/// Rehashing, based on Daniel Liu's implementation at
 /// https://gist.github.com/Daniel-Liu-c0deb0t/7078ebca04569068f15507aa856be6e8
 /// Idea: skip the priority queue and simply only track the smallest minimizer in the window.
 /// When the smallest one falls out, simply re-scan the entire window.
@@ -499,13 +499,14 @@ impl SamplingScheme for MinimizerStacksSimd {
     #[inline(always)]
     fn stream(&self, text: &[u8]) -> impl MinimizerIt {
         type T = u32;
-        type S = Simd<T, 4>;
+        const L: usize = 8;
+        type S = Simd<T, L>;
 
-        // split text in 4 chunks
+        // split text in L chunks
         // TODO: Edge cases.
-        let len = text.len() / 4;
-        // let text_chunks: [&[u8]; 4] = text.chunks(len).collect_vec().try_into().unwrap();
-        let num_kmers = len - self.k + 1;
+        let len = text.len() / L;
+        // let text_chunks: [&[u8]; L] = text.chunks(len).collect_vec().try_into().unwrap();
+        // let num_kmers = len - self.k + 1;
 
         let mut kmers = nthash::NtHashForwardIteratorSimd::new(text, len, self.k)
             .unwrap()
@@ -516,54 +517,125 @@ impl SamplingScheme for MinimizerStacksSimd {
 
         // Process the first w-1 kmers.
         kmers.by_ref().take(self.w - 1).for_each(|(j, h)| {
-            hashes[j] = h.as_array().map(|h| T::new(h as u64, j)).into();
+            hashes[j] = from_fn(|l| T::new(h[l] as u64, j)).into();
         });
         let mut hash_idx = self.w - 1;
 
         let mut rmin: S = S::splat(T::MAX);
 
-        let pos_offset: Simd<usize, 4> = from_fn(|l| l * len).into();
-        let mut poss = vec![0; num_kmers * 4];
+        let pos_offset: Simd<u32, L> = from_fn(|l| (l * len) as u32).into();
 
         assert!(self.w > 1);
 
         // i: absolute position of lmer
         // j: absolute position of kmer
-        kmers.for_each(|(j, h)| {
-            let h = h.as_array().map(|h| T::new(h as u64, j)).into();
-            unsafe { *hashes.get_unchecked_mut(hash_idx) = h };
-            rmin = rmin.simd_min(h);
-            hash_idx += 1;
-            if hash_idx == self.w {
-                hash_idx = 0;
+        let mut poss = vec![];
+        poss.reserve(len);
+        kmers.for_each(
+            #[inline(always)]
+            |(j, h)| {
+                let h = from_fn(
+                    #[inline(always)]
+                    |l| T::new(h[l] as u64, j),
+                )
+                .into();
 
-                // Rolling suffix minima over the prefix.
-                for i in (0..self.w - 1).rev() {
-                    unsafe {
-                        let y = *hashes.get_unchecked(i + 1);
-                        let x = hashes.get_unchecked_mut(i);
-                        *x = x.simd_min(y);
+                // let h = h.as_array().map(|h| T::new(h as u64, j)).into();
+                unsafe { *hashes.get_unchecked_mut(hash_idx) = h };
+                rmin = rmin.simd_min(h);
+                hash_idx += 1;
+                if hash_idx == self.w {
+                    hash_idx = 0;
+
+                    // Rolling suffix minima over the prefix.
+                    for i in (0..self.w - 1).rev() {
+                        unsafe {
+                            let y = *hashes.get_unchecked(i + 1);
+                            let x = hashes.get_unchecked_mut(i);
+                            *x = x.simd_min(y);
+                        }
                     }
+
+                    rmin = S::splat(T::MAX);
                 }
 
-                rmin = S::splat(T::MAX);
-            }
-
-            let ps: Simd<usize, 4> = unsafe { hashes.get_unchecked(hash_idx) }
-                .simd_min(rmin)
-                .to_array()
-                .map(|l| l.pos())
-                .into();
-            let ps = ps + pos_offset;
-            // TODO: Gather 8-bit offsets into a u64 and scatter once every 8 iterations.
-            for l in 0..4 {
-                // poss[j + l * num_kmers] = ps[l];
-                unsafe { *poss.get_unchecked_mut(j + l * num_kmers) = ps[l] };
-            }
-        });
-        poss.into_iter()
+                let ps: Simd<u32, L> = unsafe { hashes.get_unchecked(hash_idx) }
+                    .simd_min(rmin)
+                    .to_array()
+                    .map(
+                        #[inline(always)]
+                        |l| l.pos() as u32,
+                    )
+                    .into();
+                let ps = ps + pos_offset;
+                poss.push(ps);
+                // TODO: Gather 8-bit offsets into a u64 and scatter once every 8 iterations.
+                // for l in 0..L {
+                //     // poss[j + l * num_kmers] = ps[l];
+                //     unsafe { *poss.get_unchecked_mut(j + l * num_kmers) = ps[l] };
+                // }
+            },
+        );
+        SimdIter::new(poss).map(
+            #[inline(always)]
+            |p| p as usize,
+        )
     }
 }
+
+/// Iterates first over the first lane of all vector elements, then over the second lane, and so on.
+struct SimdIter<T: SimdElement, const L: usize>
+where
+    LaneCount<L>: SupportedLaneCount,
+{
+    data: Vec<Simd<T, L>>,
+    lane: usize,
+    idx: usize,
+}
+impl<T: SimdElement, const L: usize> SimdIter<T, L>
+where
+    LaneCount<L>: SupportedLaneCount,
+{
+    #[inline(always)]
+    fn new(data: Vec<Simd<T, L>>) -> Self {
+        Self {
+            data,
+            lane: 0,
+            idx: 0,
+        }
+    }
+}
+
+impl<T: SimdElement, const L: usize> Iterator for SimdIter<T, L>
+where
+    LaneCount<L>: SupportedLaneCount,
+{
+    type Item = T;
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx == self.data.len() {
+            cold();
+            self.idx = 0;
+            self.lane += 1;
+            if self.lane == L {
+                return None;
+            }
+        }
+        let res = unsafe {
+            *self
+                .data
+                .get_unchecked(self.idx)
+                .as_array()
+                .get_unchecked(self.lane)
+        };
+        self.idx += 1;
+        Some(res)
+    }
+}
+
+#[inline(never)]
+#[cold]
+fn cold() {}
 
 // TODO: Precompute 4^2 lookup table -> not good with SIMD.
 // TODO: Alternative hash: take xor of t=8-mers multiplied by constant C.
