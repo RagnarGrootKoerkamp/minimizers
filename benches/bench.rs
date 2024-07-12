@@ -6,7 +6,7 @@ use itertools::Itertools;
 use randmini::{
     baseline::{V0NaiveLex, V1NaiveFx, V2NaiveWy},
     daniel::ExtDaniel,
-    sliding_min::{V3AQueue, V3BQueue},
+    queue::{V3AQueue, V3BQueue},
     Minimizer,
 };
 use std::time::Duration;

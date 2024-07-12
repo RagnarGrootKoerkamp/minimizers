@@ -15,6 +15,7 @@ impl Minimizer for V0NaiveLex {
                 j + window
                     .windows(self.k)
                     .enumerate()
+                    // min_by_key returns the leftmost minimum.
                     .min_by_key(|(_idx, kmer)| *kmer)
                     .unwrap()
                     .0

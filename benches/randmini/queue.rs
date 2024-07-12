@@ -1,20 +1,6 @@
 use std::collections::VecDeque;
 
-use super::Minimizer;
-
-pub trait SlidingMin<V> {
-    /// Initialize a new datastructure with window size `w`.
-    fn new(w: usize) -> Self;
-    /// Push a new value, starting at position 0.
-    /// Return the pos and value of the minimum of the last w elements.
-    fn push(&mut self, val: V) -> Elem<V>;
-}
-
-#[derive(Clone, Copy)]
-pub struct Elem<Val> {
-    pub pos: usize,
-    pub val: Val,
-}
+use super::{Elem, Minimizer, SlidingMin};
 
 pub struct MonotoneQueueA<Val: Ord> {
     w: usize,
