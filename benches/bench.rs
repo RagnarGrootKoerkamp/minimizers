@@ -1,10 +1,11 @@
+mod random;
+
 use criterion::{criterion_group, criterion_main, Criterion};
 use itertools::Itertools;
 use random::daniel::ExtDaniel;
+use random::sliding_min::V3Queue;
 use random::{baseline::V0NaiveLex, baseline::V1NaiveFx, baseline::V2NaiveWy, Minimizer};
 use std::time::Duration;
-
-mod random;
 
 /// Benchmark some functions.
 fn bench(c: &mut Criterion) {
@@ -39,6 +40,10 @@ fn bench(c: &mut Criterion) {
     });
     g.bench_function("ext_daniel", |b| {
         let m = ExtDaniel { w, k };
+        b.iter(|| m.minimizers(text));
+    });
+    g.bench_function("3_queue", |b| {
+        let m = V3Queue { w, k };
         b.iter(|| m.minimizers(text));
     });
 }
