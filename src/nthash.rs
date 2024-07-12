@@ -323,6 +323,7 @@ pub struct NtHashForwardIteratorSimd<'a> {
     k: usize,
     fh: SH,
     i: usize,
+    ik: usize,
     max_idx: usize,
     h0: SH,
     hk: SH,
@@ -330,6 +331,7 @@ pub struct NtHashForwardIteratorSimd<'a> {
 
 impl<'a> NtHashForwardIteratorSimd<'a> {
     /// Creates a new NtHashForwardIterator with internal state properly initialized.
+    /// NOTE: seq should be a bitpacked sequence.
     pub fn new(seq: &'a [u8], len: usize, k: usize) -> Option<Self> {
         if k > len {
             return None;
@@ -343,6 +345,7 @@ impl<'a> NtHashForwardIteratorSimd<'a> {
         // FIXME: This breaks on page boundaries.
         for i in 0..k {
             unsafe {
+                // TODO: Fix this for bitpacked sequence
                 let x: SH = from_fn(|l| {
                     (h(*seq.get_unchecked(l * len + i))).rotate_left((k - i - 1) as u32)
                 })
@@ -359,6 +362,7 @@ impl<'a> NtHashForwardIteratorSimd<'a> {
             k,
             fh,
             i: 0,
+            ik: k,
             max_idx: len - k,
             h0: H_LOOKUP.map(|x| x).into(),
             hk: H_LOOKUP.map(|x| (x).rotate_left(k as u32)).into(),
@@ -410,15 +414,17 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         //     )))
         // };
 
+        let p = self.seq.as_ptr() as *const BufT;
         if self.i % 32 == 0 {
-            let p = self.seq.as_ptr() as *const BufT;
-            let oi = self.offsets + SI::splat(self.i);
-            let ok = oi + SI::splat(self.k);
-            self.vals_i = oi
+            let o = self.offsets + SI::splat(self.i / 4);
+            self.vals_i = o
                 .as_array()
                 .map(|o| unsafe { *p.byte_offset(o as isize) })
                 .into();
-            self.vals_k = ok
+        }
+        if self.ik % 32 == 0 {
+            let o = self.offsets + SI::splat(self.ik / 4);
+            self.vals_k = o
                 .as_array()
                 .map(|o| unsafe { *p.byte_offset(o as isize) })
                 .into();
@@ -435,6 +441,7 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         self.fh = (self.fh << Simd::splat(1)) ^ (self.fh >> Simd::splat(63)) ^ x0 ^ x1;
 
         self.i += 1;
+        self.ik += 1;
         Some(self.fh)
     }
 
