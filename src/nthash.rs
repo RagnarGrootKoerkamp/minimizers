@@ -14,9 +14,12 @@
 //!
 
 use std::{
-    arch::x86_64::{_mm256_permutevar_pd, _mm_castps_si128, _mm_castsi128_ps, _mm_permutevar_ps},
+    arch::x86_64::{
+        _mm256_permutevar_pd, _mm256_permutevar_ps, _mm_castps_si128, _mm_castsi128_ps,
+        _mm_permutevar_ps,
+    },
     array::from_fn,
-    mem::transmute,
+    mem::{swap, transmute},
     simd::Simd,
 };
 
@@ -306,8 +309,10 @@ impl<'a> Iterator for NtHashForwardIterator<'a> {
 
 impl<'a> ExactSizeIterator for NtHashForwardIterator<'a> {}
 
+type H = u32;
+
 /// 32-bit NtHash vector type.
-type SH = Simd<u64, 4>;
+type SH = Simd<u32, 8>;
 /// Index type.
 type SI = Simd<usize, 4>;
 /// Pre-read type.
@@ -317,9 +322,12 @@ type Buf = Simd<BufT, 4>;
 #[derive(Debug)]
 pub struct NtHashForwardIteratorSimd<'a> {
     seq: &'a [u8],
-    offsets: SI,
-    vals_i: Buf,
-    vals_k: Buf,
+    offsets1: SI,
+    offsets2: SI,
+    active_i: SH,
+    inactive_i: SH,
+    active_k: SH,
+    inactive_k: SH,
     k: usize,
     fh: SH,
     i: usize,
@@ -347,7 +355,7 @@ impl<'a> NtHashForwardIteratorSimd<'a> {
             unsafe {
                 // TODO: Fix this for bitpacked sequence
                 let x: SH = from_fn(|l| {
-                    (h(*seq.get_unchecked(l * len + i))).rotate_left((k - i - 1) as u32)
+                    (h(*seq.get_unchecked(l * len + i)) as u32).rotate_left((k - i - 1) as u32)
                 })
                 .into();
                 fh ^= x;
@@ -356,16 +364,19 @@ impl<'a> NtHashForwardIteratorSimd<'a> {
 
         Some(Self {
             seq,
-            offsets: from_fn(|l| l * len).into(),
-            vals_i: Buf::splat(0),
-            vals_k: Buf::splat(0),
+            offsets1: from_fn(|l| (l * len)).into(),
+            offsets2: from_fn(|l| ((4 + l) * len)).into(),
+            active_i: SH::splat(0),
+            inactive_i: SH::splat(0),
+            active_k: SH::splat(0),
+            inactive_k: SH::splat(0),
             k,
             fh,
             i: 0,
             ik: k,
             max_idx: len - k,
-            h0: H_LOOKUP.map(|x| x).into(),
-            hk: H_LOOKUP.map(|x| (x).rotate_left(k as u32)).into(),
+            h0: from_fn(|l| H_LOOKUP[l % 4] as u32).into(),
+            hk: from_fn(|l| (H_LOOKUP[l % 4] as u32).rotate_left(k as u32)).into(),
         })
     }
 }
@@ -415,30 +426,90 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         // };
 
         let p = self.seq.as_ptr() as *const BufT;
+        if self.i % 32 == 16 {
+            swap(&mut self.active_i, &mut self.inactive_i);
+        }
         if self.i % 32 == 0 {
-            let o = self.offsets + SI::splat(self.i / 4);
-            self.vals_i = o
+            let o1 = self.offsets1 + SI::splat(self.i / 4);
+            let v1: Simd<u64, 4> = o1
                 .as_array()
                 .map(|o| unsafe { *p.byte_offset(o as isize) })
                 .into();
+            let o2 = self.offsets2 + SI::splat(self.i / 4);
+            let v2: Simd<u64, 4> = o2
+                .as_array()
+                .map(|o| unsafe { *p.byte_offset(o as isize) })
+                .into();
+            self.active_i = from_fn(|l| {
+                if l < 4 {
+                    v1[l] as u32
+                } else {
+                    v2[l - 4] as u32
+                }
+            })
+            .into();
+            self.inactive_i = from_fn(|l| {
+                if l < 4 {
+                    (v1[l] >> 32) as u32
+                } else {
+                    (v2[l - 4] >> 32) as u32
+                }
+            })
+            .into();
+        }
+        if self.ik % 32 == 16 {
+            swap(&mut self.active_k, &mut self.inactive_k);
         }
         if self.ik % 32 == 0 {
-            let o = self.offsets + SI::splat(self.ik / 4);
-            self.vals_k = o
+            let o1 = self.offsets1 + SI::splat(self.ik / 4);
+            let v1: Simd<u64, 4> = o1
                 .as_array()
-                .map(|o| unsafe { *p.byte_offset(o as isize) })
+                .map(
+                    #[inline(always)]
+                    |o| unsafe { *p.byte_offset(o as isize) },
+                )
                 .into();
+            let o2 = self.offsets2 + SI::splat(self.ik / 4);
+            let v2: Simd<u64, 4> = o2
+                .as_array()
+                .map(
+                    #[inline(always)]
+                    |o| unsafe { *p.byte_offset(o as isize) },
+                )
+                .into();
+            self.active_k = from_fn(
+                #[inline(always)]
+                |l| {
+                    if l < 4 {
+                        v1[l] as u32
+                    } else {
+                        v2[l - 4] as u32
+                    }
+                },
+            )
+            .into();
+            self.inactive_k = from_fn(
+                #[inline(always)]
+                |l| {
+                    if l < 4 {
+                        (v1[l] >> 32) as u32
+                    } else {
+                        (v2[l - 4] >> 32) as u32
+                    }
+                },
+            )
+            .into();
         }
-        let seqi = self.vals_i & Buf::splat(0x03);
-        let seqk = self.vals_k & Buf::splat(0x03);
-        self.vals_i >>= Simd::splat(2);
-        self.vals_k >>= Simd::splat(2);
+        let seqi = self.active_i; // & SH::splat(0x03);
+        let seqk = self.active_k; // & SH::splat(0x03);
         let x0: SH =
-            unsafe { transmute(_mm256_permutevar_pd(transmute(self.h0), transmute(seqi))) };
+            unsafe { transmute(_mm256_permutevar_ps(transmute(self.h0), transmute(seqi))) };
         let x1: SH =
-            unsafe { transmute(_mm256_permutevar_pd(transmute(self.hk), transmute(seqk))) };
+            unsafe { transmute(_mm256_permutevar_ps(transmute(self.hk), transmute(seqk))) };
+        self.active_i >>= Simd::splat(2);
+        self.active_k >>= Simd::splat(2);
 
-        self.fh = (self.fh << Simd::splat(1)) ^ (self.fh >> Simd::splat(63)) ^ x0 ^ x1;
+        self.fh = (self.fh << Simd::splat(1)) ^ (self.fh >> Simd::splat(31)) ^ x0 ^ x1;
 
         self.i += 1;
         self.ik += 1;
