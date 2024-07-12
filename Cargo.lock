@@ -485,6 +485,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
+name = "minimizer-iter"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29b022505643a614c3cebbfe55ed3ef167925ca60f76a15f76d918b88a99e849"
+dependencies = [
+ "minimizer-queue",
+ "num-traits",
+ "strength_reduce",
+]
+
+[[package]]
+name = "minimizer-queue"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "762a9436d3df464f3dd9b0ee6a74719f0145ab693b8c08df7c05587a9f3952f9"
+dependencies = [
+ "strength_reduce",
+ "wyhash2",
+]
+
+[[package]]
 name = "minimizers"
 version = "0.1.0"
 dependencies = [
@@ -496,6 +517,7 @@ dependencies = [
  "fxhash",
  "good_lp",
  "itertools 0.12.1",
+ "minimizer-iter",
  "num",
  "rand",
  "rayon",
@@ -513,6 +535,12 @@ checksum = "b8a240ddb74feaf34a79a7add65a741f3167852fba007066dcac1ca548d89c08"
 dependencies = [
  "adler",
 ]
+
+[[package]]
+name = "no-std-compat"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
 
 [[package]]
 name = "num"
@@ -803,6 +831,12 @@ dependencies = [
  "ryu",
  "serde",
 ]
+
+[[package]]
+name = "strength_reduce"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
 
 [[package]]
 name = "strsim"
@@ -1099,6 +1133,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf6e163c25e3fac820b4b453185ea2dea3b6a3e0a721d4d23d75bd33734c295"
 dependencies = [
  "rand_core",
+]
+
+[[package]]
+name = "wyhash2"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9433c7c86e328a8197038c9fc31f6e5c81f9c7bdc087d86e266680236af1af1b"
+dependencies = [
+ "no-std-compat",
 ]
 
 [[package]]

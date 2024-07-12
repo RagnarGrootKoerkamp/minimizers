@@ -1,9 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use random::{Minimizer, V0NaiveLex};
+use itertools::Itertools;
+use random::{Minimizer, V0NaiveLex, V1NaiveFx, V2NaiveWy};
 use std::time::Duration;
 
 mod random;
-use random::*;
 
 /// Benchmark some functions.
 fn bench(c: &mut Criterion) {
@@ -25,6 +25,16 @@ fn bench(c: &mut Criterion) {
     g.bench_function("2_naive_wy", |b| {
         let m = V2NaiveWy { w, k };
         b.iter(|| m.minimizers(text));
+    });
+
+    g.bench_function("ext_minimizer_iter", |b| {
+        b.iter(|| {
+            minimizer_iter::MinimizerBuilder::<u64>::new()
+                .minimizer_size(k)
+                .width(w as u16)
+                .iter_pos(text)
+                .collect_vec()
+        });
     });
 }
 
