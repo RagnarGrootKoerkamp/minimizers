@@ -14,8 +14,9 @@
 //!
 
 use std::{
-    arch::x86_64::{_mm_castps_si128, _mm_castsi128_ps, _mm_permutevar_ps},
+    arch::x86_64::{_mm256_permutevar_pd, _mm_castps_si128, _mm_castsi128_ps, _mm_permutevar_ps},
     array::from_fn,
+    mem::transmute,
     simd::Simd,
 };
 
@@ -306,11 +307,11 @@ impl<'a> Iterator for NtHashForwardIterator<'a> {
 impl<'a> ExactSizeIterator for NtHashForwardIterator<'a> {}
 
 /// 32-bit NtHash vector type.
-type SH = Simd<u32, 4>;
+type SH = Simd<u64, 4>;
 /// Index type.
 type SI = Simd<usize, 4>;
 /// Pre-read type.
-type BufT = u32;
+type BufT = u64;
 type Buf = Simd<BufT, 4>;
 
 #[derive(Debug)]
@@ -343,7 +344,7 @@ impl<'a> NtHashForwardIteratorSimd<'a> {
         for i in 0..k {
             unsafe {
                 let x: SH = from_fn(|l| {
-                    (h(*seq.get_unchecked(l * len + i)) as u32).rotate_left((k - i - 1) as u32)
+                    (h(*seq.get_unchecked(l * len + i))).rotate_left((k - i - 1) as u32)
                 })
                 .into();
                 fh ^= x;
@@ -359,8 +360,8 @@ impl<'a> NtHashForwardIteratorSimd<'a> {
             fh,
             i: 0,
             max_idx: len - k,
-            h0: H_LOOKUP.map(|x| x as u32).into(),
-            hk: H_LOOKUP.map(|x| (x as u32).rotate_left(k as u32)).into(),
+            h0: H_LOOKUP.map(|x| x).into(),
+            hk: H_LOOKUP.map(|x| (x).rotate_left(k as u32)).into(),
         })
     }
 }
@@ -407,7 +408,7 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         //     )))
         // };
 
-        if self.i % 4 == 0 {
+        if self.i % 8 == 0 {
             let p = self.seq.as_ptr() as *const BufT;
             let oi = self.offsets + SI::splat(self.i);
             let ok = oi + SI::splat(self.k);
@@ -424,18 +425,10 @@ impl<'a> Iterator for NtHashForwardIteratorSimd<'a> {
         let seqk = self.vals_k & Buf::splat(0x03);
         self.vals_i >>= Simd::splat(8);
         self.vals_k >>= Simd::splat(8);
-        let x0: SH = unsafe {
-            std::mem::transmute(_mm_castps_si128(_mm_permutevar_ps(
-                _mm_castsi128_ps(std::mem::transmute(self.hk)),
-                std::mem::transmute(seqi),
-            )))
-        };
-        let x1: SH = unsafe {
-            std::mem::transmute(_mm_castps_si128(_mm_permutevar_ps(
-                _mm_castsi128_ps(std::mem::transmute(self.hk)),
-                std::mem::transmute(seqk),
-            )))
-        };
+        let x0: SH =
+            unsafe { transmute(_mm256_permutevar_pd(transmute(self.hk), transmute(seqi))) };
+        let x1: SH =
+            unsafe { transmute(_mm256_permutevar_pd(transmute(self.hk), transmute(seqk))) };
 
         self.fh = (self.fh << Simd::splat(1)) ^ x0 ^ x1;
 
