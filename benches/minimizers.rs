@@ -1,4 +1,5 @@
 #![feature(duration_constants)]
+use itertools::Itertools;
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -61,13 +62,19 @@ fn bench(c: &mut Criterion) {
     // });
 
     let mini = MinimizerStacks::<Pack>::new(k, w);
-    g.bench_function("stacks/pack", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
+    // g.bench_function("stacks/pack/dedup", |b| {
+    //     b.iter(|| criterion::black_box(mini.stream_dedup_1(&string).collect_vec()));
+    // });
+    g.bench_function("stacks/pack/all", |b| {
+        b.iter(|| criterion::black_box(mini.stream(&string).collect_vec()));
     });
 
     let mini = MinimizerStacksSimd::new(k, w);
-    g.bench_function("stacks/simd", |b| {
-        b.iter(|| mini.stream_dedup_1(&string).count());
+    // g.bench_function("stacks/simd/dedup", |b| {
+    //     b.iter(|| criterion::black_box(mini.stream_dedup_1(&string)));
+    // });
+    g.bench_function("stacks/simd/all", |b| {
+        b.iter(|| criterion::black_box(mini.stream(&string)));
     });
 }
 
