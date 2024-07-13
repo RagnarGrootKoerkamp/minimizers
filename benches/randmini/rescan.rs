@@ -33,10 +33,11 @@ impl<Val: Ord + Copy + Max> SlidingMin<Val> for Rescan<Val> {
     fn push(&mut self, val: Val) -> Elem<Val> {
         unsafe {
             *self.vals.get_unchecked_mut(self.idx) = val;
-            if val < self.min_val {
-                self.min_val = val;
-                self.min_pos = self.pos;
-            }
+            (self.min_val, self.min_pos) = if val < self.min_val {
+                (val, self.pos)
+            } else {
+                (self.min_val, self.min_pos)
+            };
             if self.pos - self.min_pos == self.w {
                 // Find the position of the minimum, preferring older elements that
                 // come *after* self.idx.
