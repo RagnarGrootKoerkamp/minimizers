@@ -7,7 +7,7 @@ use randmini::{
     baseline::{V0NaiveLex, V1NaiveFx, V2NaiveWy},
     daniel::ExtDaniel,
     queue::{V3AQueue, V3BQueue},
-    rescan::V4Rescan,
+    rescan::V4ARescan,
     Minimizer,
 };
 use std::time::Duration;
@@ -51,12 +51,16 @@ fn bench(c: &mut Criterion) {
         let m = V3AQueue { w, k };
         b.iter(|| m.minimizers(text));
     });
-    g.bench_function("3b_inlined_queue", |b| {
+    g.bench_function("3b_queue_inline", |b| {
         let m = V3BQueue { w, k };
         b.iter(|| m.minimizers(text));
     });
-    g.bench_function("4_rescan", |b| {
-        let m = V4Rescan { w, k };
+    g.bench_function("4a_rescan", |b| {
+        let m = V4ARescan { w, k };
+        b.iter(|| m.minimizers(text));
+    });
+    g.bench_function("4b_rescan_unchecked", |b| {
+        let m = V4ARescan { w, k };
         b.iter(|| m.minimizers(text));
     });
 }
