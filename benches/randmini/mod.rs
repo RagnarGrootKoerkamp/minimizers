@@ -1,5 +1,6 @@
 pub mod baseline;
 pub mod daniel;
+mod nthash;
 pub mod queue;
 pub mod rescan;
 

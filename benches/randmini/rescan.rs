@@ -110,6 +110,11 @@ impl Minimizer for V5RescanNtHash {
         for h in kmer_hashes.by_ref().take(self.w - 1) {
             q.push(h);
         }
-        kmer_hashes.map(|h| q.push(h).pos).collect()
+        kmer_hashes
+            .map(
+                #[inline(always)]
+                |h| q.push(h).pos,
+            )
+            .collect()
     }
 }

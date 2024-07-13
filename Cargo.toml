@@ -26,7 +26,6 @@ num = "0.4"
 wyhash = "0.5"
 color-backtrace = "0.6"
 ctor = "0.2"
-nthash = { git = "https://github.com/luizirber/nthash" }
 
 [[example]]
 name = "lp"
