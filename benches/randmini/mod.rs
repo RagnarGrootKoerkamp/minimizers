@@ -1,6 +1,7 @@
 pub mod baseline;
 pub mod daniel;
 pub mod queue;
+pub mod rescan;
 
 pub trait Minimizer {
     fn minimizers(&self, text: &[u8]) -> Vec<usize>;
@@ -18,4 +19,12 @@ pub trait SlidingMin<V> {
 pub struct Elem<Val> {
     pub pos: usize,
     pub val: Val,
+}
+
+trait Max {
+    const MAX: Self;
+}
+
+impl Max for usize {
+    const MAX: usize = usize::MAX;
 }
