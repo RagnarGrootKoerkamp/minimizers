@@ -26,6 +26,7 @@ num = "0.4"
 wyhash = "0.5"
 color-backtrace = "0.6"
 ctor = "0.2"
+nthash = "0.5.1"
 
 [[example]]
 name = "lp"

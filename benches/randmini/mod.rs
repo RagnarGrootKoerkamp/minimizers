@@ -28,3 +28,6 @@ trait Max {
 impl Max for usize {
     const MAX: usize = usize::MAX;
 }
+impl Max for u64 {
+    const MAX: u64 = u64::MAX;
+}

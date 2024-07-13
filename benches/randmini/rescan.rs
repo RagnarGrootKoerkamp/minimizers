@@ -90,10 +90,26 @@ impl Minimizer for V4Rescan {
     fn minimizers(&self, text: &[u8]) -> Vec<usize> {
         let mut q = Rescan::new(self.w);
         let mut kmers = text.windows(self.k);
-        // Inset the first w-1 k-mers, that do not yet form a full window.
+        // Insert the first w-1 k-mers, that do not yet form a full window.
         for kmer in kmers.by_ref().take(self.w - 1) {
             q.push(fxhash::hash(kmer));
         }
         kmers.map(|kmer| q.push(fxhash::hash(kmer)).pos).collect()
+    }
+}
+
+pub struct V5RescanNtHash {
+    pub w: usize,
+    pub k: usize,
+}
+
+impl Minimizer for V5RescanNtHash {
+    fn minimizers(&self, text: &[u8]) -> Vec<usize> {
+        let mut q = Rescan::new(self.w);
+        let mut kmer_hashes = nthash::NtHashForwardIterator::new(text, self.k).unwrap();
+        for h in kmer_hashes.by_ref().take(self.w - 1) {
+            q.push(h);
+        }
+        kmer_hashes.map(|h| q.push(h).pos).collect()
     }
 }

@@ -7,7 +7,7 @@ use randmini::{
     baseline::{V0NaiveLex, V1NaiveFx, V2NaiveWy},
     daniel::ExtDaniel,
     queue::V3Queue,
-    rescan::V4Rescan,
+    rescan::{V4Rescan, V5RescanNtHash},
     Minimizer,
 };
 use std::time::Duration;
@@ -33,26 +33,29 @@ fn bench(c: &mut Criterion) {
     //     let m = V2NaiveWy { w, k };
     //     b.iter(|| m.minimizers(text));
     // });
-
-    g.bench_function("ext_minimizer_iter", |b| {
-        b.iter(|| {
-            minimizer_iter::MinimizerBuilder::<u64>::new()
-                .minimizer_size(k)
-                .width(w as u16)
-                .iter_pos(text)
-                .collect_vec()
-        });
-    });
+    // g.bench_function("ext_minimizer_iter", |b| {
+    //     b.iter(|| {
+    //         minimizer_iter::MinimizerBuilder::<u64>::new()
+    //             .minimizer_size(k)
+    //             .width(w as u16)
+    //             .iter_pos(text)
+    //             .collect_vec()
+    //     });
+    // });
     g.bench_function("ext_daniel", |b| {
         let m = ExtDaniel { w, k };
         b.iter(|| m.minimizers(text));
     });
-    g.bench_function("3_queue", |b| {
-        let m = V3Queue { w, k };
-        b.iter(|| m.minimizers(text));
-    });
+    // g.bench_function("3_queue", |b| {
+    //     let m = V3Queue { w, k };
+    //     b.iter(|| m.minimizers(text));
+    // });
     g.bench_function("4_rescan", |b| {
         let m = V4Rescan { w, k };
+        b.iter(|| m.minimizers(text));
+    });
+    g.bench_function("5_rescan_nthash", |b| {
+        let m = V5RescanNtHash { w, k };
         b.iter(|| m.minimizers(text));
     });
 }
