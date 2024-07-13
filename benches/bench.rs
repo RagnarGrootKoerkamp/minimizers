@@ -1,6 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use itertools::Itertools;
-use random::{Minimizer, V0NaiveLex, V1NaiveFx, V2NaiveWy};
+use random::daniel::ExtDaniel;
+use random::{baseline::V0NaiveLex, baseline::V1NaiveFx, baseline::V2NaiveWy, Minimizer};
 use std::time::Duration;
 
 mod random;
@@ -35,6 +36,10 @@ fn bench(c: &mut Criterion) {
                 .iter_pos(text)
                 .collect_vec()
         });
+    });
+    g.bench_function("ext_daniel", |b| {
+        let m = ExtDaniel { w, k };
+        b.iter(|| m.minimizers(text));
     });
 }
 
