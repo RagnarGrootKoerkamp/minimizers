@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+mod blog;
 mod randmini;
 
 use criterion::{criterion_group, criterion_main, Criterion};
