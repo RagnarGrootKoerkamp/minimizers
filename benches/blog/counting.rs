@@ -1,5 +1,5 @@
 use super::*;
-use std::cell::Cell;
+use std::cell::{Cell, LazyCell};
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,10 +44,9 @@ impl<'a, H: Hasher> Hasher for CountingHash<'a, H> {
 }
 
 /// Count the number of operations for each minimizer algorithm.
-/// Invoke using `cargo test --bench bench count_comparisons`.
-pub fn count_comparisons(_c: &mut criterion::Criterion) {
+pub fn count_comparisons() {
     let k = 21;
-    let n = 100000000 + k - 1;
+    let n = 10000000 + k - 1;
 
     for w in [10, 20] {
         let text = &(0..n)
@@ -58,38 +57,31 @@ pub fn count_comparisons(_c: &mut criterion::Criterion) {
         let cnt = Cell::new(0);
         let hasher = CountingHash { count_cmp: &cnt, hasher: FxHash };
 
-        let minimizers: &[(&str, &dyn Minimizer); 5] = &[
-            (
-                "Buffered",
-                &SlidingWindowMinimizer { w, k, alg: BufferedSlidingMin, hasher },
-            ),
-            (
-                "Queue",
-                &SlidingWindowMinimizer { w, k, alg: Queue, hasher },
-            ),
-            (
-                "Rescan",
-                &SlidingWindowMinimizer { w, k, alg: Rescan, hasher },
-            ),
-            (
-                "Split",
-                &SlidingWindowMinimizer { w, k, alg: Split, hasher },
-            ),
-            (
-                "Rescan2",
-                &SlidingWindowMinimizer { w, k, alg: Rescan2, hasher },
-            ),
+        #[rustfmt::skip]
+        let minimizers: &[(&str, &dyn Minimizer, bool)] = &[
+            ("buffered", &SlidingWindowMinimizer { w, k, alg: Buffered, hasher }, true),
+            ("queue", &SlidingWindowMinimizer { w, k, alg: Queue, hasher }, true),
+            ("jumping", &JumpingMinimizer { w, k, hasher }, false),
+            ("rescan", &SlidingWindowMinimizer { w, k, alg: Rescan, hasher }, true),
+            ("split", &SlidingWindowMinimizer { w, k, alg: Split, hasher }, true),
         ];
 
-        for (name, minimizer) in minimizers.iter() {
+        for (name, m, window_minimizers) in minimizers.iter() {
             cnt.set(0);
-            minimizer.window_minimizers(text);
-            println!("{name:<10}: w={w:>2} {:.3}", cnt.get() as f32 / n);
+            if *window_minimizers {
+                m.window_minimizers(text);
+            } else {
+                m.minimizer_positions(text);
+            }
+            println!("{name:<10}: w={w:>2} {:.6}", cnt.get() as f32 / n);
         }
-
-        let (minimizer, name) = (&JumpingMinimizer { w, k, hasher }, "Jumping");
-        cnt.set(0);
-        minimizer.minimizer_positions(text);
-        println!("{name:<10}: w={w:>2} {:.3}", cnt.get() as f32 / n);
     }
+}
+
+pub fn count_comparisons_bench(c: &mut criterion::Criterion) {
+    let once = LazyCell::new(|| count_comparisons());
+    c.bench_function("count_comparisons", |b| {
+        *once;
+        b.iter(|| {});
+    });
 }

@@ -1,0 +1,11 @@
+bench *test='':
+    cargo criterion --plotting-backend disabled --output-format quiet -- {{test}}
+
+stat test='':
+    cargo build --profile bench --benches
+    perf stat -d cargo criterion -- --profile-time 2 {{test}}
+
+perf test='':
+    cargo build --profile bench --benches
+    perf record cargo criterion -- --profile-time 2 {{test}}
+    perf report
