@@ -67,7 +67,7 @@ criterion_group!(
         .warm_up_time(Duration::from_millis(500))
         .measurement_time(Duration::from_millis(2000))
         .sample_size(10);
-    targets = bench
+    targets = bench, blog::counting::count_comparisons
 );
 
 criterion_main!(group);

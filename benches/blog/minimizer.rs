@@ -29,7 +29,7 @@ pub trait Minimizer {
             .group_by(|(_idx, minimizer_pos)| *minimizer_pos)
             .into_iter()
             .map(|(minimizer_pos, mut group)| SuperKmer {
-                start_pos: group.next().unwrap().0,
+                start_pos: group.next().expect("groups are non-empty").0,
                 minimizer_pos,
             })
             .collect()

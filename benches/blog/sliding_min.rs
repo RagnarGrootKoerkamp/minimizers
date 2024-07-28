@@ -1,6 +1,8 @@
 use super::*;
 
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+/// A value at an absolute position.
+/// When comparing, ties between value are broken in favour of small position.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Elem<V> {
     pub val: V,
     pub pos: usize,
@@ -9,42 +11,57 @@ pub struct Elem<V> {
 pub trait SlidingMin<V> {
     /// Take an iterator over values of type V.
     /// Return an iterator over the minima of windows of size w, and their positions.
-    fn sliding_min(w: usize, it: impl Iterator<Item = V>) -> impl Iterator<Item = Elem<V>>;
+    fn sliding_min(&self, w: usize, it: impl Iterator<Item = V>) -> impl Iterator<Item = Elem<V>>;
 }
 
 /// A iterator extension trait so we can conveniently call .sliding_min on any iterator.
 pub trait SlidingMinExtension<V> {
-    fn sliding_min<Alg: SlidingMin<V>>(self, w: usize) -> impl Iterator<Item = Elem<V>>;
+    fn sliding_min<'a>(
+        self,
+        w: usize,
+        alg: &'a impl SlidingMin<V>,
+    ) -> impl Iterator<Item = Elem<V>> + 'a
+    where
+        V: 'a,
+        Self: 'a;
 }
 
 impl<V, I> SlidingMinExtension<V> for I
 where
     I: Iterator<Item = V>,
 {
-    fn sliding_min<Alg: SlidingMin<V>>(self, w: usize) -> impl Iterator<Item = Elem<V>> {
-        Alg::sliding_min(w, self)
+    fn sliding_min<'a>(
+        self,
+        w: usize,
+        alg: &'a impl SlidingMin<V>,
+    ) -> impl Iterator<Item = Elem<V>> + 'a
+    where
+        I: 'a,
+        V: 'a,
+    {
+        alg.sliding_min(w, self)
     }
 }
 
 /// A minimizer implementation based on a sliding window minimum algorithm.
-pub struct SlidingMinMinimizer<SlidingMinAlg> {
+/// Also takes a custom hash function, that defaults to FxHash.
+pub struct SlidingWindowMinimizer<SlidingMinAlg, H = FxHash> {
     pub w: usize,
     pub k: usize,
-    /// Rust requires that the Alg type parameter is 'used'.
-    pub alg: PhantomData<SlidingMinAlg>,
+    pub alg: SlidingMinAlg,
+    pub hasher: H,
 }
 
-impl<SlidingMinAlg: SlidingMin<u64>> Minimizer for SlidingMinMinimizer<SlidingMinAlg> {
+impl<H: Hasher, SlidingMinAlg: SlidingMin<H::Out>> Minimizer
+    for SlidingWindowMinimizer<SlidingMinAlg, H>
+{
     fn window_minimizers(&self, text: &[u8]) -> Vec<usize> {
         // Iterate over k-mers, hash them, and take sliding window minima.
         text.windows(self.k)
-            .map(|kmer| fxhash::hash64(kmer))
+            .map(|kmer| self.hasher.hash(kmer))
             // (See source for the iterator 'extension trait'.)
-            .sliding_min::<SlidingMinAlg>(self.w)
+            .sliding_min(self.w, &self.alg)
             .map(|elem| elem.pos)
             .collect()
     }
 }
-
-/// A type alias for the corresponding minimizer scheme.
-pub type Buffered = SlidingMinMinimizer<BufferedSlidingMin>;
