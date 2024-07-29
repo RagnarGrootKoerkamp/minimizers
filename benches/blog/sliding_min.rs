@@ -56,9 +56,9 @@ impl<H: Hasher, SlidingMinAlg: SlidingMin<H::Out>> Minimizer
     for SlidingWindowMinimizer<SlidingMinAlg, H>
 {
     fn window_minimizers(&self, text: &[u8]) -> Vec<usize> {
-        // Iterate over k-mers, hash them, and take sliding window minima.
-        text.windows(self.k)
-            .map(|kmer| self.hasher.hash(kmer))
+        self.hasher
+            // Iterate over k-mers and hash them.
+            .hash_kmers(self.k, text)
             // (See source for the iterator 'extension trait'.)
             .sliding_min(self.w, &self.alg)
             .map(|elem| elem.pos)

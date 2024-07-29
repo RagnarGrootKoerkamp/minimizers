@@ -7,13 +7,13 @@ pub struct RingBuf<V> {
 }
 
 impl<V: Clone> RingBuf<V> {
-    pub fn idx(&self) -> usize {
-        self.idx
-    }
-
     pub fn new(w: usize, v: V) -> Self {
         let data = vec![v; w];
         RingBuf { w, idx: 0, data }
+    }
+
+    pub fn idx(&self) -> usize {
+        self.idx
     }
 
     pub fn push(&mut self, v: V) {

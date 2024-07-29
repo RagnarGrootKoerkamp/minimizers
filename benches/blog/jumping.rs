@@ -14,10 +14,7 @@ where
         let mut minimizer_positions = Vec::new();
 
         // Precompute hashes of all k-mers.
-        let hashes = text
-            .windows(self.k)
-            .map(|kmer| self.hasher.hash(kmer))
-            .collect::<Vec<_>>();
+        let hashes = self.hasher.hash_kmers(self.k, text).collect::<Vec<_>>();
 
         let mut start = 0;
         while start < hashes.len() - self.w {
