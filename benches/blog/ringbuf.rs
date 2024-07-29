@@ -1,3 +1,5 @@
+use super::*;
+
 pub struct RingBuf<V> {
     w: usize,
     idx: usize,
@@ -35,5 +37,31 @@ impl<V> std::ops::Deref for RingBuf<V> {
 impl<V> std::ops::DerefMut for RingBuf<V> {
     fn deref_mut(&mut self) -> &mut [V] {
         &mut self.data
+    }
+}
+
+/// Extensions for ringbuf
+impl<V> RingBuf<V> {
+    pub fn forward_slices(&self) -> [&[V]; 2] {
+        let (a, b) = self.data.split_at(self.idx);
+        [b, a]
+    }
+
+    pub fn forward_min(&self) -> Elem<V>
+    where
+        V: Copy + Ord + Max,
+    {
+        let mut min = Elem { val: V::MAX, pos: 0 };
+        for (idx, &v) in self
+            .forward_slices()
+            .into_iter()
+            .flat_map(|part| part)
+            .enumerate()
+        {
+            if v < min.val {
+                min = Elem { val: v, pos: idx };
+            }
+        }
+        min
     }
 }

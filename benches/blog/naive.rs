@@ -45,3 +45,20 @@ impl<V: Copy + Max + Ord> SlidingMin<V> for Buffered {
             .skip(w - 1)
     }
 }
+
+pub struct BufferedOpt;
+
+impl<V: Copy + Max + Ord> SlidingMin<V> for BufferedOpt {
+    fn sliding_min(&self, w: usize, it: impl Iterator<Item = V>) -> impl Iterator<Item = Elem<V>> {
+        // Note: this only stores V now, not Elem<V>.
+        let mut ring_buf = RingBuf::new(w, V::MAX);
+        it.enumerate()
+            .map(move |(pos, val)| {
+                ring_buf.push(val);
+                let mut min = ring_buf.forward_min();
+                min.pos += pos - w + 1;
+                min
+            })
+            .skip(w - 1)
+    }
+}

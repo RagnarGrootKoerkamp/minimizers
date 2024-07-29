@@ -25,7 +25,7 @@ pub use ringbuf::*;
 pub use sliding_min::*;
 pub use split::*;
 
-trait Max {
+pub trait Max {
     const MAX: Self;
 }
 
