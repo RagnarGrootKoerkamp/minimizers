@@ -174,4 +174,7 @@ fn local_nthash(c: &mut Criterion) {
     g.bench_function("nthash_buf2", |b| {
         b.iter(|| Buffer2 { hasher: NtHash }.hash_kmers(k, text));
     });
+    g.bench_function("nthash_bufpardouble", |b| {
+        b.iter(|| BufferDouble { hasher: NtHash }.hash_kmers(k, text));
+    });
 }

@@ -1,6 +1,9 @@
+use std::array::from_fn;
+
 pub trait Hasher {
     type Out;
     fn hash(&self, t: &[u8]) -> Self::Out;
+    #[inline(always)]
     fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         t.windows(k).map(|kmer| self.hash(kmer))
     }
@@ -70,6 +73,38 @@ impl<H: Hasher<Out: Default + Clone>> Hasher for Buffer2<H> {
         // }
         for i in 0..len {
             unsafe { v.as_mut_ptr().add(i).write(it.next().unwrap()) };
+        }
+        v.into_iter()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BufferDouble<H> {
+    pub hasher: H,
+}
+impl<H: Hasher<Out: Default + Clone>> Hasher for BufferDouble<H> {
+    type Out = H::Out;
+    fn hash(&self, t: &[u8]) -> Self::Out {
+        self.hasher.hash(t)
+    }
+
+    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
+        let num_kmers = t.len() - k + 1;
+        // For odd num_kmers, we skip the last kmer.
+        let kmers_per_part = num_kmers / 2;
+        let part_len = kmers_per_part + k - 1;
+        let t0 = &t[..part_len];
+        let t1 = &t[kmers_per_part..kmers_per_part + part_len];
+        let mut v = vec![H::Out::default(); 2 * kmers_per_part];
+        let mut it0 = self.hasher.hash_kmers(k, t0);
+        let mut it1 = self.hasher.hash_kmers(k, t1);
+        for i in 0..kmers_per_part {
+            unsafe {
+                v.as_mut_ptr().add(i).write(it0.next().unwrap());
+                v.as_mut_ptr()
+                    .add(kmers_per_part + i)
+                    .write(it1.next().unwrap());
+            }
         }
         v.into_iter()
     }

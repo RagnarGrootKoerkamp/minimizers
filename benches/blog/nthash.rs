@@ -11,7 +11,7 @@ impl Hasher for NtHash {
     }
     #[inline(always)]
     fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
-        NtHashForwardIterator::new(t, k).unwrap()
+        NtHashIt::new(t, k).unwrap()
     }
 }
 
@@ -33,7 +33,7 @@ fn h(c: u8) -> u64 {
 }
 
 #[derive(Debug)]
-pub struct NtHashForwardIterator<'a> {
+pub struct NtHashIt<'a> {
     seq: &'a [u8],
     k: usize,
     fh: u64,
@@ -42,10 +42,10 @@ pub struct NtHashForwardIterator<'a> {
     rot_k: [u64; 256],
 }
 
-impl<'a> NtHashForwardIterator<'a> {
+impl<'a> NtHashIt<'a> {
     /// Creates a new NtHashForwardIterator with internal state properly initialized.
     #[inline(always)]
-    pub fn new(seq: &'a [u8], k: usize) -> Option<NtHashForwardIterator<'a>> {
+    pub fn new(seq: &'a [u8], k: usize) -> Option<NtHashIt<'a>> {
         if k > seq.len() {
             return None;
         }
@@ -58,7 +58,7 @@ impl<'a> NtHashForwardIterator<'a> {
             fh ^= h(*v).rotate_left((k - i - 1) as u32);
         }
 
-        Some(NtHashForwardIterator {
+        Some(NtHashIt {
             seq,
             k,
             fh,
@@ -69,7 +69,7 @@ impl<'a> NtHashForwardIterator<'a> {
     }
 }
 
-impl<'a> Iterator for NtHashForwardIterator<'a> {
+impl<'a> Iterator for NtHashIt<'a> {
     type Item = u64;
 
     #[inline(always)]
@@ -89,10 +89,4 @@ impl<'a> Iterator for NtHashForwardIterator<'a> {
         self.current_idx += 1;
         Some(self.fh)
     }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.max_idx, Some(self.max_idx))
-    }
 }
-
-impl<'a> ExactSizeIterator for NtHashForwardIterator<'a> {}
