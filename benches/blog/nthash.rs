@@ -5,9 +5,11 @@ use super::*;
 pub struct NtHash;
 impl Hasher for NtHash {
     type Out = u64;
+    #[inline(always)]
     fn hash(&self, t: &[u8]) -> u64 {
         ::nthash::ntf64(t, 0, t.len())
     }
+    #[inline(always)]
     fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         NtHashForwardIterator::new(t, k).unwrap()
     }
@@ -41,13 +43,14 @@ pub struct NtHashForwardIterator<'a> {
 
 impl<'a> NtHashForwardIterator<'a> {
     /// Creates a new NtHashForwardIterator with internal state properly initialized.
+    #[inline(always)]
     pub fn new(seq: &'a [u8], k: usize) -> Option<NtHashForwardIterator<'a>> {
         if k > seq.len() {
             return None;
         }
-        // if k > MAXIMUM_K_SIZE {
-        //     return None;
-        // }
+        if k > MAXIMUM_K_SIZE {
+            return None;
+        }
 
         let mut fh = 0;
         for (i, v) in seq[0..k].iter().enumerate() {

@@ -63,9 +63,13 @@ impl<H: Hasher<Out: Default + Clone>> Hasher for Buffer2<H> {
     fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         let len = t.len() - k + 1;
         let mut v = vec![H::Out::default(); len];
+        // assert_eq!(v.len(), len);
         let mut it = self.hasher.hash_kmers(k, t);
-        for x in v.iter_mut() {
-            *x = it.next().unwrap();
+        // for x in v.iter_mut() {
+        //     *x = it.next().unwrap();
+        // }
+        for i in 0..len {
+            unsafe { v.as_mut_ptr().add(i).write(it.next().unwrap()) };
         }
         v.into_iter()
     }
