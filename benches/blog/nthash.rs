@@ -39,6 +39,7 @@ pub struct NtHashForwardIterator<'a> {
     fh: u64,
     current_idx: usize,
     max_idx: usize,
+    rot_k: [u64; 256],
 }
 
 impl<'a> NtHashForwardIterator<'a> {
@@ -57,7 +58,14 @@ impl<'a> NtHashForwardIterator<'a> {
             fh ^= h(*v).rotate_left((k - i - 1) as u32);
         }
 
-        Some(NtHashForwardIterator { seq, k, fh, current_idx: 0, max_idx: seq.len() - k + 1 })
+        Some(NtHashForwardIterator {
+            seq,
+            k,
+            fh,
+            current_idx: 0,
+            max_idx: seq.len() - k + 1,
+            rot_k: H_LOOKUP.map(|x| x.rotate_left(k as u32)),
+        })
     }
 }
 
@@ -75,7 +83,7 @@ impl<'a> Iterator for NtHashForwardIterator<'a> {
             let seqi = unsafe { *self.seq.get_unchecked(i) };
             let seqk = unsafe { *self.seq.get_unchecked(i + self.k) };
 
-            self.fh = self.fh.rotate_left(1) ^ h(seqi).rotate_left(self.k as u32) ^ h(seqk);
+            self.fh = self.fh.rotate_left(1) ^ self.rot_k[seqi as usize] ^ h(seqk);
         }
 
         self.current_idx += 1;
