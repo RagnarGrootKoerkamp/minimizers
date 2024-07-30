@@ -16,8 +16,8 @@ impl Hasher for FxHash {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ExtNtHasher;
-impl Hasher for ExtNtHasher {
+pub struct ExtNtHash;
+impl Hasher for ExtNtHash {
     type Out = u64;
     fn hash(&self, t: &[u8]) -> u64 {
         nthash::ntf64(t, 0, t.len())
@@ -46,7 +46,27 @@ impl<H: Hasher> Hasher for Buffer<H> {
         self.hasher.hash(t)
     }
     fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
-        // Collect the underlying iterator into a Vec before iterating over it.
         self.hasher.hash_kmers(k, t).collect::<Vec<_>>().into_iter()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Buffer2<H> {
+    pub hasher: H,
+}
+impl<H: Hasher<Out: Default + Clone>> Hasher for Buffer2<H> {
+    type Out = H::Out;
+    fn hash(&self, t: &[u8]) -> Self::Out {
+        self.hasher.hash(t)
+    }
+
+    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
+        let len = t.len() - k + 1;
+        let mut v = vec![H::Out::default(); len];
+        let mut it = self.hasher.hash_kmers(k, t);
+        for x in v.iter_mut() {
+            *x = it.next().unwrap();
+        }
+        v.into_iter()
     }
 }

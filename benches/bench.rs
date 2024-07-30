@@ -14,11 +14,11 @@ criterion_group!(
         .sample_size(10);
     targets = initial_runtime_comparison,
         blog::counting::count_comparisons_bench,
-        optimized, nthash, buffered
+        optimized, ext_nthash, buffered, local_nthash
 );
 criterion_main!(group);
 
-pub fn initial_runtime_comparison(c: &mut Criterion) {
+fn initial_runtime_comparison(c: &mut Criterion) {
     // Create a random string of length 1Mbp.
     let text = &(0..1000000)
         .map(|_| b"ACGT"[rand::random::<u8>() as usize % 4])
@@ -53,7 +53,7 @@ pub fn initial_runtime_comparison(c: &mut Criterion) {
     }
 }
 
-pub fn optimized(c: &mut Criterion) {
+fn optimized(c: &mut Criterion) {
     // Create a random string of length 1Mbp.
     let text = &(0..1000000)
         .map(|_| b"ACGT"[rand::random::<u8>() as usize % 4])
@@ -83,7 +83,7 @@ pub fn optimized(c: &mut Criterion) {
     }
 }
 
-pub fn nthash(c: &mut Criterion) {
+fn ext_nthash(c: &mut Criterion) {
     // Create a random string of length 1Mbp.
     let text = &(0..1000000)
         .map(|_| b"ACGT"[rand::random::<u8>() as usize % 4])
@@ -92,7 +92,7 @@ pub fn nthash(c: &mut Criterion) {
     let w = 11;
     let k = 21;
 
-    let hasher = ExtNtHasher;
+    let hasher = ExtNtHash;
 
     #[rustfmt::skip]
     let minimizers: &[(&str, &dyn Minimizer, bool)] = &[
@@ -115,7 +115,7 @@ pub fn nthash(c: &mut Criterion) {
     }
 }
 
-pub fn buffered(c: &mut Criterion) {
+fn buffered(c: &mut Criterion) {
     // Create a random string of length 1Mbp.
     let text = &(0..1000000)
         .map(|_| b"ACGT"[rand::random::<u8>() as usize % 4])
@@ -125,7 +125,7 @@ pub fn buffered(c: &mut Criterion) {
     let k = 21;
 
     let fxhasher = Buffer { hasher: FxHash };
-    let nthasher = Buffer { hasher: ExtNtHasher };
+    let nthasher = Buffer { hasher: ExtNtHash };
 
     #[rustfmt::skip]
     let minimizers: &[(&str, &dyn Minimizer, bool)] = &[
@@ -151,4 +151,27 @@ pub fn buffered(c: &mut Criterion) {
             }
         });
     }
+}
+
+fn local_nthash(c: &mut Criterion) {
+    // Create a random string of length 1Mbp.
+    let text = &(0..1000000)
+        .map(|_| b"ACGT"[rand::random::<u8>() as usize % 4])
+        .collect::<Vec<_>>();
+
+    let k = 21;
+
+    let mut g = c.benchmark_group("g");
+    g.bench_function("ext_nthash", |b| {
+        b.iter(|| ExtNtHash.hash_kmers(k, text).collect::<Vec<_>>());
+    });
+    g.bench_function("nthash", |b| {
+        b.iter(|| NtHash.hash_kmers(k, text).collect::<Vec<_>>());
+    });
+    g.bench_function("nthash_buf", |b| {
+        b.iter(|| Buffer { hasher: NtHash }.hash_kmers(k, text));
+    });
+    g.bench_function("nthash_buf2", |b| {
+        b.iter(|| Buffer2 { hasher: NtHash }.hash_kmers(k, text));
+    });
 }
