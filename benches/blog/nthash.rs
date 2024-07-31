@@ -202,6 +202,8 @@ pub struct NtHashSimdIt<'a> {
     table: S,
     table_rot_k: S,
     offsets: S,
+    chars_i: S,
+    chars_k: S,
 }
 
 impl<'a> NtHashSimdIt<'a> {
@@ -245,6 +247,8 @@ impl<'a> NtHashSimdIt<'a> {
             table,
             table_rot_k,
             offsets: from_fn(|l| (l * n) as T).into(),
+            chars_i: S::splat(0),
+            chars_k: S::splat(0),
         })
     }
 }
@@ -261,11 +265,21 @@ impl<'a> Iterator for NtHashSimdIt<'a> {
         if self.current_idx != 0 {
             let i = self.current_idx - 1;
             unsafe {
-                let oi = self.offsets + S::splat(i as T);
-                let ok = oi + S::splat(self.k as T);
-                let s_ptr = self.seq.as_ptr();
-                let seqi = oi.as_array().map(|o| *s_ptr.add(o as usize) as T).into();
-                let seqk = ok.as_array().map(|o| *s_ptr.add(o as usize) as T).into();
+                if i % 4 == 0 {
+                    let p = self.seq.as_ptr() as *const u32;
+                    let oi = self.offsets + S::splat(i as u32);
+                    let ok = oi + S::splat(self.k as u32);
+                    // Read a u32 at given byte offsets.
+                    // Assumes little-endian.
+                    self.chars_i = oi.as_array().map(|o| *p.byte_offset(o as isize)).into();
+                    self.chars_k = ok.as_array().map(|o| *p.byte_offset(o as isize)).into();
+                }
+                // Extract the last 2 bits of each character.
+                let seqi = self.chars_i & S::splat(0x03);
+                let seqk = self.chars_k & S::splat(0x03);
+                // Shift remaining characters to the right.
+                self.chars_i >>= S::splat(8);
+                self.chars_k >>= S::splat(8);
 
                 use std::mem::transmute;
                 let permutevar_epi32 =
