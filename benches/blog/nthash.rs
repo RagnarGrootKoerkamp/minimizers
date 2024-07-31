@@ -1,9 +1,5 @@
 //! This code is adapted from the nthash crate:
-use std::{
-    arch::x86_64::_mm256_permutevar_ps,
-    array::from_fn,
-    simd::{LaneCount, Simd, SupportedLaneCount},
-};
+use std::{arch::x86_64::_mm256_permutevar_ps, array::from_fn, simd::Simd};
 
 use super::*;
 
@@ -205,6 +201,7 @@ pub struct NtHashSimdIt<'a> {
     current_idx: usize,
     table: S,
     table_rot_k: S,
+    offsets: S,
 }
 
 impl<'a> NtHashSimdIt<'a> {
@@ -215,6 +212,9 @@ impl<'a> NtHashSimdIt<'a> {
             return None;
         }
         if k > MAXIMUM_K_SIZE {
+            return None;
+        }
+        if seq.len() > u32::MAX as _ {
             return None;
         }
         let num_kmers = seq.len() - k + 1;
@@ -236,7 +236,16 @@ impl<'a> NtHashSimdIt<'a> {
         })
         .into();
 
-        Some(Self { seq, n, k, fh, current_idx: 0, table, table_rot_k })
+        Some(Self {
+            seq,
+            n,
+            k,
+            fh,
+            current_idx: 0,
+            table,
+            table_rot_k,
+            offsets: from_fn(|l| (l * n) as T).into(),
+        })
     }
 }
 
@@ -252,9 +261,11 @@ impl<'a> Iterator for NtHashSimdIt<'a> {
         if self.current_idx != 0 {
             let i = self.current_idx - 1;
             unsafe {
-                let seqi: S = from_fn(|l| *self.seq.get_unchecked(l * self.n + i) as T).into();
-                let seqk: S =
-                    from_fn(|l| *self.seq.get_unchecked(l * self.n + i + self.k) as T).into();
+                let oi = self.offsets + S::splat(i as T);
+                let ok = oi + S::splat(self.k as T);
+                let s_ptr = self.seq.as_ptr();
+                let seqi = oi.as_array().map(|o| *s_ptr.add(o as usize) as T).into();
+                let seqk = ok.as_array().map(|o| *s_ptr.add(o as usize) as T).into();
 
                 use std::mem::transmute;
                 let permutevar_epi32 =
