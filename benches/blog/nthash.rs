@@ -180,7 +180,7 @@ impl<'a, const L: usize> Iterator for NtHashParIt<'a, L> {
     }
 }
 
-//////////////////////////// SIMD ////////////////////////////
+//////////////////////////// Bit-packed SIMD ////////////////////////////
 
 const L: usize = 8;
 type T = u32;
@@ -192,12 +192,12 @@ impl ParHasher<L> for NtHashSimd {
     type Out = T;
     #[inline(always)]
     fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = [Self::Out; L]> {
-        NtHashSimdIt::new(t, k).unwrap().map(|x| x.into())
+        NtHashPackedSimdIt::new(t, k).unwrap().map(|x| x.into())
     }
 }
 
 #[derive(Debug)]
-pub struct NtHashSimdIt<'a> {
+pub struct NtHashPackedSimdIt<'a> {
     seq: &'a [u8],
     n: usize,
     k: usize,
@@ -208,12 +208,12 @@ pub struct NtHashSimdIt<'a> {
     offsets: Simd<*const u8, 4>,
     offsets_next: Simd<*const u8, 4>,
     chars_i: S,
-    chars_k: S,
     chars_i_next: S,
+    chars_k: S,
     chars_k_next: S,
 }
 
-impl<'a> NtHashSimdIt<'a> {
+impl<'a> NtHashPackedSimdIt<'a> {
     /// Creates a new NtHashIt with internal state properly initialized.
     #[inline(always)]
     pub fn new(seq: &'a [u8], k: usize) -> Option<Self> {
@@ -256,14 +256,15 @@ impl<'a> NtHashSimdIt<'a> {
             offsets: from_fn(|l| unsafe { seq.as_ptr().add(l * n) }).into(),
             offsets_next: from_fn(|l| unsafe { seq.as_ptr().add((4 + l) * n) }).into(),
             chars_i: S::splat(0),
-            chars_k: S::splat(0),
             chars_i_next: S::splat(0),
+            // TODO: properly initialize the first (-k)%32 characters of chars_k.
+            chars_k: S::splat(0),
             chars_k_next: S::splat(0),
         })
     }
 }
 
-impl<'a> Iterator for NtHashSimdIt<'a> {
+impl<'a> Iterator for NtHashPackedSimdIt<'a> {
     type Item = S;
 
     #[inline(always)]
@@ -275,41 +276,33 @@ impl<'a> Iterator for NtHashSimdIt<'a> {
         if self.current_idx != 0 {
             let i = self.current_idx - 1;
             unsafe {
-                if i % 8 == 0 {
+                let read = |i| {
                     let oi1 = self.offsets.wrapping_add(Simd::splat(i));
                     let oi2 = self.offsets_next.wrapping_add(Simd::splat(i));
-                    let ok1 = oi1.wrapping_add(Simd::splat(self.k));
-                    let ok2 = oi2.wrapping_add(Simd::splat(self.k));
-
-                    // i1, k1: The next 64bits for the first 4 chunks.
-                    // i2, k2: The next 64bits for the next 4 chunks.
-                    // Assumes little-endian.
-                    // The inner transmute makes the *u8 into a *u32.
-                    // The outer transmute makes the [u64, 4] into a [u32, 8].
                     let chars_i1: Simd<u32, 8> =
                         transmute(Simd::<u64, 4>::gather_ptr(transmute(oi1)));
                     let chars_i2: Simd<u32, 8> =
                         transmute(Simd::<u64, 4>::gather_ptr(transmute(oi2)));
-                    let chars_k1: Simd<u32, 8> =
-                        transmute(Simd::<u64, 4>::gather_ptr(transmute(ok1)));
-                    let chars_k2: Simd<u32, 8> =
-                        transmute(Simd::<u64, 4>::gather_ptr(transmute(ok2)));
-
-                    // The upcoming 32 bits for each chunk.
-                    // The 32 bits after that for each chunk.
-                    (self.chars_i, self.chars_i_next) = chars_i1.deinterleave(chars_i2);
-                    (self.chars_k, self.chars_k_next) = chars_k1.deinterleave(chars_k2);
+                    chars_i1.deinterleave(chars_i2)
+                };
+                if i % 32 == 0 {
+                    (self.chars_i, self.chars_i_next) = read(i);
                 }
-                if i % 8 == 4 {
+                if i % 32 == 16 {
                     self.chars_i = self.chars_i_next;
+                }
+                if (i + self.k) % 32 == 0 {
+                    (self.chars_k, self.chars_k_next) = read(i + self.k);
+                }
+                if (i + self.k) % 32 == 16 {
                     self.chars_k = self.chars_k_next;
                 }
                 // Extract the last 2 bits of each character.
                 let seqi = self.chars_i & S::splat(0x03);
                 let seqk = self.chars_k & S::splat(0x03);
                 // Shift remaining characters to the right.
-                self.chars_i >>= S::splat(8);
-                self.chars_k >>= S::splat(8);
+                self.chars_i >>= S::splat(2);
+                self.chars_k >>= S::splat(2);
 
                 use std::mem::transmute;
                 let permutevar_epi32 =
