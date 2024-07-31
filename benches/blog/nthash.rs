@@ -211,6 +211,8 @@ pub struct NtHashPackedSimdIt<'a> {
     chars_i_next: S,
     chars_k: S,
     chars_k_next: S,
+    chars_k_copy: S,
+    chars_k_next_copy: S,
 }
 
 impl<'a> NtHashPackedSimdIt<'a> {
@@ -260,6 +262,8 @@ impl<'a> NtHashPackedSimdIt<'a> {
             // TODO: properly initialize the first (-k)%32 characters of chars_k.
             chars_k: S::splat(0),
             chars_k_next: S::splat(0),
+            chars_k_copy: S::splat(0),
+            chars_k_next_copy: S::splat(0),
         })
     }
 }
@@ -286,13 +290,20 @@ impl<'a> Iterator for NtHashPackedSimdIt<'a> {
                     chars_i1.deinterleave(chars_i2)
                 };
                 if i % 32 == 0 {
-                    (self.chars_i, self.chars_i_next) = read(i);
+                    if self.k <= 32 {
+                        self.chars_i = self.chars_k_copy;
+                        self.chars_i_next = self.chars_k_next_copy;
+                    } else {
+                        (self.chars_i, self.chars_i_next) = read(i);
+                    }
                 }
                 if i % 32 == 16 {
                     self.chars_i = self.chars_i_next;
                 }
                 if (i + self.k) % 32 == 0 {
                     (self.chars_k, self.chars_k_next) = read(i + self.k);
+                    self.chars_k_copy = self.chars_k;
+                    self.chars_k_next_copy = self.chars_k_next;
                 }
                 if (i + self.k) % 32 == 16 {
                     self.chars_k = self.chars_k_next;
