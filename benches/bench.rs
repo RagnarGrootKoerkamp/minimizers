@@ -1,3 +1,4 @@
+#![feature(portable_simd)]
 #![allow(dead_code)]
 mod blog;
 use blog::*;
@@ -168,13 +169,32 @@ fn local_nthash(c: &mut Criterion) {
     g.bench_function("nthash", |b| {
         b.iter(|| NtHash.hash_kmers(k, text).collect::<Vec<_>>());
     });
-    g.bench_function("nthash_buf", |b| {
+    g.bench_with_input("nthash_buf", text, |b, text| {
         b.iter(|| Buffer { hasher: NtHash }.hash_kmers(k, text));
     });
-    g.bench_function("nthash_buf2", |b| {
-        b.iter(|| Buffer2 { hasher: NtHash }.hash_kmers(k, text));
+    g.bench_with_input("nthash_bufopt", text, |b, text| {
+        b.iter(|| BufferOpt { hasher: NtHash }.hash_kmers(k, text));
     });
-    g.bench_function("nthash_bufpardouble", |b| {
+    g.bench_with_input("nthash_bufdouble", text, |b, text| {
         b.iter(|| BufferDouble { hasher: NtHash }.hash_kmers(k, text));
+    });
+    g.bench_with_input("nthash_bufpar1", text, |b, text| {
+        b.iter(|| BufferPar { hasher: NtHashPar::<1> }.hash_kmers(k, text));
+    });
+    g.bench_with_input("nthash_bufpar2", text, |b, text| {
+        b.iter(|| BufferPar { hasher: NtHashPar::<2> }.hash_kmers(k, text));
+    });
+    g.bench_with_input("nthash_bufpar3", text, |b, text| {
+        b.iter(|| BufferPar { hasher: NtHashPar::<3> }.hash_kmers(k, text));
+    });
+    g.bench_with_input("nthash_bufpar4", text, |b, text| {
+        b.iter(|| BufferPar { hasher: NtHashPar::<4> }.hash_kmers(k, text));
+    });
+
+    let text = &(0..1000000)
+        .map(|_| rand::random::<u8>() % 4)
+        .collect::<Vec<_>>();
+    g.bench_with_input("nthash_bufsimd", text, |b, text| {
+        b.iter(|| BufferPar { hasher: NtHashSimd }.hash_kmers(k, text));
     });
 }

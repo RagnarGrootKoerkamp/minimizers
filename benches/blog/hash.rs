@@ -1,5 +1,3 @@
-use std::array::from_fn;
-
 pub trait Hasher {
     type Out;
     fn hash(&self, t: &[u8]) -> Self::Out;
@@ -54,10 +52,10 @@ impl<H: Hasher> Hasher for Buffer<H> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Buffer2<H> {
+pub struct BufferOpt<H> {
     pub hasher: H,
 }
-impl<H: Hasher<Out: Default + Clone>> Hasher for Buffer2<H> {
+impl<H: Hasher<Out: Default + Clone>> Hasher for BufferOpt<H> {
     type Out = H::Out;
     fn hash(&self, t: &[u8]) -> Self::Out {
         self.hasher.hash(t)
@@ -104,6 +102,40 @@ impl<H: Hasher<Out: Default + Clone>> Hasher for BufferDouble<H> {
                 v.as_mut_ptr()
                     .add(kmers_per_part + i)
                     .write(it1.next().unwrap());
+            }
+        }
+        v.into_iter()
+    }
+}
+
+pub trait ParHasher<const L: usize> {
+    type Out;
+    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = [Self::Out; L]>;
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BufferPar<const L: usize, H: ParHasher<L>> {
+    pub hasher: H,
+}
+
+impl<const L: usize, H: ParHasher<L>> ParHasher<L> for BufferPar<L, H>
+where
+    H::Out: Default + Clone + Copy,
+{
+    type Out = H::Out;
+
+    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = [H::Out; L]> {
+        let mut len = t.len() - k + 1;
+        let t = &t[..t.len() - len % L];
+        len -= len % L;
+        let n = len / L;
+
+        let mut v = vec![[Self::Out::default(); L]; n];
+        let mut it = self.hasher.hash_kmers(k, t);
+        for i in 0..n {
+            let hs = it.next().unwrap();
+            for j in 0..L {
+                unsafe { v.get_unchecked_mut(i)[j] = hs[j] };
             }
         }
         v.into_iter()
