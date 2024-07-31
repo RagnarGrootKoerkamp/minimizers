@@ -289,24 +289,26 @@ impl<'a> Iterator for NtHashPackedSimdIt<'a> {
                         transmute(Simd::<u64, 4>::gather_ptr(transmute(oi2)));
                     chars_i1.deinterleave(chars_i2)
                 };
-                if i % 32 == 0 {
-                    if self.k <= 32 {
-                        self.chars_i = self.chars_k_copy;
-                        self.chars_i_next = self.chars_k_next_copy;
+                if i % 16 == 0 {
+                    if i % 32 == 0 {
+                        if self.k <= 32 {
+                            self.chars_i = self.chars_k_copy;
+                            self.chars_i_next = self.chars_k_next_copy;
+                        } else {
+                            (self.chars_i, self.chars_i_next) = read(i);
+                        }
                     } else {
-                        (self.chars_i, self.chars_i_next) = read(i);
+                        self.chars_i = self.chars_i_next;
                     }
                 }
-                if i % 32 == 16 {
-                    self.chars_i = self.chars_i_next;
-                }
-                if (i + self.k) % 32 == 0 {
-                    (self.chars_k, self.chars_k_next) = read(i + self.k);
-                    self.chars_k_copy = self.chars_k;
-                    self.chars_k_next_copy = self.chars_k_next;
-                }
-                if (i + self.k) % 32 == 16 {
-                    self.chars_k = self.chars_k_next;
+                if (i + self.k) % 16 == 0 {
+                    if (i + self.k) % 32 == 0 {
+                        (self.chars_k, self.chars_k_next) = read(i + self.k);
+                        self.chars_k_copy = self.chars_k;
+                        self.chars_k_next_copy = self.chars_k_next;
+                    } else {
+                        self.chars_k = self.chars_k_next;
+                    }
                 }
                 // Extract the last 2 bits of each character.
                 let seqi = self.chars_i & S::splat(0x03);
