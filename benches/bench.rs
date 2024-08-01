@@ -5,7 +5,7 @@ use blog::*;
 use itertools::Itertools;
 use std::time::Duration;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 criterion_group!(
     name = group;
@@ -215,18 +215,23 @@ fn local_nthash(c: &mut Criterion) {
     let packed_text = &(0..1000000 / 4)
         .map(|_| rand::random::<u8>())
         .collect::<Vec<_>>();
-    g.bench_with_input("nthash_bufsimd_sk", packed_text, |b, packed_text| {
+    g.bench_with_input("nthash_bufsimd_ksmall", packed_text, |b, packed_text| {
         b.iter(|| {
             BufferPar { hasher: NtHashSimd::<true> }
                 .hash_kmers(k, packed_text)
                 .collect_vec()
         });
     });
-    g.bench_with_input("nthash_bufsimd_lk", packed_text, |b, packed_text| {
+    g.bench_with_input("nthash_bufsimd_klarge", packed_text, |b, packed_text| {
         b.iter(|| {
             BufferPar { hasher: NtHashSimd::<false> }
                 .hash_kmers(k, packed_text)
                 .collect_vec()
         });
+    });
+
+    let mut hasher = BufferParCached::new(NtHashSimd::<true>);
+    g.bench_with_input("nthash_bufsimd_cached", packed_text, |b, packed_text| {
+        b.iter(|| drop(black_box(hasher.hash_kmers(k, packed_text))));
     });
 }

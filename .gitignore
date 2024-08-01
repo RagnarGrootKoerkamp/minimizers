@@ -3,3 +3,4 @@
 /data/
 /fig/
 perf.data*
+flamegraph.svg

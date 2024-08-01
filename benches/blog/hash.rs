@@ -147,3 +147,42 @@ where
         v.into_iter()
     }
 }
+
+#[derive(Debug)]
+pub struct BufferParCached<const L: usize, H: ParHasher<L>> {
+    hasher: H,
+    /// A vector that can be reused between iterations.
+    v: Vec<[H::Out; L]>,
+}
+
+impl<const L: usize, H: ParHasher<L>> BufferParCached<L, H> {
+    pub fn new(hasher: H) -> Self {
+        Self { hasher, v: vec![] }
+    }
+}
+
+impl<const L: usize, H: ParHasher<L>> ParHasher<L> for BufferParCached<L, H>
+where
+    H::Out: Default + Copy,
+{
+    type Out = H::Out;
+
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = [H::Out; L]> {
+        let mut len = t.len() - k + 1;
+        let t = &t[..t.len() - len % L];
+        len -= len % L;
+        let n = len / L;
+
+        // Resize the vector to the right size.
+        self.v.resize(n, [Self::Out::default(); L]);
+        let mut it = self.hasher.hash_kmers(k, t);
+        for i in 0..n {
+            let hs = it.next().unwrap();
+            for j in 0..L {
+                unsafe { self.v.get_unchecked_mut(i)[j] = hs[j] };
+            }
+        }
+        // We can't 'into_iter' our owned vector, so we hand out copies to the elements instead.
+        self.v.iter().copied()
+    }
+}
