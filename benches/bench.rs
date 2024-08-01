@@ -3,7 +3,7 @@
 mod blog;
 use blog::*;
 use itertools::Itertools;
-use std::time::Duration;
+use std::{simd::Simd, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
@@ -16,7 +16,8 @@ criterion_group!(
         .sample_size(10);
     targets = initial_runtime_comparison,
         blog::counting::count_comparisons_bench,
-        optimized, ext_nthash, buffered, local_nthash
+        optimized, ext_nthash, buffered, local_nthash,
+        simd_minimizer
 );
 criterion_main!(group);
 
@@ -215,6 +216,18 @@ fn local_nthash(c: &mut Criterion) {
     let packed_text = &(0..1000000 / 4)
         .map(|_| rand::random::<u8>())
         .collect::<Vec<_>>();
+    let num_kmers = packed_text.len() - k + 1;
+    let packed_text = &packed_text[..packed_text.len() - (num_kmers % 16)];
+
+    g.bench_with_input("nthash_simd_ksmall", packed_text, |b, packed_text| {
+        b.iter(|| {
+            NtHashSimd::<true>
+                .hash_kmers(k, packed_text)
+                .map(|x| Simd::<u32, 8>::from(x))
+                .sum::<Simd<u32, 8>>()
+        });
+    });
+
     g.bench_with_input("nthash_bufsimd_ksmall", packed_text, |b, packed_text| {
         b.iter(|| {
             BufferPar { hasher: NtHashSimd::<true> }
@@ -236,8 +249,73 @@ fn local_nthash(c: &mut Criterion) {
     });
 
     let k = 15;
+    let num_kmers = packed_text.len() - k + 1;
+    let packed_text = &packed_text[..packed_text.len() - (num_kmers % 16)];
+    g.bench_with_input("fxhash_simd", packed_text, |b, packed_text| {
+        b.iter(|| {
+            FxHashSimd
+                .hash_kmers(k, packed_text)
+                .map(|x| Simd::<u32, 8>::from(x))
+                .sum::<Simd<u32, 8>>()
+        });
+    });
+
     let mut hasher = BufferParCached::new(FxHashSimd);
     g.bench_with_input("fxhash_bufsimd_cached", packed_text, |b, packed_text| {
         b.iter(|| drop(black_box(hasher.hash_kmers(k, packed_text))));
+    });
+}
+
+fn simd_minimizer(c: &mut Criterion) {
+    // Create a random string of length 1Mbp.
+    let packed_text = &(0..1000000 / 4)
+        .map(|_| rand::random::<u8>())
+        .collect::<Vec<_>>();
+
+    let w = 11;
+    let k = 21;
+
+    let num_kmers = packed_text.len() - k + 1;
+    let packed_text = &packed_text[..packed_text.len() - (num_kmers % 16)];
+
+    let mut g = c.benchmark_group("g");
+    let mut hasher = NtHashSimd::<true>;
+    g.bench_function("split_simd_sum", |b| {
+        b.iter(|| {
+            SplitSimd
+                .sliding_min(w, hasher.hash_kmers(k, packed_text))
+                .map(|x| Simd::<u32, 8>::from(x))
+                .sum::<Simd<u32, 8>>()
+        });
+    });
+
+    let hasher = NtHashSimd::<true>;
+    let mut hasher = BufferParCached::new(hasher);
+    g.bench_function("split_simd_buf_sum", |b| {
+        b.iter(|| {
+            SplitSimd
+                .sliding_min(w, hasher.hash_kmers(k, packed_text))
+                .map(|x| Simd::<u32, 8>::from(x))
+                .sum::<Simd<u32, 8>>()
+        });
+    });
+
+    let mut hasher = NtHashSimd::<true>;
+    g.bench_function("split_simd_collect", |b| {
+        b.iter(|| {
+            SplitSimd
+                .sliding_min(w, hasher.hash_kmers(k, packed_text))
+                .collect_vec()
+        });
+    });
+
+    let hasher = NtHashSimd::<true>;
+    let mut hasher = BufferParCached::new(hasher);
+    g.bench_function("split_simd_buf_collect", |b| {
+        b.iter(|| {
+            SplitSimd
+                .sliding_min(w, hasher.hash_kmers(k, packed_text))
+                .collect_vec()
+        });
     });
 }

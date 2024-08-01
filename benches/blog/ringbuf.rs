@@ -7,15 +7,18 @@ pub struct RingBuf<V> {
 }
 
 impl<V: Clone> RingBuf<V> {
+    #[inline(always)]
     pub fn new(w: usize, v: V) -> Self {
         let data = vec![v; w];
         RingBuf { w, idx: 0, data }
     }
 
+    #[inline(always)]
     pub fn idx(&self) -> usize {
         self.idx
     }
 
+    #[inline(always)]
     pub fn push(&mut self, v: V) {
         self.data[self.idx] = v;
         self.idx += 1;
@@ -29,12 +32,14 @@ impl<V: Clone> RingBuf<V> {
 impl<V> std::ops::Deref for RingBuf<V> {
     type Target = [V];
 
+    #[inline(always)]
     fn deref(&self) -> &[V] {
         &self.data
     }
 }
 
 impl<V> std::ops::DerefMut for RingBuf<V> {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut [V] {
         &mut self.data
     }

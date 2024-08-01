@@ -11,12 +11,12 @@ stat-selection test='':
 
 perf test='':
     cargo build --profile bench --benches
-    perf record cargo criterion -- --profile-time 4 {{test}}
+    perf record cargo criterion -- --profile-time 2 {{test}}
     perf report
 
 perf-misses test='':
     cargo build --profile bench --benches
-    perf record -e branch-misses cargo criterion -- --profile-time 4 {{test}}
+    perf record -e branch-misses cargo criterion -- --profile-time 2 {{test}}
     perf report
 
 flame test='':
