@@ -186,18 +186,23 @@ const L: usize = 8;
 type T = u32;
 type S = Simd<T, L>;
 
-pub struct NtHashSimd;
+pub struct NtHashSimd<const SMALL_K: bool>;
 
-impl ParHasher<L> for NtHashSimd {
+impl<const SMALL_K: bool> ParHasher<L> for NtHashSimd<SMALL_K> {
     type Out = T;
     #[inline(always)]
     fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = [Self::Out; L]> {
-        NtHashPackedSimdIt::new(t, k).unwrap().map(|x| x.into())
+        if SMALL_K {
+            assert!(k <= 32);
+        }
+        NtHashPackedSimdIt::<SMALL_K>::new(t, k)
+            .unwrap()
+            .map(|x| x.into())
     }
 }
 
 #[derive(Debug)]
-pub struct NtHashPackedSimdIt<'a> {
+pub struct NtHashPackedSimdIt<'a, const SMALL_K: bool> {
     seq: &'a [u8],
     n: usize,
     k: usize,
@@ -215,7 +220,7 @@ pub struct NtHashPackedSimdIt<'a> {
     chars_k_next_copy: S,
 }
 
-impl<'a> NtHashPackedSimdIt<'a> {
+impl<'a, const SMALL_K: bool> NtHashPackedSimdIt<'a, SMALL_K> {
     /// Creates a new NtHashIt with internal state properly initialized.
     #[inline(always)]
     pub fn new(seq: &'a [u8], k: usize) -> Option<Self> {
@@ -268,7 +273,7 @@ impl<'a> NtHashPackedSimdIt<'a> {
     }
 }
 
-impl<'a> Iterator for NtHashPackedSimdIt<'a> {
+impl<'a, const SMALL_K: bool> Iterator for NtHashPackedSimdIt<'a, SMALL_K> {
     type Item = S;
 
     #[inline(always)]
@@ -291,7 +296,7 @@ impl<'a> Iterator for NtHashPackedSimdIt<'a> {
                 };
                 if i % 16 == 0 {
                     if i % 32 == 0 {
-                        if self.k <= 32 {
+                        if SMALL_K {
                             self.chars_i = self.chars_k_copy;
                             self.chars_i_next = self.chars_k_next_copy;
                         } else {

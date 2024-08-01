@@ -194,7 +194,10 @@ fn local_nthash(c: &mut Criterion) {
     let packed_text = &(0..1000000 / 4)
         .map(|_| rand::random::<u8>())
         .collect::<Vec<_>>();
-    g.bench_with_input("nthash_bufsimd", packed_text, |b, packed_text| {
-        b.iter(|| BufferPar { hasher: NtHashSimd }.hash_kmers(k, packed_text));
+    g.bench_with_input("nthash_bufsimd_sk", packed_text, |b, packed_text| {
+        b.iter(|| BufferPar { hasher: NtHashSimd::<true> }.hash_kmers(k, packed_text));
+    });
+    g.bench_with_input("nthash_bufsimd_lk", packed_text, |b, packed_text| {
+        b.iter(|| BufferPar { hasher: NtHashSimd::<false> }.hash_kmers(k, packed_text));
     });
 }
