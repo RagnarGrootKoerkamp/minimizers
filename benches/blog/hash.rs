@@ -1,8 +1,8 @@
-pub trait Hasher {
+pub trait Hasher: Clone {
     type Out;
     fn hash(&self, t: &[u8]) -> Self::Out;
     #[inline(always)]
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         t.windows(k).map(|kmer| self.hash(kmer))
     }
 }
@@ -23,7 +23,7 @@ impl Hasher for ExtNtHash {
     fn hash(&self, t: &[u8]) -> u64 {
         nthash::ntf64(t, 0, t.len())
     }
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         nthash::NtHashForwardIterator::new(t, k).unwrap()
     }
 }
@@ -46,7 +46,7 @@ impl<H: Hasher> Hasher for Buffer<H> {
     fn hash(&self, t: &[u8]) -> Self::Out {
         self.hasher.hash(t)
     }
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         self.hasher.hash_kmers(k, t).collect::<Vec<_>>().into_iter()
     }
 }
@@ -61,7 +61,7 @@ impl<H: Hasher<Out: Default + Clone>> Hasher for BufferOpt<H> {
         self.hasher.hash(t)
     }
 
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         let len = t.len() - k + 1;
         let mut v = vec![H::Out::default(); len];
         // assert_eq!(v.len(), len);
@@ -78,15 +78,21 @@ impl<H: Hasher<Out: Default + Clone>> Hasher for BufferOpt<H> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct BufferDouble<H> {
-    pub hasher: H,
+    pub hasher1: H,
+    pub hasher2: H,
+}
+impl<H: Clone> BufferDouble<H> {
+    pub fn new(hasher: H) -> Self {
+        Self { hasher1: hasher.clone(), hasher2: hasher }
+    }
 }
 impl<H: Hasher<Out: Default + Clone>> Hasher for BufferDouble<H> {
     type Out = H::Out;
     fn hash(&self, t: &[u8]) -> Self::Out {
-        self.hasher.hash(t)
+        self.hasher1.hash(t)
     }
 
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         let num_kmers = t.len() - k + 1;
         // For odd num_kmers, we skip the last kmer.
         let kmers_per_part = num_kmers / 2;
@@ -94,8 +100,8 @@ impl<H: Hasher<Out: Default + Clone>> Hasher for BufferDouble<H> {
         let t0 = &t[..part_len];
         let t1 = &t[kmers_per_part..kmers_per_part + part_len];
         let mut v = vec![H::Out::default(); 2 * kmers_per_part];
-        let mut it0 = self.hasher.hash_kmers(k, t0);
-        let mut it1 = self.hasher.hash_kmers(k, t1);
+        let mut it0 = self.hasher1.hash_kmers(k, t0);
+        let mut it1 = self.hasher2.hash_kmers(k, t1);
         for i in 0..kmers_per_part {
             unsafe {
                 v.as_mut_ptr().add(i).write(it0.next().unwrap());
@@ -110,7 +116,7 @@ impl<H: Hasher<Out: Default + Clone>> Hasher for BufferDouble<H> {
 
 pub trait ParHasher<const L: usize> {
     type Out;
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = [Self::Out; L]>;
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = [Self::Out; L]>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -124,7 +130,7 @@ where
 {
     type Out = H::Out;
 
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = [H::Out; L]> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = [H::Out; L]> {
         let mut len = t.len() - k + 1;
         let t = &t[..t.len() - len % L];
         len -= len % L;

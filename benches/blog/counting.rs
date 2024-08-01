@@ -41,10 +41,10 @@ impl<'a, H: Hasher> Hasher for CountingHash<'a, H> {
     fn hash(&self, t: &[u8]) -> Self::Out {
         CountCompare { val: self.hasher.hash(t), count_cmp: Some(self.count_cmp) }
     }
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         self.hasher
             .hash_kmers(k, t)
-            .map(move |val| CountCompare { val, count_cmp: Some(self.count_cmp) })
+            .map(|val| CountCompare { val, count_cmp: Some(self.count_cmp) })
     }
 }
 
@@ -63,15 +63,15 @@ pub fn count_comparisons() {
         let hasher = CountingHash { count_cmp: &cnt, hasher: FxHash };
 
         #[rustfmt::skip]
-        let minimizers: &[(&str, &dyn Minimizer, bool)] = &[
-            ("buffered", &SlidingWindowMinimizer { w, k, alg: Buffered, hasher }, true),
-            ("queue", &SlidingWindowMinimizer { w, k, alg: Queue, hasher }, true),
-            ("jumping", &JumpingMinimizer { w, k, hasher }, false),
-            ("rescan", &SlidingWindowMinimizer { w, k, alg: Rescan, hasher }, true),
-            ("split", &SlidingWindowMinimizer { w, k, alg: Split, hasher }, true),
+        let minimizers: &mut [(&str, &mut dyn Minimizer, bool)] = &mut [
+            ("buffered", &mut SlidingWindowMinimizer { w, k, alg: Buffered, hasher }, true),
+            ("queue", &mut SlidingWindowMinimizer { w, k, alg: Queue, hasher }, true),
+            ("jumping", &mut JumpingMinimizer { w, k, hasher }, false),
+            ("rescan", &mut SlidingWindowMinimizer { w, k, alg: Rescan, hasher }, true),
+            ("split", &mut SlidingWindowMinimizer { w, k, alg: Split, hasher }, true),
         ];
 
-        for (name, m, window_minimizers) in minimizers.iter() {
+        for (name, m, window_minimizers) in minimizers {
             cnt.set(0);
             if *window_minimizers {
                 m.window_minimizers(text);

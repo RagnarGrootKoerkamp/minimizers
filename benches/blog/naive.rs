@@ -10,7 +10,7 @@ impl<H: Hasher> Minimizer for NaiveMinimizer<H>
 where
     H::Out: Ord,
 {
-    fn window_minimizers(&self, text: &[u8]) -> Vec<usize> {
+    fn window_minimizers(&mut self, text: &[u8]) -> Vec<usize> {
         // Iterate over the windows of size l=w+k-1.
         text.windows(self.w + self.k - 1)
             .enumerate()

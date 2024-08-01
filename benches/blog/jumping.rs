@@ -10,7 +10,7 @@ impl<H: Hasher> Minimizer for JumpingMinimizer<H>
 where
     H::Out: Ord,
 {
-    fn minimizer_positions(&self, text: &[u8]) -> Vec<usize> {
+    fn minimizer_positions(&mut self, text: &[u8]) -> Vec<usize> {
         let mut minimizer_positions = Vec::new();
 
         // Precompute hashes of all k-mers.

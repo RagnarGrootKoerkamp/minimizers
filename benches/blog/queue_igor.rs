@@ -7,7 +7,7 @@ pub struct QueueIgor {
 }
 
 impl Minimizer for QueueIgor {
-    fn minimizer_positions(&self, text: &[u8]) -> Vec<usize> {
+    fn minimizer_positions(&mut self, text: &[u8]) -> Vec<usize> {
         minimizer_iter::MinimizerBuilder::<u64>::new()
             .minimizer_size(self.k)
             .width(self.w as u16)

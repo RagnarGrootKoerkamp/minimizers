@@ -10,19 +10,19 @@ pub struct SuperKmer {
 
 pub trait Minimizer {
     /// Problem A: The absolute positions of all minimizers in the text.
-    fn minimizer_positions(&self, text: &[u8]) -> Vec<usize> {
+    fn minimizer_positions(&mut self, text: &[u8]) -> Vec<usize> {
         let mut minimizers = self.window_minimizers(text);
         minimizers.dedup();
         minimizers
     }
 
     /// Problem B: For each window, the absolute position in the text of its minimizer.
-    fn window_minimizers(&self, _text: &[u8]) -> Vec<usize> {
+    fn window_minimizers(&mut self, _text: &[u8]) -> Vec<usize> {
         unimplemented!()
     }
 
     /// Problem C: The super-k-mers of the text.
-    fn super_kmers(&self, text: &[u8]) -> Vec<SuperKmer> {
+    fn super_kmers(&mut self, text: &[u8]) -> Vec<SuperKmer> {
         self.window_minimizers(text)
             .into_iter()
             .enumerate()

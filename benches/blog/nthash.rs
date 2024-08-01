@@ -16,7 +16,7 @@ impl Hasher for NtHash {
         ::nthash::ntf64(t, 0, t.len())
     }
     #[inline(always)]
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = Self::Out> {
         NtHashIt::new(t, k).unwrap()
     }
 }
@@ -102,7 +102,7 @@ pub struct NtHashPar<const L: usize>;
 impl<const L: usize> ParHasher<L> for NtHashPar<L> {
     type Out = u64;
     #[inline(always)]
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = [Self::Out; L]> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = [Self::Out; L]> {
         NtHashParIt::new(t, k).unwrap()
     }
 }
@@ -191,7 +191,7 @@ pub struct NtHashSimd<const SMALL_K: bool>;
 impl<const SMALL_K: bool> ParHasher<L> for NtHashSimd<SMALL_K> {
     type Out = T;
     #[inline(always)]
-    fn hash_kmers(&self, k: usize, t: &[u8]) -> impl Iterator<Item = [Self::Out; L]> {
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = [Self::Out; L]> {
         if SMALL_K {
             assert!(k <= 32);
         }

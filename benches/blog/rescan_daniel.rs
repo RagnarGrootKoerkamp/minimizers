@@ -12,7 +12,7 @@ pub struct RescanDaniel {
 }
 
 impl Minimizer for RescanDaniel {
-    fn window_minimizers(&self, text: &[u8]) -> Vec<usize> {
+    fn window_minimizers(&mut self, text: &[u8]) -> Vec<usize> {
         let mut minimizers = Vec::new();
         minimizers_callback(text, self.w + self.k - 1, self.k, 0, |idx, _min| {
             minimizers.push(idx);

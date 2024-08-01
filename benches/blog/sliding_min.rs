@@ -55,7 +55,7 @@ pub struct SlidingWindowMinimizer<SlidingMinAlg, H = FxHash> {
 impl<H: Hasher, SlidingMinAlg: SlidingMin<H::Out>> Minimizer
     for SlidingWindowMinimizer<SlidingMinAlg, H>
 {
-    fn window_minimizers(&self, text: &[u8]) -> Vec<usize> {
+    fn window_minimizers(&mut self, text: &[u8]) -> Vec<usize> {
         self.hasher
             // Iterate over k-mers and hash them.
             .hash_kmers(self.k, text)
