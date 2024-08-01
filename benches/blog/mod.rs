@@ -1,6 +1,7 @@
 use itertools::Itertools;
 
 pub mod counting;
+pub mod fxhash;
 pub mod hash;
 pub mod jumping;
 pub mod minimizer;
@@ -14,6 +15,7 @@ pub mod ringbuf;
 pub mod sliding_min;
 pub mod split;
 
+pub use fxhash::*;
 pub use hash::*;
 pub use jumping::*;
 pub use minimizer::*;

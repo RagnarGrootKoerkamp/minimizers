@@ -234,4 +234,10 @@ fn local_nthash(c: &mut Criterion) {
     g.bench_with_input("nthash_bufsimd_cached", packed_text, |b, packed_text| {
         b.iter(|| drop(black_box(hasher.hash_kmers(k, packed_text))));
     });
+
+    let k = 15;
+    let mut hasher = BufferParCached::new(FxHashSimd);
+    g.bench_with_input("fxhash_bufsimd_cached", packed_text, |b, packed_text| {
+        b.iter(|| drop(black_box(hasher.hash_kmers(k, packed_text))));
+    });
 }
