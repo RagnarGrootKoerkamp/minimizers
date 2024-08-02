@@ -3,7 +3,7 @@
 mod blog;
 use blog::*;
 use itertools::Itertools;
-use std::{simd::Simd, time::Duration};
+use std::{cell::LazyCell, simd::Simd, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
@@ -17,7 +17,7 @@ criterion_group!(
     targets = initial_runtime_comparison,
         blog::counting::count_comparisons_bench,
         optimized, ext_nthash, buffered, local_nthash,
-        simd_minimizer
+        simd_minimizer, human_genome
 );
 criterion_main!(group);
 
@@ -318,4 +318,68 @@ fn simd_minimizer(c: &mut Criterion) {
                 .collect_vec()
         });
     });
+}
+
+fn human_genome(c: &mut Criterion) {
+    let w = 11;
+    let k = 21;
+
+    let packed_text = LazyCell::new(|| {
+        eprintln!("Reading..");
+        let start = std::time::Instant::now();
+        let mut packed_text = vec![];
+        let Ok(mut reader) = needletail::parse_fastx_file("human-genome.fa") else {
+            eprintln!("Did not find human-genome.fa. Add/symlink it to test runtime on it.");
+            return vec![];
+        };
+        while let Some(r) = reader.next() {
+            let r = r.unwrap();
+            eprintln!(
+                "Read {:?} of len {:?}",
+                std::str::from_utf8(r.id()),
+                r.raw_seq().len()
+            );
+            pack(&r.raw_seq(), &mut packed_text);
+            eprintln!("Packed len {:?}", packed_text.len());
+        }
+        eprintln!("Packing took {:?}", start.elapsed());
+        let num_kmers = packed_text.len() - k + 1;
+        packed_text.resize(packed_text.len() - (num_kmers % 16), b' ');
+        packed_text
+    });
+
+    let mut hasher = NtHashSimd::<true>;
+    c.bench_function("human_genome", |b| {
+        let packed_text = &*packed_text;
+        b.iter(|| {
+            if packed_text.is_empty() {
+                return Default::default();
+            }
+            SplitSimd
+                .sliding_min(w, hasher.hash_kmers(k, &packed_text))
+                .map(|x| Simd::<u32, 8>::from(x))
+                .sum::<Simd<u32, 8>>()
+        });
+    });
+}
+
+fn pack(text: &[u8], packed: &mut Vec<u8>) {
+    let mut packed_byte = 0;
+    let mut packed_len = 0;
+    for &base in text {
+        packed_byte |= match base {
+            b'a' | b'A' => 0,
+            b'c' | b'C' => 1,
+            b'g' | b'G' => 2,
+            b't' | b'T' => 3,
+            b'\r' | b'\n' => continue,
+            _ => panic!(),
+        } << (packed_len * 2);
+        packed_len += 1;
+        if packed_len == 4 {
+            packed.push(packed_byte);
+            packed_byte = 0;
+            packed_len = 0;
+        }
+    }
 }
