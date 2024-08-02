@@ -21,3 +21,10 @@ Density plot for $\sigma=4$. Reproduce using:
 - ~plot.ipynb~
 
 [[file:./fig/density_4.svg]]
+
+* Fast random minimizers
+Additionally, the =benches/blog= directory contains a fast implementation of
+ntHash and a fast random minimizer implementation on top of that. This computes
+the minimizers of a human genome in under half a second, or =0.16ns/window=.
+
+See the corresponding blogpost for details: [[https://curiouscoding.nl/posts/fast-minimizers/][curiouscoding.nl/posts/fast-minimizers]]
