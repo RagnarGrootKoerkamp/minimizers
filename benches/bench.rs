@@ -3,6 +3,7 @@
 mod blog;
 use blog::*;
 use itertools::Itertools;
+use minimizers::par::{minimizer::minimizer_par_it, nthash::nthash32f_par_it, packed::Packed};
 use std::{cell::LazyCell, simd::Simd, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -260,6 +261,14 @@ fn local_nthash(c: &mut Criterion) {
     g.bench_with_input("fxhash_bufsimd_cached", packed_text, |b, packed_text| {
         b.iter(|| drop(black_box(hasher.hash_kmers(k, packed_text))));
     });
+
+    let packed_text = Packed { seq: packed_text, len_in_bp: packed_text.len() * 4 };
+    g.bench_with_input("nthash_par_it_sum", &packed_text, |b, packed_text| {
+        b.iter(|| nthash32f_par_it(*packed_text, k, 1).0.sum::<Simd<u32, 8>>());
+    });
+    g.bench_with_input("nthash_par_it_vec", &packed_text, |b, packed_text| {
+        b.iter(|| nthash32f_par_it(*packed_text, k, 1).0.collect_vec());
+    });
 }
 
 fn simd_minimizer(c: &mut Criterion) {
@@ -310,6 +319,14 @@ fn simd_minimizer(c: &mut Criterion) {
                 .sliding_min(w, hasher.hash_kmers(k, packed_text))
                 .collect_vec()
         });
+    });
+
+    let packed_text = Packed { seq: packed_text, len_in_bp: packed_text.len() * 4 };
+    g.bench_function("minimizer_par_it_sum", |b| {
+        b.iter(|| minimizer_par_it(packed_text, k, w).0.sum::<Simd<u32, 8>>());
+    });
+    g.bench_function("minimizer_par_it_vec", |b| {
+        b.iter(|| minimizer_par_it(packed_text, k, w).0.collect_vec());
     });
 }
 
