@@ -233,21 +233,15 @@ impl<'a, const SMALL_K: bool> NtHashPackedSimdIt<'a, SMALL_K> {
         if seq.len() > u32::MAX as _ {
             return None;
         }
-        let num_kmers = seq.len() - k + 1;
-        if num_kmers % L != 0 {
-            return None;
-        }
-        let n = num_kmers / L;
+        let n = (4 * seq.len() - k + 1) / L;
 
         // Each 128-bit half has a copy of the 4 32-bit hashes.
         let table: S = b"ACTGACTG".map(|c| h(c) as T).into();
         let table_rot_k: S = b"ACTGACTG".map(|c| h(c).rotate_left(k as u32) as T).into();
 
-        let fh = from_fn(|l| {
-            let mut fh = 0;
-            for (i, v) in seq[l * n..l * n + k].iter().enumerate() {
-                fh ^= (h(*v) as T).rotate_left((k - i - 1) as u32);
-            }
+        let fh = from_fn(|_l| {
+            let fh = 0;
+            // TODO
             fh
         })
         .into();
@@ -260,8 +254,8 @@ impl<'a, const SMALL_K: bool> NtHashPackedSimdIt<'a, SMALL_K> {
             current_idx: 0,
             table,
             table_rot_k,
-            offsets: from_fn(|l| unsafe { seq.as_ptr().add(l * n) }).into(),
-            offsets_next: from_fn(|l| unsafe { seq.as_ptr().add((4 + l) * n) }).into(),
+            offsets: from_fn(|l| unsafe { seq.as_ptr().add(l * n / 4) }).into(),
+            offsets_next: from_fn(|l| unsafe { seq.as_ptr().add((4 + l) * n / 4) }).into(),
             chars_i: S::splat(0),
             chars_i_next: S::splat(0),
             // TODO: properly initialize the first (-k)%32 characters of chars_k.
@@ -286,8 +280,8 @@ impl<'a, const SMALL_K: bool> Iterator for NtHashPackedSimdIt<'a, SMALL_K> {
             let i = self.current_idx - 1;
             unsafe {
                 let read = |i| {
-                    let oi1 = self.offsets.wrapping_add(Simd::splat(i));
-                    let oi2 = self.offsets_next.wrapping_add(Simd::splat(i));
+                    let oi1 = self.offsets.wrapping_add(Simd::splat(i / 4));
+                    let oi2 = self.offsets_next.wrapping_add(Simd::splat(i / 4));
                     let chars_i1: Simd<u32, 8> =
                         transmute(Simd::<u64, 4>::gather_ptr(transmute(oi1)));
                     let chars_i2: Simd<u32, 8> =

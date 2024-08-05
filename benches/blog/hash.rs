@@ -131,10 +131,8 @@ where
     type Out = H::Out;
 
     fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = [H::Out; L]> {
-        let mut len = t.len() - k + 1;
-        let t = &t[..t.len() - len % L];
-        len -= len % L;
-        let n = len / L;
+        let num_kmers = 4 * t.len() - k + 1;
+        let n = num_kmers / L;
 
         let mut v = vec![[Self::Out::default(); L]; n];
         let mut it = self.hasher.hash_kmers(k, t);
@@ -168,10 +166,8 @@ where
     type Out = H::Out;
 
     fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = [H::Out; L]> {
-        let mut len = t.len() - k + 1;
-        let t = &t[..t.len() - len % L];
-        len -= len % L;
-        let n = len / L;
+        let num_kmers = 4 * t.len() - k + 1;
+        let n = num_kmers / L;
 
         // Resize the vector to the right size.
         self.v.resize(n, [Self::Out::default(); L]);
