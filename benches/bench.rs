@@ -216,8 +216,6 @@ fn local_nthash(c: &mut Criterion) {
     let packed_text = &(0..1000000 / 4)
         .map(|_| rand::random::<u8>())
         .collect::<Vec<_>>();
-    let num_kmers = packed_text.len() - k + 1;
-    let packed_text = &packed_text[..packed_text.len() - (num_kmers % 16)];
 
     g.bench_with_input("nthash_simd_ksmall", packed_text, |b, packed_text| {
         b.iter(|| {
@@ -249,8 +247,6 @@ fn local_nthash(c: &mut Criterion) {
     });
 
     let k = 15;
-    let num_kmers = packed_text.len() - k + 1;
-    let packed_text = &packed_text[..packed_text.len() - (num_kmers % 16)];
     g.bench_with_input("fxhash_simd", packed_text, |b, packed_text| {
         b.iter(|| {
             FxHashSimd
@@ -274,9 +270,6 @@ fn simd_minimizer(c: &mut Criterion) {
 
     let w = 11;
     let k = 21;
-
-    let num_kmers = packed_text.len() - k + 1;
-    let packed_text = &packed_text[..packed_text.len() - (num_kmers % 16)];
 
     let mut g = c.benchmark_group("g");
     let mut hasher = NtHashSimd::<true>;
@@ -343,8 +336,6 @@ fn human_genome(c: &mut Criterion) {
             eprintln!("Packed len {:?}", packed_text.len());
         }
         eprintln!("Packing took {:?}", start.elapsed());
-        let num_kmers = packed_text.len() - k + 1;
-        packed_text.resize(packed_text.len() - (num_kmers % 16), b' ');
         packed_text
     });
 
