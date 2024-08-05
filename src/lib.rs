@@ -1,4 +1,4 @@
-#![feature(type_alias_impl_trait, iter_repeat_n, trait_alias)]
+#![feature(type_alias_impl_trait, iter_repeat_n, trait_alias, portable_simd)]
 
 pub mod bruteforce;
 pub mod de_bruijn_seq;
@@ -6,6 +6,7 @@ pub mod ilp_scheme;
 pub mod local_scheme;
 pub mod monotone_queue;
 pub mod order;
+pub mod par;
 
 use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;
