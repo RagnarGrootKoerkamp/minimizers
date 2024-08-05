@@ -14,19 +14,43 @@ use super::packed::{IntoBpIterator, S};
 use crate::par::packed::L;
 use std::arch::x86_64::_mm256_permutevar_ps;
 
-const HASHES: [u32; 4] = [
+// TODO: Update to guarantee unique hash values for k<=16?
+const HASHES_F: [u32; 4] = [
     0x3c8b_fbb3_95c6_0474u64 as u32,
     0x3193_c185_62a0_2b4cu64 as u32,
     0x2032_3ed0_8257_2324u64 as u32,
     0x2955_49f5_4be2_4456u64 as u32,
 ];
+const fn cmpl(base: u32) -> u32 {
+    base ^ 0x2
+}
+/// Compliment hashes.
+const HASHES_C: [u32; 4] = [
+    HASHES_F[cmpl(0) as usize],
+    HASHES_F[cmpl(1) as usize],
+    HASHES_F[cmpl(2) as usize],
+    HASHES_F[cmpl(3) as usize],
+];
 
+/// Forward hash.
 pub fn nthash32f_kmer(seq: impl IntoBpIterator) -> u32 {
-    let mut h: u32 = 0;
+    let mut hf: u32 = 0;
     seq.iter_bp().for_each(|a| {
-        h = h.rotate_left(1) ^ HASHES[a as usize];
+        hf = hf.rotate_left(1) ^ HASHES_F[a as usize];
     });
-    h
+    hf
+}
+
+/// Canonical hash
+pub fn nthash32c_kmer(seq: impl IntoBpIterator) -> u32 {
+    let k = seq.bp();
+    let mut hfw: u32 = 0;
+    let mut hrc: u32 = 0;
+    seq.iter_bp().for_each(|a| {
+        hfw = hfw.rotate_left(1) ^ HASHES_F[a as usize];
+        hrc = hrc.rotate_right(1) ^ HASHES_C[a as usize];
+    });
+    hfw.wrapping_add(hrc.rotate_left(k as u32 - 1))
 }
 
 pub fn nthash32f_scalar_it(
@@ -38,12 +62,34 @@ pub fn nthash32f_scalar_it(
     let mut add = seq.iter_bp();
     let remove = seq.iter_bp();
     add.by_ref().take(k - 1).for_each(|a| {
-        h = h.rotate_left(1) ^ HASHES[a as usize];
+        h = h.rotate_left(1) ^ HASHES_F[a as usize];
     });
     add.zip(remove).map(move |(a, r)| {
-        let h_out = h.rotate_left(1) ^ HASHES[a as usize];
-        h = h_out ^ (HASHES[r as usize].rotate_left((k - 1) as u32));
+        let h_out = h.rotate_left(1) ^ HASHES_F[a as usize];
+        h = h_out ^ HASHES_F[r as usize].rotate_left((k - 1) as u32);
         h_out
+    })
+}
+
+pub fn nthash32c_scalar_it(
+    seq: impl IntoBpIterator,
+    k: usize,
+) -> impl ExactSizeIterator<Item = u32> {
+    assert!(k > 0);
+    let mut hfw: u32 = 0;
+    let mut hrc: u32 = 0;
+    let mut add = seq.iter_bp();
+    let remove = seq.iter_bp();
+    add.by_ref().take(k - 1).for_each(|a| {
+        hfw = hfw.rotate_left(1) ^ HASHES_F[a as usize];
+        hrc = hrc.rotate_right(1) ^ HASHES_C[a as usize].rotate_left(k as u32 - 1);
+    });
+    add.zip(remove).map(move |(a, r)| {
+        let hfw_out = hfw.rotate_left(1) ^ HASHES_F[a as usize];
+        let hrc_out = hrc.rotate_right(1) ^ HASHES_C[a as usize].rotate_left(k as u32 - 1);
+        hfw = hfw_out ^ HASHES_F[r as usize].rotate_left(k as u32 - 1);
+        hrc = hrc_out ^ HASHES_C[r as usize];
+        hfw_out.wrapping_add(hrc_out)
     })
 }
 
@@ -64,9 +110,11 @@ pub fn nthash32f_par_it(
     assert!(k > 0);
     assert!(w > 0);
     // Each 128-bit half has a copy of the 4 32-bit hashes.
-    let table: S = [0, 1, 2, 3, 0, 1, 2, 3].map(|c| HASHES[c as usize]).into();
+    let table: S = [0, 1, 2, 3, 0, 1, 2, 3]
+        .map(|c| HASHES_F[c as usize])
+        .into();
     let table_rot: S = [0, 1, 2, 3, 0, 1, 2, 3]
-        .map(|c| (HASHES[c as usize]).rotate_left(k as u32 - 1))
+        .map(|c| HASHES_F[c as usize].rotate_left(k as u32 - 1))
         .into();
 
     #[cfg(target_feature = "avx2")]
@@ -105,6 +153,82 @@ pub fn nthash32f_par_it(
 
         let tail = seq.iter_bp(k + w - 1);
         let tail = nthash32f_scalar_it(tail, k);
+        (empty(), tail)
+    }
+}
+
+// Split the kmers of the sequence into 8 chunks of equal length ~len/8.
+// Then return the hashes of each of them, and the remaining few using the second iterator.
+// The tail end has up to 31*8 = 248 elements.
+// TODO: SMALL_K + reusing gathers?
+// TODO: ARM variant
+#[cfg(target_feature = "avx2")]
+pub fn nthash32c_par_it(
+    seq: impl IntoBpIterator,
+    k: usize,
+    w: usize,
+) -> (
+    impl ExactSizeIterator<Item = S>,
+    impl ExactSizeIterator<Item = u32>,
+) {
+    assert!(k > 0);
+    assert!(w > 0);
+    // Each 128-bit half has a copy of the 4 32-bit hashes.
+    let table_fw: S = [0, 1, 2, 3, 0, 1, 2, 3]
+        .map(|c| HASHES_F[c as usize])
+        .into();
+    let table_fw_rot: S = [0, 1, 2, 3, 0, 1, 2, 3]
+        .map(|c| HASHES_F[c as usize].rotate_left(k as u32 - 1))
+        .into();
+    // TODO: Reuse tables above instead of making new ones?
+    let table_rc: S = [0, 1, 2, 3, 0, 1, 2, 3]
+        .map(|c| HASHES_C[c as usize])
+        .into();
+    let table_rc_rot: S = [0, 1, 2, 3, 0, 1, 2, 3]
+        .map(|c| HASHES_C[c as usize].rotate_left(k as u32 - 1))
+        .into();
+
+    #[cfg(target_feature = "avx2")]
+    {
+        let table_lookup = |table: S, bps: S| -> S {
+            use std::mem::transmute;
+            unsafe { transmute(_mm256_permutevar_ps(transmute(table), transmute(bps))) }
+        };
+
+        let mut h_fw = S::splat(0);
+        let mut h_rc = S::splat(0);
+        let (mut add, tail) = seq.par_iter_bp(k + w - 1);
+        let (remove, _tail) = seq.par_iter_bp(k + w - 1);
+
+        add.by_ref().take(k - 1).for_each(|a| {
+            h_fw = ((h_fw << 1) | (h_fw >> 31)) ^ table_lookup(table_fw, a);
+            h_rc = ((h_rc >> 1) | (h_rc << 31)) ^ table_lookup(table_rc_rot, a);
+        });
+
+        let it = add.zip(remove).map(move |(a, r)| {
+            let hfw_out = ((h_fw << 1) | (h_fw >> 31)) ^ table_lookup(table_fw, a);
+            h_fw = hfw_out ^ table_lookup(table_fw_rot, r);
+            let hrc_out = ((h_rc >> 1) | (h_rc << 31)) ^ table_lookup(table_rc_rot, a);
+            h_rc = hrc_out ^ table_lookup(table_rc, r);
+            // Wrapping SIMD add
+            hfw_out + hrc_out
+        });
+
+        let tail = nthash32c_scalar_it(tail, k);
+
+        (it, tail)
+    }
+
+    #[cfg(not(target_feature = "avx2"))]
+    {
+        static WARNED: LazyCell<()> = LazyCell::new(|| {
+            eprintln!("nthash32f_par_it: AVX2 not available, falling back to scalar.");
+        });
+
+        *WARNED;
+
+        let tail = seq.iter_bp(k + w - 1);
+        let tail = nthash32c_scalar_it(tail, k);
         (empty(), tail)
     }
 }
@@ -267,6 +391,7 @@ fn buffer_chunk(seq: impl IntoBpIterator, k: usize, buf: &mut Vec<S>, tail_buf: 
 mod test {
     use super::*;
     use crate::par::packed::Packed;
+    use itertools::Itertools;
     use rand::random;
     use std::{cell::LazyCell, iter::once};
 
@@ -361,6 +486,77 @@ mod test {
                 let seq = seq.sub_slice(0, len);
                 let scalar = nthash32f_scalar_it(seq, k).collect::<Vec<_>>();
                 let (par_head, tail) = nthash32f_par_it(seq, k, 1);
+                let par_head = par_head.collect::<Vec<_>>();
+                let parallel_iter = (0..L)
+                    .flat_map(|l| par_head.iter().map(move |x| x[l]))
+                    .chain(tail)
+                    .collect::<Vec<_>>();
+                assert_eq!(scalar, parallel_iter, "k={}, len={}", k, len);
+            }
+        }
+    }
+
+    #[test]
+    fn canonical_is_revcomp() {
+        let seq = &**BYTE_SEQ;
+        let seq_rc = seq
+            .iter()
+            .rev()
+            .map(|c| cmpl(*c as u32) as u8)
+            .collect_vec();
+        for k in [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
+        ] {
+            for len in (0..100).chain(once(1024)) {
+                let seq = seq.sub_slice(0, len);
+                let seq_rc = &seq_rc[seq_rc.len() - len..];
+                let scalar = nthash32c_scalar_it(seq, k).collect::<Vec<_>>();
+                let scalar_rc = nthash32c_scalar_it(seq_rc, k).collect::<Vec<_>>();
+                let scalar_rc_rc = scalar_rc.iter().rev().copied().collect_vec();
+                assert_eq!(
+                    scalar_rc_rc,
+                    scalar,
+                    "k={}, len={} {:032b} {:032b}",
+                    k,
+                    len,
+                    scalar.first().unwrap_or(&0),
+                    scalar_rc_rc.first().unwrap_or(&0)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn scalar_byte_canonical() {
+        let seq = &**BYTE_SEQ;
+        for k in [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
+        ] {
+            for len in (0..100).chain(once(1024)) {
+                let seq = seq.sub_slice(0, len);
+                let single = seq
+                    .windows(k)
+                    .map(|seq| nthash32c_kmer(seq))
+                    .collect::<Vec<_>>();
+                let scalar = nthash32c_scalar_it(seq, k).collect::<Vec<_>>();
+                assert_eq!(single, scalar, "k={}, len={}", k, len);
+            }
+        }
+    }
+
+    #[test]
+    fn parallel_iter_packed_canonical() {
+        let seq = Packed {
+            seq: &*PACKED_SEQ,
+            len_in_bp: 1024,
+        };
+        for k in [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
+        ] {
+            for len in (0..100).chain(once(1024)) {
+                let seq = seq.sub_slice(0, len);
+                let scalar = nthash32c_scalar_it(seq, k).collect::<Vec<_>>();
+                let (par_head, tail) = nthash32c_par_it(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
                 let parallel_iter = (0..L)
                     .flat_map(|l| par_head.iter().map(move |x| x[l]))
