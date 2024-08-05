@@ -32,46 +32,20 @@ const HASHES_C: [u32; 4] = [
     HASHES_F[cmpl(3) as usize],
 ];
 
-/// Forward hash.
-pub fn nthash32f_kmer(seq: impl IntoBpIterator) -> u32 {
-    let mut hf: u32 = 0;
-    seq.iter_bp().for_each(|a| {
-        hf = hf.rotate_left(1) ^ HASHES_F[a as usize];
-    });
-    hf
-}
-
-/// Canonical hash
-pub fn nthash32c_kmer(seq: impl IntoBpIterator) -> u32 {
+pub fn nthash32_kmer<const RC: bool>(seq: impl IntoBpIterator) -> u32 {
     let k = seq.bp();
     let mut hfw: u32 = 0;
     let mut hrc: u32 = 0;
     seq.iter_bp().for_each(|a| {
         hfw = hfw.rotate_left(1) ^ HASHES_F[a as usize];
-        hrc = hrc.rotate_right(1) ^ HASHES_C[a as usize];
+        if RC {
+            hrc = hrc.rotate_right(1) ^ HASHES_C[a as usize];
+        }
     });
     hfw.wrapping_add(hrc.rotate_left(k as u32 - 1))
 }
 
-pub fn nthash32f_scalar_it(
-    seq: impl IntoBpIterator,
-    k: usize,
-) -> impl ExactSizeIterator<Item = u32> {
-    assert!(k > 0);
-    let mut h: u32 = 0;
-    let mut add = seq.iter_bp();
-    let remove = seq.iter_bp();
-    add.by_ref().take(k - 1).for_each(|a| {
-        h = h.rotate_left(1) ^ HASHES_F[a as usize];
-    });
-    add.zip(remove).map(move |(a, r)| {
-        let h_out = h.rotate_left(1) ^ HASHES_F[a as usize];
-        h = h_out ^ HASHES_F[r as usize].rotate_left((k - 1) as u32);
-        h_out
-    })
-}
-
-pub fn nthash32c_scalar_it(
+pub fn nthash32_scalar_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
 ) -> impl ExactSizeIterator<Item = u32> {
@@ -82,14 +56,20 @@ pub fn nthash32c_scalar_it(
     let remove = seq.iter_bp();
     add.by_ref().take(k - 1).for_each(|a| {
         hfw = hfw.rotate_left(1) ^ HASHES_F[a as usize];
-        hrc = hrc.rotate_right(1) ^ HASHES_C[a as usize].rotate_left(k as u32 - 1);
+        if RC {
+            hrc = hrc.rotate_right(1) ^ HASHES_C[a as usize].rotate_left(k as u32 - 1);
+        }
     });
     add.zip(remove).map(move |(a, r)| {
         let hfw_out = hfw.rotate_left(1) ^ HASHES_F[a as usize];
-        let hrc_out = hrc.rotate_right(1) ^ HASHES_C[a as usize].rotate_left(k as u32 - 1);
         hfw = hfw_out ^ HASHES_F[r as usize].rotate_left(k as u32 - 1);
-        hrc = hrc_out ^ HASHES_C[r as usize];
-        hfw_out.wrapping_add(hrc_out)
+        if RC {
+            let hrc_out = hrc.rotate_right(1) ^ HASHES_C[a as usize].rotate_left(k as u32 - 1);
+            hrc = hrc_out ^ HASHES_C[r as usize];
+            hfw_out.wrapping_add(hrc_out)
+        } else {
+            hfw_out
+        }
     })
 }
 
@@ -99,71 +79,7 @@ pub fn nthash32c_scalar_it(
 // TODO: SMALL_K + reusing gathers?
 // TODO: ARM variant
 #[cfg(target_feature = "avx2")]
-pub fn nthash32f_par_it(
-    seq: impl IntoBpIterator,
-    k: usize,
-    w: usize,
-) -> (
-    impl ExactSizeIterator<Item = S>,
-    impl ExactSizeIterator<Item = u32>,
-) {
-    assert!(k > 0);
-    assert!(w > 0);
-    // Each 128-bit half has a copy of the 4 32-bit hashes.
-    let table: S = [0, 1, 2, 3, 0, 1, 2, 3]
-        .map(|c| HASHES_F[c as usize])
-        .into();
-    let table_rot: S = [0, 1, 2, 3, 0, 1, 2, 3]
-        .map(|c| HASHES_F[c as usize].rotate_left(k as u32 - 1))
-        .into();
-
-    #[cfg(target_feature = "avx2")]
-    {
-        let table_lookup = |table: S, bps: S| -> S {
-            use std::mem::transmute;
-            unsafe { transmute(_mm256_permutevar_ps(transmute(table), transmute(bps))) }
-        };
-
-        let mut h = S::splat(0);
-        let (mut add, tail) = seq.par_iter_bp(k + w - 1);
-        let (remove, _tail) = seq.par_iter_bp(k + w - 1);
-
-        add.by_ref().take(k - 1).for_each(|a| {
-            h = ((h << 1) | (h >> 31)) ^ table_lookup(table, a);
-        });
-
-        let it = add.zip(remove).map(move |(a, r)| {
-            let out = ((h << 1) | (h >> 31)) ^ table_lookup(table, a);
-            h = out ^ table_lookup(table_rot, r);
-            out
-        });
-
-        let tail = nthash32f_scalar_it(tail, k);
-
-        (it, tail)
-    }
-
-    #[cfg(not(target_feature = "avx2"))]
-    {
-        static WARNED: LazyCell<()> = LazyCell::new(|| {
-            eprintln!("nthash32f_par_it: AVX2 not available, falling back to scalar.");
-        });
-
-        *WARNED;
-
-        let tail = seq.iter_bp(k + w - 1);
-        let tail = nthash32f_scalar_it(tail, k);
-        (empty(), tail)
-    }
-}
-
-// Split the kmers of the sequence into 8 chunks of equal length ~len/8.
-// Then return the hashes of each of them, and the remaining few using the second iterator.
-// The tail end has up to 31*8 = 248 elements.
-// TODO: SMALL_K + reusing gathers?
-// TODO: ARM variant
-#[cfg(target_feature = "avx2")]
-pub fn nthash32c_par_it(
+pub fn nthash32_par_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
     w: usize,
@@ -202,19 +118,25 @@ pub fn nthash32c_par_it(
 
         add.by_ref().take(k - 1).for_each(|a| {
             h_fw = ((h_fw << 1) | (h_fw >> 31)) ^ table_lookup(table_fw, a);
-            h_rc = ((h_rc >> 1) | (h_rc << 31)) ^ table_lookup(table_rc_rot, a);
+            if RC {
+                h_rc = ((h_rc >> 1) | (h_rc << 31)) ^ table_lookup(table_rc_rot, a);
+            }
         });
 
         let it = add.zip(remove).map(move |(a, r)| {
             let hfw_out = ((h_fw << 1) | (h_fw >> 31)) ^ table_lookup(table_fw, a);
             h_fw = hfw_out ^ table_lookup(table_fw_rot, r);
-            let hrc_out = ((h_rc >> 1) | (h_rc << 31)) ^ table_lookup(table_rc_rot, a);
-            h_rc = hrc_out ^ table_lookup(table_rc, r);
-            // Wrapping SIMD add
-            hfw_out + hrc_out
+            if RC {
+                let hrc_out = ((h_rc >> 1) | (h_rc << 31)) ^ table_lookup(table_rc_rot, a);
+                h_rc = hrc_out ^ table_lookup(table_rc, r);
+                // Wrapping SIMD add
+                hfw_out + hrc_out
+            } else {
+                hfw_out
+            }
         });
 
-        let tail = nthash32c_scalar_it(tail, k);
+        let tail = nthash32_scalar_it::<RC>(tail, k);
 
         (it, tail)
     }
@@ -236,11 +158,14 @@ pub fn nthash32c_par_it(
 // This splits the input in ~2^15bp chunks, and computes the hashes of
 // each chunk using 8 streams in parallel. Those results are buffered and a
 // linear iterator over them is returned. Once it runs out, the next 2^15bp chunk is computed.
-pub fn nthash32f_fast_it(seq: impl IntoBpIterator, k: usize) -> impl ExactSizeIterator<Item = u32> {
-    NtHash32ForwardIterator::new(seq, k)
+pub fn nthash32_fast_it<const RC: bool>(
+    seq: impl IntoBpIterator,
+    k: usize,
+) -> impl ExactSizeIterator<Item = u32> {
+    NtHash32ForwardIterator::<RC, _>::new(seq, k)
 }
 
-struct NtHash32ForwardIterator<BI: IntoBpIterator> {
+struct NtHash32ForwardIterator<const RC: bool, BI: IntoBpIterator> {
     seq: BI,
     k: usize,
 
@@ -264,8 +189,8 @@ struct NtHash32ForwardIterator<BI: IntoBpIterator> {
     max_i: usize,
 }
 
-impl<BI: IntoBpIterator> NtHash32ForwardIterator<BI> {
-    fn new(seq: BI, k: usize) -> Self {
+impl<const RC: bool, BI: IntoBpIterator> NtHash32ForwardIterator<RC, BI> {
+    fn new(seq: BI, k: usize) -> NtHash32ForwardIterator<RC, BI> {
         assert!(k > 0);
         let len = seq.bp();
         let chunk_size = 1 << 13;
@@ -277,7 +202,7 @@ impl<BI: IntoBpIterator> NtHash32ForwardIterator<BI> {
         let mut cache = vec![S::splat(0); par_size];
         let mut tail_cache = vec![];
         if num_chunks == 1 {
-            buffer_chunk(seq, k, &mut cache, &mut tail_cache);
+            buffer_chunk::<RC>(seq, k, &mut cache, &mut tail_cache);
         }
 
         Self {
@@ -300,7 +225,7 @@ impl<BI: IntoBpIterator> NtHash32ForwardIterator<BI> {
     }
 }
 
-impl<BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<BI> {
+impl<const RC: bool, BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<RC, BI> {
     type Item = u32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -313,7 +238,7 @@ impl<BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<BI> {
                 self.c = self.c.wrapping_add(1);
                 if self.c < self.num_chunks {
                     let offset = self.c * self.chunk_size;
-                    buffer_chunk(
+                    buffer_chunk::<RC>(
                         self.seq.sub_slice(
                             offset,
                             (self.chunk_size + self.k - 1).min(self.seq.bp() - offset),
@@ -369,10 +294,15 @@ impl<BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<BI> {
     }
 }
 
-impl<BI: IntoBpIterator> ExactSizeIterator for NtHash32ForwardIterator<BI> {}
+impl<const RC: bool, BI: IntoBpIterator> ExactSizeIterator for NtHash32ForwardIterator<RC, BI> {}
 
-fn buffer_chunk(seq: impl IntoBpIterator, k: usize, buf: &mut Vec<S>, tail_buf: &mut Vec<u32>) {
-    let (mut par_it, mut tail) = nthash32f_par_it(seq, k, 1);
+fn buffer_chunk<const RC: bool>(
+    seq: impl IntoBpIterator,
+    k: usize,
+    buf: &mut Vec<S>,
+    tail_buf: &mut Vec<u32>,
+) {
+    let (mut par_it, mut tail) = nthash32_par_it::<RC>(seq, k, 1);
     buf.resize(par_it.size_hint().0, S::splat(0));
     for i in 0..buf.len() {
         unsafe {
@@ -411,9 +341,9 @@ mod test {
                 let seq = seq.sub_slice(0, len);
                 let single = seq
                     .windows(k)
-                    .map(|seq| nthash32f_kmer(seq))
+                    .map(|seq| nthash32_kmer::<false>(seq))
                     .collect::<Vec<_>>();
-                let scalar = nthash32f_scalar_it(seq, k).collect::<Vec<_>>();
+                let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
                 assert_eq!(single, scalar, "k={}, len={}", k, len);
             }
         }
@@ -427,8 +357,8 @@ mod test {
         ] {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.sub_slice(0, len);
-                let scalar = nthash32f_scalar_it(seq, k).collect::<Vec<_>>();
-                let parallel = nthash32f_fast_it(seq, k).collect::<Vec<_>>();
+                let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
+                let parallel = nthash32_fast_it::<false>(seq, k).collect::<Vec<_>>();
                 assert_eq!(scalar, parallel, "k={}, len={}", k, len);
             }
         }
@@ -445,8 +375,8 @@ mod test {
         ] {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.sub_slice(0, len);
-                let scalar = nthash32f_scalar_it(seq, k).collect::<Vec<_>>();
-                let parallel = nthash32f_fast_it(seq, k).collect::<Vec<_>>();
+                let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
+                let parallel = nthash32_fast_it::<false>(seq, k).collect::<Vec<_>>();
                 assert_eq!(scalar, parallel, "k={}, len={}", k, len);
             }
         }
@@ -460,8 +390,8 @@ mod test {
         ] {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.sub_slice(0, len);
-                let scalar = nthash32f_scalar_it(seq, k).collect::<Vec<_>>();
-                let (par_head, tail) = nthash32f_par_it(seq, k, 1);
+                let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
+                let (par_head, tail) = nthash32_par_it::<false>(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
                 let parallel_iter = (0..L)
                     .flat_map(|l| par_head.iter().map(move |x| x[l]))
@@ -484,8 +414,8 @@ mod test {
         ] {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.sub_slice(0, len);
-                let scalar = nthash32f_scalar_it(seq, k).collect::<Vec<_>>();
-                let (par_head, tail) = nthash32f_par_it(seq, k, 1);
+                let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
+                let (par_head, tail) = nthash32_par_it::<false>(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
                 let parallel_iter = (0..L)
                     .flat_map(|l| par_head.iter().map(move |x| x[l]))
@@ -510,8 +440,8 @@ mod test {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.sub_slice(0, len);
                 let seq_rc = &seq_rc[seq_rc.len() - len..];
-                let scalar = nthash32c_scalar_it(seq, k).collect::<Vec<_>>();
-                let scalar_rc = nthash32c_scalar_it(seq_rc, k).collect::<Vec<_>>();
+                let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
+                let scalar_rc = nthash32_scalar_it::<true>(seq_rc, k).collect::<Vec<_>>();
                 let scalar_rc_rc = scalar_rc.iter().rev().copied().collect_vec();
                 assert_eq!(
                     scalar_rc_rc,
@@ -536,9 +466,9 @@ mod test {
                 let seq = seq.sub_slice(0, len);
                 let single = seq
                     .windows(k)
-                    .map(|seq| nthash32c_kmer(seq))
+                    .map(|seq| nthash32_kmer::<true>(seq))
                     .collect::<Vec<_>>();
-                let scalar = nthash32c_scalar_it(seq, k).collect::<Vec<_>>();
+                let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
                 assert_eq!(single, scalar, "k={}, len={}", k, len);
             }
         }
@@ -555,8 +485,8 @@ mod test {
         ] {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.sub_slice(0, len);
-                let scalar = nthash32c_scalar_it(seq, k).collect::<Vec<_>>();
-                let (par_head, tail) = nthash32c_par_it(seq, k, 1);
+                let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
+                let (par_head, tail) = nthash32_par_it::<true>(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
                 let parallel_iter = (0..L)
                     .flat_map(|l| par_head.iter().map(move |x| x[l]))

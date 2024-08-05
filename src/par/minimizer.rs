@@ -8,7 +8,7 @@ use itertools::Itertools;
 use crate::par::packed::S;
 
 use super::{
-    nthash::{nthash32f_par_it, nthash32f_scalar_it},
+    nthash::{nthash32_par_it, nthash32_scalar_it},
     packed::IntoBpIterator,
 };
 
@@ -168,23 +168,23 @@ fn sliding_min_par_it(
     it
 }
 
-pub fn minimizer_window(seq: impl IntoBpIterator, k: usize) -> usize {
-    nthash32f_scalar_it(seq, k)
+pub fn minimizer_window<const RC: bool>(seq: impl IntoBpIterator, k: usize) -> usize {
+    nthash32_scalar_it::<RC>(seq, k)
         .map(|x| x & 0xffff_0000)
         .position_min()
         .unwrap()
 }
 
-pub fn minimizer_scalar_it(
+pub fn minimizer_scalar_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
     w: usize,
 ) -> impl ExactSizeIterator<Item = u32> {
-    let it = nthash32f_scalar_it(seq, k);
+    let it = nthash32_scalar_it::<RC>(seq, k);
     sliding_min_scalar_it(it, w)
 }
 
-pub fn minimizer_par_it(
+pub fn minimizer_par_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
     w: usize,
@@ -192,7 +192,7 @@ pub fn minimizer_par_it(
     impl ExactSizeIterator<Item = S>,
     impl ExactSizeIterator<Item = u32>,
 ) {
-    let (par_head, tail) = nthash32f_par_it(seq, k, w);
+    let (par_head, tail) = nthash32_par_it::<RC>(seq, k, w);
     let par_head = sliding_min_par_it(par_head, w);
     let offset = 8 * par_head.size_hint().0 as u32;
     let tail = sliding_min_scalar_it(tail, w).map(move |pos| offset + pos);
@@ -222,9 +222,9 @@ mod test {
                     let single = seq[0..len]
                         .windows(w + k - 1)
                         .enumerate()
-                        .map(|(pos, seq)| (pos + minimizer_window(seq, k)) as u32)
+                        .map(|(pos, seq)| (pos + minimizer_window::<false>(seq, k)) as u32)
                         .collect::<Vec<_>>();
-                    let scalar = minimizer_scalar_it(seq, k, w).collect::<Vec<_>>();
+                    let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
                     assert_eq!(single, scalar, "k={k}, w={w}, len={len}");
                 }
             }
@@ -238,8 +238,8 @@ mod test {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128)) {
                     let seq = seq.sub_slice(0, len);
-                    let scalar = minimizer_scalar_it(seq, k, w).collect::<Vec<_>>();
-                    let (par_head, tail) = minimizer_par_it(seq, k, w);
+                    let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
+                    let (par_head, tail) = minimizer_par_it::<false>(seq, k, w);
                     let par_head = par_head.collect::<Vec<_>>();
                     let parallel_iter = (0..8)
                         .flat_map(|l| par_head.iter().map(move |x| x[l]))
@@ -262,8 +262,8 @@ mod test {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128)) {
                     let seq = seq.sub_slice(0, len);
-                    let scalar = minimizer_scalar_it(seq, k, w).collect::<Vec<_>>();
-                    let (par_head, tail) = minimizer_par_it(seq, k, w);
+                    let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
+                    let (par_head, tail) = minimizer_par_it::<false>(seq, k, w);
                     let par_head = par_head.collect::<Vec<_>>();
                     let parallel_iter = (0..8)
                         .flat_map(|l| par_head.iter().map(move |x| x[l]))
