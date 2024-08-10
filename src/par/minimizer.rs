@@ -184,6 +184,7 @@ pub fn minimizer_scalar_it<const RC: bool>(
     sliding_min_scalar_it(it, w)
 }
 
+// TODO: Take a hash function as argument.
 pub fn minimizer_par_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
@@ -256,7 +257,8 @@ mod test {
     fn parallel_iter_packed() {
         let seq = Packed {
             seq: &*PACKED_SEQ,
-            len_in_bp: 1024 * 1024,
+            offset: 0,
+            len: 1024 * 1024,
         };
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {

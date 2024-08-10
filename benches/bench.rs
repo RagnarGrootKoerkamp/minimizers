@@ -262,7 +262,7 @@ fn local_nthash(c: &mut Criterion) {
         b.iter(|| drop(black_box(hasher.hash_kmers(k, packed_text))));
     });
 
-    let packed_text = Packed { seq: packed_text, len_in_bp: packed_text.len() * 4 };
+    let packed_text = Packed { seq: packed_text, offset: 0, len: packed_text.len() * 4 };
     g.bench_with_input("nthash_par_it_sum", &packed_text, |b, packed_text| {
         b.iter(|| {
             nthash32_par_it::<false>(*packed_text, k, 1)
@@ -332,7 +332,7 @@ fn simd_minimizer(c: &mut Criterion) {
         });
     });
 
-    let packed_text = Packed { seq: packed_text, len_in_bp: packed_text.len() * 4 };
+    let packed_text = Packed { seq: packed_text, offset: 0, len: packed_text.len() * 4 };
     g.bench_function("minimizer_par_it_sum", |b| {
         b.iter(|| {
             minimizer_par_it::<false>(packed_text, k, w)

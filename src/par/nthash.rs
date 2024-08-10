@@ -33,7 +33,7 @@ const HASHES_C: [u32; 4] = [
 ];
 
 pub fn nthash32_kmer<const RC: bool>(seq: impl IntoBpIterator) -> u32 {
-    let k = seq.bp();
+    let k = seq.len();
     let mut hfw: u32 = 0;
     let mut hrc: u32 = 0;
     seq.iter_bp().for_each(|a| {
@@ -192,7 +192,7 @@ struct NtHash32ForwardIterator<const RC: bool, BI: IntoBpIterator> {
 impl<const RC: bool, BI: IntoBpIterator> NtHash32ForwardIterator<RC, BI> {
     fn new(seq: BI, k: usize) -> NtHash32ForwardIterator<RC, BI> {
         assert!(k > 0);
-        let len = seq.bp();
+        let len = seq.len();
         let chunk_size = 1 << 13;
         assert!(chunk_size % L == 0);
         let par_size = chunk_size / L;
@@ -241,7 +241,7 @@ impl<const RC: bool, BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<RC
                     buffer_chunk::<RC>(
                         self.seq.sub_slice(
                             offset,
-                            (self.chunk_size + self.k - 1).min(self.seq.bp() - offset),
+                            (self.chunk_size + self.k - 1).min(self.seq.len() - offset),
                         ),
                         self.k,
                         &mut self.cache,
@@ -286,7 +286,7 @@ impl<const RC: bool, BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<RC
         } else if self.c == self.num_chunks {
             self.max_i - self.i
         } else {
-            let total_kmers = self.seq.bp() - self.k + 1;
+            let total_kmers = self.seq.len() - self.k + 1;
             let processed_kmers = 1 + self.c * L * self.par_size + self.l * self.max_i + self.i;
             total_kmers - processed_kmers
         };
@@ -368,7 +368,8 @@ mod test {
     fn parallel_packed() {
         let seq = Packed {
             seq: &*PACKED_SEQ,
-            len_in_bp: 1024,
+            offset: 0,
+            len: 1024,
         };
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
@@ -407,7 +408,8 @@ mod test {
     fn parallel_iter_packed() {
         let seq = Packed {
             seq: &*PACKED_SEQ,
-            len_in_bp: 1024,
+            offset: 0,
+            len: 1024,
         };
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
@@ -478,7 +480,8 @@ mod test {
     fn parallel_iter_packed_canonical() {
         let seq = Packed {
             seq: &*PACKED_SEQ,
-            len_in_bp: 1024,
+            offset: 0,
+            len: 1024,
         };
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,

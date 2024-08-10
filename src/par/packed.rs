@@ -13,7 +13,11 @@ pub(crate) type S = Simd<u32, L>;
 pub trait IntoBpIterator: Copy {
     const BASES_PER_BYTE: usize;
 
-    fn bp(&self) -> usize;
+    fn len(&self) -> usize;
+
+    fn normalize(&mut self) {}
+
+    fn to_word(&self) -> usize;
 
     fn sub_slice(&self, idx: usize, len: usize) -> Self;
 
@@ -32,8 +36,14 @@ pub trait IntoBpIterator: Copy {
 impl<'s> IntoBpIterator for &'s [u8] {
     const BASES_PER_BYTE: usize = 1;
 
-    fn bp(&self) -> usize {
-        self.len()
+    fn len(&self) -> usize {
+        (self as &[u8]).len()
+    }
+
+    fn to_word(&self) -> usize {
+        assert!(self.len() <= usize::BITS as usize / 8);
+        let mask = usize::MAX >> (64 - 8 * self.len());
+        unsafe { *(self.as_ptr() as *const usize) & mask }
     }
 
     fn sub_slice(&self, idx: usize, len: usize) -> Self {
@@ -89,50 +99,80 @@ impl<'s> IntoBpIterator for &'s [u8] {
 
 #[derive(Copy, Clone)]
 pub struct Packed<'s> {
+    /// Packed data.
     pub seq: &'s [u8],
-    pub len_in_bp: usize,
+    /// Offset in bp from the start of the sequence.
+    pub offset: usize,
+    /// Length of the sequence in bp, starting at `offset` from the start.
+    pub len: usize,
 }
 
 impl<'s> IntoBpIterator for Packed<'s> {
     const BASES_PER_BYTE: usize = 4;
 
-    fn bp(&self) -> usize {
-        self.len_in_bp
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Shrink `seq` to only just cover the data.
+    fn normalize(&mut self) {
+        let start = self.offset / 4;
+        let end = (self.offset + self.len).div_ceil(4);
+        self.seq = &self.seq[start..end];
+        self.offset %= 4;
+    }
+
+    fn to_word(&self) -> usize {
+        assert!(self.len() <= usize::BITS as usize / 2 - 3);
+        let mask = usize::MAX >> (64 - 2 * self.len());
+        unsafe { (*(self.as_ptr() as *const usize) >> (2 * self.offset)) & mask }
     }
 
     fn sub_slice(&self, idx: usize, len: usize) -> Self {
-        assert!(idx + len <= self.len_in_bp);
-        assert!(idx % Self::BASES_PER_BYTE == 0);
-        let seq = &self.seq[idx / 4..];
-        Packed {
-            seq,
-            len_in_bp: len,
-        }
+        assert!(idx + len <= self.len);
+        let mut slice = Packed {
+            seq: self.seq,
+            offset: self.offset + idx,
+            len,
+        };
+        slice.normalize();
+        slice
     }
 
     fn as_ptr(&self) -> *const u8 {
         self.seq.as_ptr()
     }
 
-    fn iter_bp(self) -> impl ExactSizeIterator<Item = u8> {
-        assert!(self.len_in_bp <= self.seq.len() * 4);
+    fn iter_bp(mut self) -> impl ExactSizeIterator<Item = u8> {
+        assert!(self.len <= self.seq.len() * 4);
+
+        self.normalize();
 
         // read u64 at a time?
         let mut byte = 0;
-        (0..self.len_in_bp).map(move |i| {
+        let mut it = (0..self.len + self.offset).map(move |i| {
             if i % 4 == 0 {
                 byte = self.seq[i / 4];
             }
             // Shift byte instead of i?
             (byte >> (2 * (i % 4))) & 0b11
-        })
+        });
+        it.by_ref().take(self.offset).for_each(drop);
+        it
     }
 
-    fn par_iter_bp(self, k: usize) -> (impl ExactSizeIterator<Item = S>, Self) {
+    fn par_iter_bp(mut self, k: usize) -> (impl ExactSizeIterator<Item = S>, Self) {
         #[cfg(target_endian = "big")]
         assert!(false, "Big endian architectures are not yet supported.");
 
-        let num_kmers = self.len_in_bp.saturating_sub(k - 1);
+        self.normalize();
+        assert_eq!(
+            self.offset % 4,
+            0,
+            "Non-byte offsets are not yet supported."
+        );
+
+        let num_kmers = self.len.saturating_sub(k - 1);
         let n = (num_kmers / L).prev_multiple_of(&4);
         let bytes_per_chunk = n / 4;
 
@@ -171,7 +211,8 @@ impl<'s> IntoBpIterator for Packed<'s> {
             it,
             Packed {
                 seq: &self.seq[L * bytes_per_chunk..],
-                len_in_bp: self.len_in_bp - L * n,
+                offset: 0,
+                len: self.len - L * n,
             },
         )
     }
