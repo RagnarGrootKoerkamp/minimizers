@@ -36,28 +36,34 @@ pub trait IntoBpIterator: Copy {
 impl<'s> IntoBpIterator for &'s [u8] {
     const BASES_PER_BYTE: usize = 1;
 
+    #[inline(always)]
     fn len(&self) -> usize {
         (self as &[u8]).len()
     }
 
+    #[inline(always)]
     fn to_word(&self) -> usize {
         assert!(self.len() <= usize::BITS as usize / 8);
         let mask = usize::MAX >> (64 - 8 * self.len());
         unsafe { *(self.as_ptr() as *const usize) & mask }
     }
 
+    #[inline(always)]
     fn sub_slice(&self, idx: usize, len: usize) -> Self {
         &self[idx..idx + len]
     }
 
+    #[inline(always)]
     fn as_ptr(&self) -> *const u8 {
         (self as &[u8]).as_ptr()
     }
 
+    #[inline(always)]
     fn iter_bp(self) -> impl ExactSizeIterator<Item = u8> {
         self.iter().copied()
     }
 
+    #[inline(always)]
     fn par_iter_bp(self, k: usize) -> (impl ExactSizeIterator<Item = S>, Self) {
         let num_kmers = self.len().saturating_sub(k - 1);
         let n = num_kmers / L;
@@ -110,11 +116,13 @@ pub struct Packed<'s> {
 impl<'s> IntoBpIterator for Packed<'s> {
     const BASES_PER_BYTE: usize = 4;
 
+    #[inline(always)]
     fn len(&self) -> usize {
         self.len
     }
 
     /// Shrink `seq` to only just cover the data.
+    #[inline(always)]
     fn normalize(&mut self) {
         let start = self.offset / 4;
         let end = (self.offset + self.len).div_ceil(4);
@@ -122,12 +130,14 @@ impl<'s> IntoBpIterator for Packed<'s> {
         self.offset %= 4;
     }
 
+    #[inline(always)]
     fn to_word(&self) -> usize {
         assert!(self.len() <= usize::BITS as usize / 2 - 3);
         let mask = usize::MAX >> (64 - 2 * self.len());
         unsafe { (*(self.as_ptr() as *const usize) >> (2 * self.offset)) & mask }
     }
 
+    #[inline(always)]
     fn sub_slice(&self, idx: usize, len: usize) -> Self {
         assert!(idx + len <= self.len);
         let mut slice = Packed {
@@ -139,10 +149,12 @@ impl<'s> IntoBpIterator for Packed<'s> {
         slice
     }
 
+    #[inline(always)]
     fn as_ptr(&self) -> *const u8 {
         self.seq.as_ptr()
     }
 
+    #[inline(always)]
     fn iter_bp(mut self) -> impl ExactSizeIterator<Item = u8> {
         assert!(self.len <= self.seq.len() * 4);
 
@@ -161,6 +173,7 @@ impl<'s> IntoBpIterator for Packed<'s> {
         it
     }
 
+    #[inline(always)]
     fn par_iter_bp(mut self, k: usize) -> (impl ExactSizeIterator<Item = S>, Self) {
         #[cfg(target_endian = "big")]
         assert!(false, "Big endian architectures are not yet supported.");
