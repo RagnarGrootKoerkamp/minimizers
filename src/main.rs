@@ -3,6 +3,7 @@ use std::{
     io::Write,
     path::PathBuf,
     sync::{atomic::AtomicUsize, Mutex},
+    fs,
 };
 
 use clap::Parser;
@@ -139,7 +140,7 @@ impl MinimizerType {
                 collect_stats(w, text, ModSampling::new(k, w, *k0, o))
             }
             MinimizerType::LrMinimizer => collect_stats(w, text, ModSampling::lr_minimizer(k, w)),
-            MinimizerType::ModMinimizer => collect_stats(w, text, ModSampling::mod_minimizer(k, w)),
+            MinimizerType::ModMinimizer => collect_stats(w, text, ModSampling::mod_minimizer(k, w, sigma)),
             MinimizerType::RotMinimizer => collect_stats(w, text, RotMinimizer::new(k, w, o)),
             MinimizerType::AltRotMinimizer => collect_stats(w, text, AltRotMinimizer::new(k, w, o)),
             MinimizerType::DecyclingMinimizer => {
@@ -280,6 +281,11 @@ enum Command {
         stats: bool,
         #[clap(short, long)]
         small: bool,
+        #[clap(short, long)]
+        practical: bool,
+        /// Read sequence from file.
+        #[clap(short, long)]
+        input: Option<PathBuf>,
     },
 }
 
@@ -317,6 +323,8 @@ fn main() {
             output,
             stats,
             small,
+            practical,
+            input,
         } => {
             let mut base_types = vec![
                 MinimizerType::Minimizer,
@@ -349,6 +357,8 @@ fn main() {
                 &[1, 2, 3][..]
             } else if stats {
                 &[4, 8, 16, 32][..]
+            } else if practical {
+                &(6..64).collect::<Vec<usize>>()[..]
             } else {
                 &[
                     5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26,
@@ -360,6 +370,8 @@ fn main() {
                 &[2][..]
             } else if stats {
                 &[8, 16, 32, 64][..]
+            } else if practical {
+                &[2, 5, 10, 19, 50]
             } else {
                 &[8, 24][..]
             };
@@ -373,6 +385,11 @@ fn main() {
             let total = k_w_tp.len();
             let text = if small {
                 &de_bruijn_sequence(args.sigma, 8)
+            } else {
+                text
+            };
+            let text = if let Some(input) = input {
+                &fs::read(input).unwrap()
             } else {
                 text
             };
