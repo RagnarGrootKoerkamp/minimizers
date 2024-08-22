@@ -409,9 +409,9 @@ fn main() {
                         l,
                         tp,
                         density,
-                        positions,
-                        dists,
-                        transfer,
+                        positions: if stats { positions } else { vec![] },
+                        dists: if stats { dists } else { vec![] },
+                        transfer: if stats { transfer } else { vec![] },
                     }));
                 }
                 let done = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
