@@ -6,7 +6,7 @@ use std::{
     fs,
 };
 
-use rand::{Rng, SeedableRng};
+use rand_chacha::{ChaChaRng, rand_core::{RngCore, SeedableRng}};
 use clap::Parser;
 use itertools::Itertools;
 use minimizers::{de_bruijn_seq::de_bruijn_sequence, *};
@@ -16,9 +16,9 @@ use serde_derive::Serialize;
 
 /// Generate a random string.
 fn generate_random_string(n: usize, sigma: usize) -> Vec<u8> {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(213456);
+    let mut rng = ChaChaRng::seed_from_u64(213456);
     (0..n)
-        .map(|_| (rng.gen::<usize>() % sigma) as u8)
+        .map(|_| (((rng.next_u64() as usize) % sigma) as u8))
         .collect()
 }
 
