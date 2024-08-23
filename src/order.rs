@@ -39,7 +39,7 @@ impl<T: Order> DirectedOrder for T {
     }
 }
 
-/// A random order than hashes each kmer using `fxhash64`.
+/// A random order than hashes each kmer using `wyhash64`.
 #[derive(Clone, Copy)]
 pub struct RandomOrder;
 
