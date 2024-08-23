@@ -46,7 +46,7 @@ pub struct RandomOrder;
 impl Order for RandomOrder {
     #[inline(always)]
     fn key(&self, kmer: &[u8]) -> usize {
-        fxhash::hash64(kmer) as usize
+        wyhash::wyhash(kmer, 213456) as usize
     }
 }
 
