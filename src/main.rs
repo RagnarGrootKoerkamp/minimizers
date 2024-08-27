@@ -338,22 +338,22 @@ fn main() {
             input,
         } => {
             let mut base_types = vec![
-                MinimizerType::Minimizer,
-                MinimizerType::BdAnchor { r: 0 },
+                // MinimizerType::Minimizer,
+                // MinimizerType::BdAnchor { r: 0 },
                 MinimizerType::Miniception { k0: 0 },
                 // MinimizerType::MiniceptionNew { k0: 0 },
                 // MinimizerType::ModSampling { k0: 0 },
                 MinimizerType::LrMinimizer,
-                MinimizerType::ModMinimizer,
+                // MinimizerType::ModMinimizer,
                 // NOTE: These Rotmini/AltRotmini assume alphabet size 4.
                 // MinimizerType::RotMinimizer,
                 // MinimizerType::AltRotMinimizer,
-                MinimizerType::DecyclingMinimizer,
-                MinimizerType::DoubleDecyclingMinimizer,
-                MinimizerType::OpenSyncmerMinimizer {
-                    t: 0,
-                    tiebreak: false,
-                },
+                // MinimizerType::DecyclingMinimizer,
+                // MinimizerType::DoubleDecyclingMinimizer,
+                // MinimizerType::OpenSyncmerMinimizer {
+                //     t: 0,
+                //     tiebreak: false,
+                // },
                 MinimizerType::OpenClosedSyncmerMinimizer {
                     t: 0,
                     tiebreak: false,
@@ -365,22 +365,22 @@ fn main() {
             }
 
             let ks = if small {
-                &[1, 2, 3][..]
+                &[1, 2, 3]
             } else if stats {
-                &[4, 8, 16, 32][..]
+                &[4, 8, 16, 32]
             } else if practical {
-                &(6..64).collect::<Vec<usize>>()[..]
+                &(6..64).collect::<Vec<usize>>()
             } else {
                 &[
                     5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26,
-                    28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84,
-                    88, 92, 96, 100,
+                    28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 47, 48, 49, 50, 51, 52, 54, 56, 58, 60,
+                    62, 64, 66, 68, 70, 72, 74, 76, 78, 80,
                 ][..]
             };
             let ws = if small {
-                &[2][..]
+                &[2]
             } else if stats {
-                &[8, 16, 32, 64][..]
+                &[8, 16, 32, 64]
             } else if practical {
                 &[2, 5, 10, 12, 19, 50]
             } else {
