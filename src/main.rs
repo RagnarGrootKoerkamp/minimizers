@@ -1,9 +1,10 @@
 #![feature(type_alias_impl_trait)]
 use std::{
+    cmp::max,
+    fs,
     io::Write,
     path::PathBuf,
     sync::{atomic::AtomicUsize, Mutex},
-    fs,
 };
 
 use rand_chacha::{ChaChaRng, rand_core::{RngCore, SeedableRng}};
@@ -142,7 +143,9 @@ impl MinimizerType {
                 collect_stats(w, text, ModSampling::new(k, w, *k0, o))
             }
             MinimizerType::LrMinimizer => collect_stats(w, text, ModSampling::lr_minimizer(k, w)),
-            MinimizerType::ModMinimizer => collect_stats(w, text, ModSampling::mod_minimizer(k, w, sigma)),
+            MinimizerType::ModMinimizer => {
+                collect_stats(w, text, ModSampling::mod_minimizer(k, w, sigma))
+            }
             MinimizerType::RotMinimizer => collect_stats(w, text, RotMinimizer::new(k, w, o)),
             MinimizerType::AltRotMinimizer => collect_stats(w, text, AltRotMinimizer::new(k, w, o)),
             MinimizerType::DecyclingMinimizer => {
@@ -161,7 +164,7 @@ impl MinimizerType {
                 OpenSyncmer::new(k + t - 1, w, *t, *tiebreak, false),
             ),
             MinimizerType::OpenClosedSyncmerMinimizer { t, tiebreak } => {
-                collect_stats(w, text, OpenSyncmer::new(k + t - 1, w, *t, *tiebreak, true))
+                collect_stats(w, text, OpenSyncmer::new(k, w, *t, *tiebreak, true))
             }
             MinimizerType::FracMin { f } => collect_stats(w, text, FracMin::new(k, w, *f)),
         }
@@ -255,8 +258,9 @@ impl MinimizerType {
             }
             MinimizerType::OpenClosedSyncmerMinimizer { .. } => {
                 vec![MinimizerType::OpenClosedSyncmerMinimizer {
-                    t: 1,
-                    tiebreak: true,
+                    t: 4,
+                    // t: max(k as isize - 2 * w as isize, 4) as usize,
+                    tiebreak: false,
                 }]
             }
             MinimizerType::FracMin { .. } => (1..w).map(|f| MinimizerType::FracMin { f }).collect(),
