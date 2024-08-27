@@ -186,13 +186,15 @@ impl MinimizerType {
                     .collect()
             }
             MinimizerType::Miniception { .. } => {
-                let k0_min = (2 * k).saturating_sub(l + 1).max(1);
-                let k0_max = k;
-                if k0_min > k0_max {
-                    return vec![];
-                }
+                let k0 = max(k as isize - w as isize, 4) as usize;
+                return vec![MinimizerType::Miniception { k0 }];
+                // let k0_min = (2 * k).saturating_sub(l + 1).max(1);
+                // let k0_max = k;
+                // if k0_min > k0_max {
+                //     return vec![];
+                // }
 
-                return vec![MinimizerType::Miniception { k0: k0_min }];
+                // return vec![MinimizerType::Miniception { k0: k0_min }];
                 // FIXME
                 // let start = 1.max(k0_min);
                 // let end = 10.max(k0_min + 2).min(k0_max);
@@ -201,12 +203,15 @@ impl MinimizerType {
                 //     .collect()
             }
             MinimizerType::MiniceptionNew { .. } => {
-                let k0_min = (2 * k).saturating_sub(l + 1).max(1);
-                let k0_max = k;
-                if k0_min > k0_max {
-                    return vec![];
-                }
-                return vec![MinimizerType::MiniceptionNew { k0: k0_min }];
+                let k0 = max(k as isize - w as isize, 4) as usize;
+                return vec![MinimizerType::MiniceptionNew { k0 }];
+
+                // let k0_min = (2 * k).saturating_sub(l + 1).max(1);
+                // let k0_max = k;
+                // if k0_min > k0_max {
+                //     return vec![];
+                // }
+                // return vec![MinimizerType::MiniceptionNew { k0: k0_min }];
 
                 // FIXME
                 // let start = 1.max(k0_min);
@@ -258,8 +263,8 @@ impl MinimizerType {
             }
             MinimizerType::OpenClosedSyncmerMinimizer { .. } => {
                 vec![MinimizerType::OpenClosedSyncmerMinimizer {
-                    t: 4,
-                    // t: max(k as isize - 2 * w as isize, 4) as usize,
+                    // t: 4,
+                    t: max(k as isize - 2 * w as isize, 4) as usize,
                     tiebreak: false,
                 }]
             }
