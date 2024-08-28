@@ -434,8 +434,8 @@ impl ModSampling<RandomOrder> {
             2 => 5,
             4 => 3,
             _ => 1,
-        };
-        assert!(k > r);
+        }
+        .min(k);
         let t = (k - r) % w + r;
         Self::new(k, w, t, RandomOrder)
     }

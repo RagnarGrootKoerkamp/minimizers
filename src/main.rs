@@ -7,11 +7,14 @@ use std::{
     sync::{atomic::AtomicUsize, Mutex},
 };
 
-use rand_chacha::{ChaChaRng, rand_core::{RngCore, SeedableRng}};
 use clap::Parser;
 use itertools::Itertools;
 use minimizers::{de_bruijn_seq::de_bruijn_sequence, *};
 use order::RandomOrder;
+use rand_chacha::{
+    rand_core::{RngCore, SeedableRng},
+    ChaChaRng,
+};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_derive::Serialize;
 
