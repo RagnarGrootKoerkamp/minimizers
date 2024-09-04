@@ -51,8 +51,7 @@ pub fn cyclic_exact_density_string(
     sigma: usize,
     forward: bool,
 ) -> (Vec<u8>, usize) {
-    // FIXME +1?
-    let order = if forward { w + k } else { 2 * w + k - 2 } + 1;
+    let order = if forward { w + k } else { 2 * w + k - 2 };
     let s = de_bruijn_sequence(sigma, order);
     (s, sigma.pow(order as u32))
 }
