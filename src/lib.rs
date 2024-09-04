@@ -20,9 +20,14 @@ use std::{cmp::Reverse, f64::consts::PI};
 pub trait MinimizerIt = Iterator<Item = usize>;
 
 pub trait SamplingScheme {
-    fn l(&self) -> usize {
-        unimplemented!("l() is needed for stream_naive() and cyclic_text_density().");
+    fn w(&self) -> usize {
+        panic!();
     }
+    fn k(&self) -> usize {
+        panic!();
+    }
+    fn l(&self) -> usize;
+
     /// Sample a single lmer.
     fn sample(&self, _lmer: &[u8]) -> usize {
         unimplemented!("Use stream() instead.");
@@ -46,6 +51,10 @@ pub trait SamplingScheme {
         poss.sort();
         poss.dedup();
         poss.len()
+    }
+
+    fn is_forward(&self, text: &[u8]) -> bool {
+        self.stream(text).tuple_windows().all(|(a, b)| a <= b)
     }
 
     /// Sample all lmers in a text.
@@ -77,6 +86,12 @@ impl<O: DirectedOrder> Minimizer<O> {
 }
 
 impl<O: DirectedOrder> SamplingScheme for Minimizer<O> {
+    fn w(&self) -> usize {
+        self.w
+    }
+    fn k(&self) -> usize {
+        self.k
+    }
     fn l(&self) -> usize {
         self.l
     }
@@ -121,6 +136,12 @@ pub struct ExplicitLocalScheme {
 }
 
 impl SamplingScheme for ExplicitLocalScheme {
+    fn w(&self) -> usize {
+        self.w
+    }
+    fn k(&self) -> usize {
+        self.k
+    }
     fn l(&self) -> usize {
         self.k + self.w - 1
     }
