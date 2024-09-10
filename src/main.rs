@@ -1,6 +1,5 @@
 #![feature(type_alias_impl_trait)]
 use std::{
-    cmp::max,
     fs,
     io::Write,
     path::PathBuf,
@@ -10,104 +9,8 @@ use std::{
 use clap::Parser;
 use itertools::Itertools;
 use minimizers::{de_bruijn_seq::de_bruijn_sequence, *};
-use order::RandomOrder;
-use rand_chacha::{
-    rand_core::{RngCore, SeedableRng},
-    ChaChaRng,
-};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_derive::Serialize;
-
-/// Generate a random string.
-fn generate_random_string(n: usize, sigma: usize) -> Vec<u8> {
-    let mut rng = ChaChaRng::seed_from_u64(213456);
-    (0..n)
-        .map(|_| (((rng.next_u64() as usize) % sigma) as u8))
-        .collect()
-}
-
-/// Returns:
-/// - density
-/// - position distribution
-/// - distance distribution
-/// - transfer distribution
-fn collect_stats(
-    w: usize,
-    text: &[u8],
-    scheme: impl SamplingScheme,
-) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
-    let it = scheme.stream(text);
-
-    let mut n = 0;
-    let mut anchors = 0;
-    let mut ps = vec![0; w];
-    let mut ds = vec![0; 2 * w + 1];
-    let mut transfer = vec![vec![0; w]; w];
-    let mut last = 0;
-    for (i, idx) in it.enumerate() {
-        assert!(
-            i <= idx && idx < i + w,
-            "Sampled index not in range: {i}<={idx}<{}",
-            i + w
-        );
-        n += 1;
-        ps[idx - i] += 1;
-        transfer[last - (i - 1)][idx - i] += 1;
-        if idx != last {
-            anchors += 1;
-            ds[w + idx - last] += 1;
-            last = idx;
-        }
-    }
-    let density = anchors as f64 / n as f64;
-    let ps = ps.into_iter().map(|c| (c * w) as f64 / n as f64).collect();
-    let ds = ds
-        .into_iter()
-        .map(|d| (d * w) as f64 / anchors as f64)
-        .collect();
-    let transfer = transfer
-        .into_iter()
-        .map(|row| row.into_iter().map(|c| c as f64 / n as f64).collect())
-        .collect();
-    (density, ps, ds, transfer)
-}
-
-#[derive(Clone, Copy, clap::Subcommand, Debug, Serialize, Default)]
-#[serde(tag = "minimizer_type")]
-enum MinimizerType {
-    #[default]
-    Minimizer,
-    BdAnchor {
-        r: usize,
-    },
-    Miniception {
-        k0: usize,
-    },
-    MiniceptionNew {
-        k0: usize,
-    },
-    ModSampling {
-        k0: usize,
-    },
-    LrMinimizer,
-    ModMinimizer,
-    RotMinimizer,
-    AltRotMinimizer,
-    DecyclingMinimizer,
-    DoubleDecyclingMinimizer,
-    Bruteforce,
-    OpenSyncmerMinimizer {
-        t: usize,
-        tiebreak: bool,
-    },
-    OpenClosedSyncmerMinimizer {
-        t: usize,
-        tiebreak: bool,
-    },
-    FracMin {
-        f: usize,
-    },
-}
 
 #[derive(Clone, Debug, Serialize, Default)]
 struct Result {
@@ -120,160 +23,6 @@ struct Result {
     positions: Vec<f64>,
     dists: Vec<f64>,
     transfer: Vec<Vec<f64>>,
-}
-
-/// TODO: Analyze non-forward schemes.
-impl MinimizerType {
-    #[inline(never)]
-    fn stats(
-        &self,
-        text: &[u8],
-        w: usize,
-        k: usize,
-        sigma: usize,
-    ) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
-        let o = RandomOrder;
-        match self {
-            MinimizerType::Minimizer => collect_stats(w, text, Minimizer::new(k, w, o)),
-            MinimizerType::BdAnchor { r } => collect_stats(w, text, BdAnchor::new(w + *r, *r)),
-            MinimizerType::Miniception { k0 } => {
-                collect_stats(w, text, Miniception::new(w, k, *k0, o))
-            }
-            MinimizerType::MiniceptionNew { k0 } => {
-                collect_stats(w, text, MiniceptionNew::new(w, k, *k0, o))
-            }
-            MinimizerType::ModSampling { k0 } => {
-                collect_stats(w, text, ModSampling::new(k, w, *k0, o))
-            }
-            MinimizerType::LrMinimizer => collect_stats(w, text, ModSampling::lr_minimizer(k, w)),
-            MinimizerType::ModMinimizer => {
-                collect_stats(w, text, ModSampling::mod_minimizer(k, w, sigma))
-            }
-            MinimizerType::RotMinimizer => collect_stats(w, text, RotMinimizer::new(k, w, o)),
-            MinimizerType::AltRotMinimizer => collect_stats(w, text, AltRotMinimizer::new(k, w, o)),
-            MinimizerType::DecyclingMinimizer => {
-                collect_stats(w, text, Decycling::new(k, w, o, false))
-            }
-            MinimizerType::DoubleDecyclingMinimizer => {
-                collect_stats(w, text, Decycling::new(k, w, o, true))
-            }
-            MinimizerType::Bruteforce => {
-                let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
-                collect_stats(w, text, m)
-            }
-            MinimizerType::OpenSyncmerMinimizer { t, tiebreak } => collect_stats(
-                w,
-                text,
-                OpenSyncmer::new(k + t - 1, w, *t, *tiebreak, false),
-            ),
-            MinimizerType::OpenClosedSyncmerMinimizer { t, tiebreak } => {
-                collect_stats(w, text, OpenSyncmer::new(k, w, *t, *tiebreak, true))
-            }
-            MinimizerType::FracMin { f } => collect_stats(w, text, FracMin::new(k, w, *f)),
-        }
-    }
-
-    fn try_params(&self, w: usize, k: usize) -> Vec<Self> {
-        let l = w + k - 1;
-        match self {
-            MinimizerType::Minimizer
-            | MinimizerType::DecyclingMinimizer
-            | MinimizerType::DoubleDecyclingMinimizer
-            | MinimizerType::Bruteforce => {
-                vec![*self]
-            }
-            MinimizerType::BdAnchor { .. } => {
-                let r_max = k;
-                (0.min(r_max)..=10.min(r_max))
-                    .map(|r| MinimizerType::BdAnchor { r })
-                    .collect()
-            }
-            MinimizerType::Miniception { .. } => {
-                let k0 = max(k as isize - w as isize, 4) as usize;
-                return vec![MinimizerType::Miniception { k0 }];
-                // let k0_min = (2 * k).saturating_sub(l + 1).max(1);
-                // let k0_max = k;
-                // if k0_min > k0_max {
-                //     return vec![];
-                // }
-
-                // return vec![MinimizerType::Miniception { k0: k0_min }];
-                // FIXME
-                // let start = 1.max(k0_min);
-                // let end = 10.max(k0_min + 2).min(k0_max);
-                // (start..=end)
-                //     .map(|k0| MinimizerType::Miniception { k0 })
-                //     .collect()
-            }
-            MinimizerType::MiniceptionNew { .. } => {
-                let k0 = max(k as isize - w as isize, 4) as usize;
-                return vec![MinimizerType::MiniceptionNew { k0 }];
-
-                // let k0_min = (2 * k).saturating_sub(l + 1).max(1);
-                // let k0_max = k;
-                // if k0_min > k0_max {
-                //     return vec![];
-                // }
-                // return vec![MinimizerType::MiniceptionNew { k0: k0_min }];
-
-                // FIXME
-                // let start = 1.max(k0_min);
-                // let end = 10.max(k0_min + 2).min(k0_max);
-                // (start..=end)
-                //     .map(|k0| MinimizerType::MiniceptionNew { k0 })
-                //     .collect()
-            }
-            MinimizerType::ModSampling { .. } => {
-                let k0_min = 1;
-                let k0_max = l;
-                (k0_min..=k0_max)
-                    .map(|k0| MinimizerType::ModSampling { k0 })
-                    .collect()
-            }
-            MinimizerType::LrMinimizer => {
-                if k > w + 4 {
-                    vec![*self]
-                } else {
-                    vec![]
-                }
-            }
-            MinimizerType::ModMinimizer => {
-                if k > 1 {
-                    vec![*self]
-                } else {
-                    vec![]
-                }
-            }
-            MinimizerType::RotMinimizer => {
-                if k % w == 0 {
-                    vec![*self]
-                } else {
-                    vec![]
-                }
-            }
-            MinimizerType::AltRotMinimizer => {
-                if k > w {
-                    vec![*self]
-                } else {
-                    vec![]
-                }
-            }
-            MinimizerType::OpenSyncmerMinimizer { .. } => {
-                vec![MinimizerType::OpenSyncmerMinimizer {
-                    t: 1,
-                    tiebreak: true,
-                }]
-            }
-            MinimizerType::OpenClosedSyncmerMinimizer { .. } => {
-                vec![MinimizerType::OpenClosedSyncmerMinimizer {
-                    // t: 4,
-                    t: max(k as isize - 2 * w as isize, 4) as usize,
-                    tiebreak: false,
-                }]
-            }
-            MinimizerType::FracMin { .. } => (1..w).map(|f| MinimizerType::FracMin { f }).collect(),
-        }
-    }
 }
 
 #[derive(clap::Subcommand)]
@@ -355,12 +104,8 @@ fn main() {
                 // MinimizerType::DoubleDecyclingMinimizer,
                 // MinimizerType::OpenSyncmerMinimizer {
                 //     t: 0,
-                //     tiebreak: false,
                 // },
-                MinimizerType::OpenClosedSyncmerMinimizer {
-                    t: 0,
-                    tiebreak: false,
-                },
+                MinimizerType::OpenClosedSyncmerMinimizer { t: 0 },
                 // MinimizerType::FracMin { f: 0 },
             ];
             if small {
@@ -452,8 +197,9 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-
     use super::*;
+    use order::RandomOrder;
+
     #[test]
     fn minimizers() {
         let text = generate_random_string(1000, 4);
