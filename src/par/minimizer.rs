@@ -1,16 +1,10 @@
-use std::{
-    array::from_fn,
-    simd::{cmp::SimdOrd, Simd},
-};
-
-use itertools::Itertools;
-
-use crate::par::packed::S;
-
 use super::{
     nthash::{nthash32_par_it, nthash32_scalar_it},
     packed::IntoBpIterator,
 };
+use core::array::from_fn;
+use itertools::Itertools;
+use wide::u32x8 as S;
 
 /// A custom RingBuf implementation that has a fixed size `w` and wraps around.
 struct RingBuf<V> {
@@ -116,9 +110,9 @@ fn sliding_min_scalar_it(
 
 #[inline(always)]
 fn sliding_min_par_it(
-    it: impl ExactSizeIterator<Item = Simd<u32, 8>>,
+    it: impl ExactSizeIterator<Item = S>,
     w: usize,
-) -> impl ExactSizeIterator<Item = Simd<u32, 8>> {
+) -> impl ExactSizeIterator<Item = S> {
     assert!(w > 0);
     assert!(w < (1 << 15), "This method is not tested for large w.");
     assert!(it.size_hint().0 * 8 < (1 << 32));
@@ -149,18 +143,18 @@ fn sliding_min_par_it(
             let elem = (val & val_mask) | pos;
             pos += S::splat(1);
             ring_buf.push(elem);
-            prefix_min = prefix_min.simd_min(elem);
+            prefix_min = prefix_min.min(elem);
             // After a chunk has been filled, compute suffix minima.
             if ring_buf.idx() == 0 {
                 let mut suffix_min = ring_buf[w - 1];
                 for i in (0..w - 1).rev() {
-                    suffix_min = suffix_min.simd_min(ring_buf[i]);
+                    suffix_min = suffix_min.min(ring_buf[i]);
                     ring_buf[i] = suffix_min;
                 }
                 prefix_min = elem; // slightly faster than assigning S::splat(u32::MAX)
             }
             let suffix_min = unsafe { *ring_buf.get_unchecked(ring_buf.idx()) };
-            (prefix_min.simd_min(suffix_min) & pos_mask) + pos_offset
+            (prefix_min.min(suffix_min) & pos_mask) + pos_offset
         },
     );
     // This optimizes better than it.skip(w-1).
@@ -243,7 +237,7 @@ mod test {
                     let (par_head, tail) = minimizer_par_it::<false>(seq, k, w);
                     let par_head = par_head.collect::<Vec<_>>();
                     let parallel_iter = (0..8)
-                        .flat_map(|l| par_head.iter().map(move |x| x[l]))
+                        .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
                         .chain(tail)
                         .collect::<Vec<_>>();
 
@@ -268,7 +262,7 @@ mod test {
                     let (par_head, tail) = minimizer_par_it::<false>(seq, k, w);
                     let par_head = par_head.collect::<Vec<_>>();
                     let parallel_iter = (0..8)
-                        .flat_map(|l| par_head.iter().map(move |x| x[l]))
+                        .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
                         .chain(tail)
                         .collect::<Vec<_>>();
                     assert_eq!(scalar, parallel_iter, "k={k}, w={w}, len={len}");

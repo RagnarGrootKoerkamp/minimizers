@@ -3,16 +3,16 @@
 //! - A 2-bit packed DNA sequence, only ACGT.
 //! - It's length in bp.
 //! - The k-mer length k.
+//!
 //! Output:
 //! - An iterator over all 32-hashes of all k-mers in the sequence.
-//!
-//! All functions assume that AVX2 is available.
 
 // TODO: Write about 2bit encoded packed represenatation.
 
-use super::packed::{IntoBpIterator, S};
-use crate::par::packed::L;
-use std::arch::x86_64::_mm256_permutevar_ps;
+use super::intrinsics::lookup::lookup;
+use super::packed::IntoBpIterator;
+use super::packed::L;
+use wide::u32x8 as S;
 
 // TODO: Update to guarantee unique hash values for k<=16?
 const HASHES_F: [u32; 4] = [
@@ -77,8 +77,6 @@ pub fn nthash32_scalar_it<const RC: bool>(
 // Then return the hashes of each of them, and the remaining few using the second iterator.
 // The tail end has up to 31*8 = 248 elements.
 // TODO: SMALL_K + reusing gathers?
-// TODO: ARM variant
-#[cfg(target_feature = "avx2")]
 pub fn nthash32_par_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
@@ -104,55 +102,34 @@ pub fn nthash32_par_it<const RC: bool>(
         .map(|c| HASHES_C[c as usize].rotate_left(k as u32 - 1))
         .into();
 
-    #[cfg(target_feature = "avx2")]
-    {
-        let table_lookup = |table: S, bps: S| -> S {
-            use std::mem::transmute;
-            unsafe { transmute(_mm256_permutevar_ps(transmute(table), transmute(bps))) }
-        };
+    let mut h_fw = S::splat(0);
+    let mut h_rc = S::splat(0);
+    let (mut add, tail) = seq.par_iter_bp(k + w - 1);
+    let (remove, _tail) = seq.par_iter_bp(k + w - 1);
 
-        let mut h_fw = S::splat(0);
-        let mut h_rc = S::splat(0);
-        let (mut add, tail) = seq.par_iter_bp(k + w - 1);
-        let (remove, _tail) = seq.par_iter_bp(k + w - 1);
+    add.by_ref().take(k - 1).for_each(|a| {
+        h_fw = ((h_fw << 1) | (h_fw >> 31)) ^ lookup(table_fw, a);
+        if RC {
+            h_rc = ((h_rc >> 1) | (h_rc << 31)) ^ lookup(table_rc_rot, a);
+        }
+    });
 
-        add.by_ref().take(k - 1).for_each(|a| {
-            h_fw = ((h_fw << 1) | (h_fw >> 31)) ^ table_lookup(table_fw, a);
-            if RC {
-                h_rc = ((h_rc >> 1) | (h_rc << 31)) ^ table_lookup(table_rc_rot, a);
-            }
-        });
+    let it = add.zip(remove).map(move |(a, r)| {
+        let hfw_out = ((h_fw << 1) | (h_fw >> 31)) ^ lookup(table_fw, a);
+        h_fw = hfw_out ^ lookup(table_fw_rot, r);
+        if RC {
+            let hrc_out = ((h_rc >> 1) | (h_rc << 31)) ^ lookup(table_rc_rot, a);
+            h_rc = hrc_out ^ lookup(table_rc, r);
+            // Wrapping SIMD add
+            hfw_out + hrc_out
+        } else {
+            hfw_out
+        }
+    });
 
-        let it = add.zip(remove).map(move |(a, r)| {
-            let hfw_out = ((h_fw << 1) | (h_fw >> 31)) ^ table_lookup(table_fw, a);
-            h_fw = hfw_out ^ table_lookup(table_fw_rot, r);
-            if RC {
-                let hrc_out = ((h_rc >> 1) | (h_rc << 31)) ^ table_lookup(table_rc_rot, a);
-                h_rc = hrc_out ^ table_lookup(table_rc, r);
-                // Wrapping SIMD add
-                hfw_out + hrc_out
-            } else {
-                hfw_out
-            }
-        });
+    let tail = nthash32_scalar_it::<RC>(tail, k);
 
-        let tail = nthash32_scalar_it::<RC>(tail, k);
-
-        (it, tail)
-    }
-
-    #[cfg(not(target_feature = "avx2"))]
-    {
-        static WARNED: LazyCell<()> = LazyCell::new(|| {
-            eprintln!("nthash32f_par_it: AVX2 not available, falling back to scalar.");
-        });
-
-        *WARNED;
-
-        let tail = seq.iter_bp(k + w - 1);
-        let tail = nthash32c_scalar_it(tail, k);
-        (empty(), tail)
-    }
+    (it, tail)
 }
 
 // This splits the input in ~2^15bp chunks, and computes the hashes of
@@ -265,7 +242,7 @@ impl<const RC: bool, BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<RC
                     assert!(self.tail_cache.len() <= self.par_size);
                     self.cache.resize(self.max_i, S::splat(0));
                     for i in 0..self.max_i {
-                        self.cache[i][0] = self.tail_cache[i];
+                        self.cache[i].as_array_mut()[0] = self.tail_cache[i];
                     }
                     if self.max_i == 0 {
                         self.c += 1;
@@ -277,7 +254,7 @@ impl<const RC: bool, BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<RC
             }
         }
 
-        Some(self.cache[self.i][self.l])
+        Some(self.cache[self.i].as_array_ref()[self.l])
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -395,7 +372,7 @@ mod test {
                 let (par_head, tail) = nthash32_par_it::<false>(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
                 let parallel_iter = (0..L)
-                    .flat_map(|l| par_head.iter().map(move |x| x[l]))
+                    .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
                     .chain(tail)
                     .collect::<Vec<_>>();
 
@@ -420,7 +397,7 @@ mod test {
                 let (par_head, tail) = nthash32_par_it::<false>(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
                 let parallel_iter = (0..L)
-                    .flat_map(|l| par_head.iter().map(move |x| x[l]))
+                    .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
                     .chain(tail)
                     .collect::<Vec<_>>();
                 assert_eq!(scalar, parallel_iter, "k={}, len={}", k, len);
@@ -492,7 +469,7 @@ mod test {
                 let (par_head, tail) = nthash32_par_it::<true>(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
                 let parallel_iter = (0..L)
-                    .flat_map(|l| par_head.iter().map(move |x| x[l]))
+                    .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
                     .chain(tail)
                     .collect::<Vec<_>>();
                 assert_eq!(scalar, parallel_iter, "k={}, len={}", k, len);
