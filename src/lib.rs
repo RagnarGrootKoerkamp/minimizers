@@ -1,4 +1,4 @@
-#![feature(type_alias_impl_trait, iter_repeat_n, trait_alias, portable_simd)]
+#![feature(type_alias_impl_trait, trait_alias)]
 
 pub mod bruteforce;
 pub mod de_bruijn_seq;
@@ -19,7 +19,7 @@ use rand_chacha::{
 };
 use serde_derive::{Deserialize, Serialize};
 use std::{
-    cmp::{max, min, Reverse},
+    cmp::{max, Reverse},
     f64::consts::PI,
 };
 
@@ -1305,4 +1305,3 @@ impl<O: Order, OT: Order> SamplingScheme for OcModMinimizer<O, OT> {
         })
     }
 }
-
