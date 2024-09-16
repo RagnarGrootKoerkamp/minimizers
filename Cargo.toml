@@ -35,6 +35,7 @@ color-backtrace = "0.6"
 ctor = "0.2"
 nthash = "0.5.1"
 pyo3 = { version = "0.22.2", features = ["extension-module"] }
+wide = "0.7"
 
 [[example]]
 name = "lp"
