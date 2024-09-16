@@ -86,6 +86,8 @@ unsafe fn deinterleave_fallback(a: u32x8, b: u32x8) -> (u32x8, u32x8) {
     )
 }
 
+/// Given two SIMD vectors `a` and `b`, return one vector with elements at even
+/// positions in `a` and `b` and one vector with elements at odd positions.
 #[inline(always)]
 pub fn deinterleave(a: u32x8, b: u32x8) -> (u32x8, u32x8) {
     #[cfg(all(

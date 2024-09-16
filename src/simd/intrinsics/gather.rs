@@ -24,6 +24,7 @@ unsafe fn gather_fallback(ptr: *const u8, offsets: u64x4) -> u64x4 {
     u64x4::new(source.to_array().map(|p| *(p as *const u64)))
 }
 
+/// Given a base address and 4 offsets in bytes, read the 4 u64 values starting at the given positions.
 #[inline(always)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn gather(ptr: *const u8, offsets: u64x4) -> u64x4 {

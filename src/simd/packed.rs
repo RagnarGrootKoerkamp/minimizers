@@ -1,4 +1,4 @@
-use super::intrinsics::{deinterleave::deinterleave, gather::gather};
+use super::intrinsics;
 use core::{array::from_fn, mem::transmute};
 use num::Integer;
 use wide::u64x4;
@@ -77,10 +77,10 @@ impl<'s> IntoBpIterator for &'s [u8] {
                     // Read a u64 containing the next 8 characters.
                     let idx_0_4 = offsets_lanes_0_4 + u64x4::splat(i as u64);
                     let idx_4_8 = offsets_lanes_4_8 + u64x4::splat(i as u64);
-                    let u64_0_4: S = unsafe { transmute(gather(base_ptr, idx_0_4)) };
-                    let u64_4_8: S = unsafe { transmute(gather(base_ptr, idx_4_8)) };
+                    let u64_0_4: S = unsafe { transmute(intrinsics::gather(base_ptr, idx_0_4)) };
+                    let u64_4_8: S = unsafe { transmute(intrinsics::gather(base_ptr, idx_4_8)) };
                     // Split into two vecs containing a u32 of 4 characters each.
-                    (upcoming_1, upcoming_2) = deinterleave(u64_0_4, u64_4_8);
+                    (upcoming_1, upcoming_2) = intrinsics::deinterleave(u64_0_4, u64_4_8);
                 } else {
                     // Move on to the next u32 containing 4 buffered characters.
                     upcoming_1 = upcoming_2;
@@ -195,10 +195,10 @@ impl<'s> IntoBpIterator for Packed<'s> {
                     // Read a u64 containing the next 8 characters.
                     let idx_0_4 = offsets_lanes_0_4 + u64x4::splat((i / 4) as u64);
                     let idx_4_8 = offsets_lanes_4_8 + u64x4::splat((i / 4) as u64);
-                    let u64_0_4: S = unsafe { transmute(gather(base_ptr, idx_0_4)) };
-                    let u64_4_8: S = unsafe { transmute(gather(base_ptr, idx_4_8)) };
+                    let u64_0_4: S = unsafe { transmute(intrinsics::gather(base_ptr, idx_0_4)) };
+                    let u64_4_8: S = unsafe { transmute(intrinsics::gather(base_ptr, idx_4_8)) };
                     // Split into two vecs containing a u32 of 4 characters each.
-                    (upcoming_1, upcoming_2) = deinterleave(u64_0_4, u64_4_8);
+                    (upcoming_1, upcoming_2) = intrinsics::deinterleave(u64_0_4, u64_4_8);
                 } else {
                     // Move on to the next u32 containing 4 buffered characters.
                     upcoming_1 = upcoming_2;
