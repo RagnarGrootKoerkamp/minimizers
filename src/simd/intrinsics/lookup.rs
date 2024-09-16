@@ -18,7 +18,6 @@ unsafe fn lookup_avx(t: u32x8, idx: u32x8) -> u32x8 {
 #[inline(always)]
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 unsafe fn lookup_neon(t: u32x8, idx: u32x8) -> u32x8 {
-    #[cfg(target_arch = "aarch64")]
     use core::arch::aarch64::{uint8x16_t, vqtbl1q_u8};
     use core::mem::transmute;
 
@@ -38,13 +37,15 @@ unsafe fn lookup_neon(t: u32x8, idx: u32x8) -> u32x8 {
 
 #[inline(always)]
 #[deprecated(
-    note = "This function does not use SIMD, make sure you are compiling using `-C target-cpu=native`."
+    note = "This function does not use SIMD, make sure you are compiling using `-C target-cpu=native` to get the expected NtHash and minimizers performance."
 )]
 unsafe fn lookup_fallback(t: u32x8, idx: u32x8) -> u32x8 {
     let t = t.as_array_ref();
     u32x8::new(idx.to_array().map(|i| *t.get_unchecked(i as usize)))
 }
 
+/// Given a 'table' `t` consisting of 8 values, and an index `idx` consisting of 8 indices from 0 to 4,
+/// look up the first four indices in the first half of `t`, and the second four indices in the second half of `t`.
 #[inline(always)]
 pub fn lookup(t: u32x8, idx: u32x8) -> u32x8 {
     #[cfg(all(
