@@ -4,8 +4,8 @@ pub mod ilp_scheme;
 pub mod local_scheme;
 pub mod monotone_queue;
 pub mod order;
-pub mod par;
 mod py;
+pub mod simd;
 
 use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;

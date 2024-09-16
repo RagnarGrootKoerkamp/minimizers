@@ -297,7 +297,7 @@ fn buffer_chunk<const RC: bool>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::par::packed::Packed;
+    use crate::simd::packed::Packed;
     use itertools::Itertools;
     use rand::random;
     use std::{cell::LazyCell, iter::once};
