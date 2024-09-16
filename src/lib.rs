@@ -7,6 +7,7 @@ pub mod local_scheme;
 pub mod monotone_queue;
 pub mod order;
 pub mod par;
+mod py;
 
 use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;

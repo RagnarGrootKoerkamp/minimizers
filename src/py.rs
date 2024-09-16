@@ -18,30 +18,39 @@ fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
 
 #[pyfunction]
 #[pyo3(signature = (tp, text, w, k, sigma, **params))]
-fn density(
+fn stats(
     tp: &str,
     text: Vec<u8>,
     w: usize,
     k: usize,
     sigma: usize,
     params: Option<&Bound<'_, PyDict>>,
-) -> PyResult<f64> {
+) -> PyResult<(f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>)> {
     let scheme: super::MinimizerType = match tp {
-        "Minimizer"
-        | "LrMinimizer"
-        | "ModMinimizer"
-        | "RotMinimizer"
-        | "AltRotMinimizer"
-        | "DecyclingMinimizer"
-        | "DoubleDecyclingMinimizer"
+        "LrMinimizer" | "RotMinimizer" | "AltRotMinimizer" | "DecyclingMinimizer"
         | "Bruteforce" => {
             serde_json::from_str(&format!("{{\"minimizer_type\": \"{tp}\"}}")).unwrap()
         }
+        "Minimizer" => super::MinimizerType::Minimizer {
+            ao: get(params, "ao").map_or(false, |x| x == 1),
+        },
+        "DoubleDecyclingMinimizer" => super::MinimizerType::DoubleDecyclingMinimizer {
+            ao: get(params, "ao").map_or(false, |x| x == 1),
+        },
+        "ModMinimizer" => super::MinimizerType::ModMinimizer {
+            r: get(params, "r")?,
+            aot: get(params, "aot").map_or(false, |x| x == 1),
+        },
         "BdAnchor" => super::MinimizerType::BdAnchor {
             r: get(params, "r")?,
         },
+        "SusAnchor" => super::MinimizerType::SusAnchor {
+            ao: get(params, "ao").map_or(false, |x| x == 1),
+        },
         "Miniception" => super::MinimizerType::Miniception {
             k0: get(params, "k0")?,
+            ao: get(params, "ao").map_or(false, |x| x == 1),
+            aot: get(params, "aot").map_or(false, |x| x == 1),
         },
         "MiniceptionNew" => super::MinimizerType::MiniceptionNew {
             k0: get(params, "k0")?,
@@ -58,10 +67,34 @@ fn density(
         "FracMin" => super::MinimizerType::FracMin {
             f: get(params, "f")?,
         },
+        "OcModMinimizer" => super::MinimizerType::OcModMinimizer {
+            t: get(params, "t")?,
+            offset: get(params, "offset")?,
+            use_closed: get(params, "use_closed")? == 1,
+            prefer_prefix: get(params, "prefer_prefix")? == 1,
+            open_tmer: get(params, "open_tmer")? == 1,
+            closed_tmer: get(params, "closed_tmer")? == 1,
+            other_tmer: get(params, "other_tmer")? == 1,
+            ao: get(params, "ao").map_or(false, |x| x == 1),
+            aot: get(params, "aot").map_or(false, |x| x == 1),
+        },
         _ => PyResult::Err(PyValueError::new_err("Invalid minimizer type"))?,
     };
-    let density = scheme.stats(&text, w, k, sigma).0;
-    Ok(density)
+    let stats = scheme.stats(&text, w, k, sigma);
+    Ok(stats)
+}
+
+#[pyfunction]
+#[pyo3(signature = (tp, text, w, k, sigma, **params))]
+fn density(
+    tp: &str,
+    text: Vec<u8>,
+    w: usize,
+    k: usize,
+    sigma: usize,
+    params: Option<&Bound<'_, PyDict>>,
+) -> PyResult<f64> {
+    stats(tp, text, w, k, sigma, params).map(|(density, _, _, _)| density)
 }
 
 #[pyfunction]
@@ -74,6 +107,7 @@ pub fn generate_random_string(n: usize, sigma: usize) -> PyResult<Vec<u8>> {
 /// import the module.
 #[pymodule]
 fn minimizers(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(stats, m)?)?;
     m.add_function(wrap_pyfunction!(density, m)?)?;
     m.add_function(wrap_pyfunction!(generate_random_string, m)?)?;
     Ok(())
