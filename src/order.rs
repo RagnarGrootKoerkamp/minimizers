@@ -110,3 +110,32 @@ impl DirectedOrder for ExplicitDirectedOrder {
         self.idx[pack(kmer, self.sigma)]
     }
 }
+
+#[derive(Clone, Copy)]
+pub struct Lex;
+
+impl Order for Lex {
+    fn key(&self, kmer: &[u8]) -> usize {
+        let s = 8usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 8];
+        for i in 0..8 - s {
+            prefix[7 - i] = kmer[i];
+        }
+        usize::from_ne_bytes(prefix)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct AntiLex;
+
+impl Order for AntiLex {
+    fn key(&self, kmer: &[u8]) -> usize {
+        let s = 8usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 8];
+        for i in 0..8 - s {
+            prefix[7 - i] = kmer[i];
+        }
+        prefix[7] ^= 0xff;
+        usize::from_ne_bytes(prefix)
+    }
+}
