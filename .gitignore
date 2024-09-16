@@ -5,3 +5,4 @@
 perf.data*
 flamegraph.svg
 /benches/human-genome.fa
+/.env/
