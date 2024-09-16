@@ -18,9 +18,14 @@ use rand_chacha::{
 };
 use serde_derive::{Deserialize, Serialize};
 use std::{
-    cmp::{max, Reverse},
+    cmp::{max, min, Reverse},
     f64::consts::PI,
 };
+
+#[ctor::ctor]
+fn init_color_backtrace() {
+    color_backtrace::install();
+}
 
 /// An iterator over *all* minimizer positions. Not yet deduplicated.
 ///
@@ -127,16 +132,19 @@ fn collect_stats(
     (density, ps, ds, transfer)
 }
 
-#[derive(Clone, Copy, clap::Subcommand, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Copy, clap::Subcommand, Debug, Serialize, Deserialize)]
 #[serde(tag = "minimizer_type")]
 pub enum MinimizerType {
-    #[default]
-    Minimizer,
+    Minimizer {
+        ao: bool,
+    },
     BdAnchor {
         r: usize,
     },
     Miniception {
         k0: usize,
+        ao: bool,
+        aot: bool,
     },
     MiniceptionNew {
         k0: usize,
@@ -145,11 +153,16 @@ pub enum MinimizerType {
         k0: usize,
     },
     LrMinimizer,
-    ModMinimizer,
+    ModMinimizer {
+        r: usize,
+        aot: bool,
+    },
     RotMinimizer,
     AltRotMinimizer,
     DecyclingMinimizer,
-    DoubleDecyclingMinimizer,
+    DoubleDecyclingMinimizer {
+        ao: bool,
+    },
     Bruteforce,
     OpenSyncmerMinimizer {
         t: usize,
@@ -173,11 +186,33 @@ impl MinimizerType {
         sigma: usize,
     ) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
         let o = RandomOrder;
+        let al = AntiLex;
         match self {
-            MinimizerType::Minimizer => collect_stats(w, text, Minimizer::new(k, w, o)),
-            MinimizerType::BdAnchor { r } => collect_stats(w, text, BdAnchor::new(w + *r, *r)),
-            MinimizerType::Miniception { k0 } => {
-                collect_stats(w, text, Miniception::new(w, k, *k0, o))
+            MinimizerType::Minimizer { ao } => {
+                if !ao {
+                    collect_stats(w, text, Minimizer::new(k, w, o))
+                } else {
+                    collect_stats(w, text, Minimizer::new(k, w, al))
+                }
+            }
+            MinimizerType::BdAnchor { r } => {
+                assert_eq!(k, 1);
+                collect_stats(w, text, BdAnchor::new(w, *r))
+            }
+            MinimizerType::Miniception { k0, ao, aot } => {
+                if !ao {
+                    if !aot {
+                        collect_stats(w, text, Miniception::new(w, k, *k0, o, o))
+                    } else {
+                        collect_stats(w, text, Miniception::new(w, k, *k0, o, al))
+                    }
+                } else {
+                    if !aot {
+                        collect_stats(w, text, Miniception::new(w, k, *k0, al, o))
+                    } else {
+                        collect_stats(w, text, Miniception::new(w, k, *k0, al, al))
+                    }
+                }
             }
             MinimizerType::MiniceptionNew { k0 } => {
                 collect_stats(w, text, MiniceptionNew::new(w, k, *k0, o))
@@ -185,17 +220,27 @@ impl MinimizerType {
             MinimizerType::ModSampling { k0 } => {
                 collect_stats(w, text, ModSampling::new(k, w, *k0, o))
             }
-            MinimizerType::LrMinimizer => collect_stats(w, text, ModSampling::lr_minimizer(k, w)),
-            MinimizerType::ModMinimizer => {
-                collect_stats(w, text, ModSampling::mod_minimizer(k, w, sigma))
+            MinimizerType::LrMinimizer => {
+                collect_stats(w, text, ModSampling::lr_minimizer(k, w, o))
+            }
+            MinimizerType::ModMinimizer { r, aot } => {
+                if !aot {
+                    collect_stats(w, text, ModSampling::mod_minimizer(k, w, *r, o))
+                } else {
+                    collect_stats(w, text, ModSampling::mod_minimizer(k, w, *r, al))
+                }
             }
             MinimizerType::RotMinimizer => collect_stats(w, text, RotMinimizer::new(k, w, o)),
             MinimizerType::AltRotMinimizer => collect_stats(w, text, AltRotMinimizer::new(k, w, o)),
             MinimizerType::DecyclingMinimizer => {
                 collect_stats(w, text, Decycling::new(k, w, o, false))
             }
-            MinimizerType::DoubleDecyclingMinimizer => {
-                collect_stats(w, text, Decycling::new(k, w, o, true))
+            MinimizerType::DoubleDecyclingMinimizer { ao } => {
+                if !ao {
+                    collect_stats(w, text, Decycling::new(k, w, o, true))
+                } else {
+                    collect_stats(w, text, Decycling::new(k, w, al, true))
+                }
             }
             MinimizerType::Bruteforce => {
                 let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
@@ -214,52 +259,23 @@ impl MinimizerType {
     pub fn try_params(&self, w: usize, k: usize) -> Vec<Self> {
         let l = w + k - 1;
         match self {
-            MinimizerType::Minimizer
-            | MinimizerType::DecyclingMinimizer
-            | MinimizerType::DoubleDecyclingMinimizer
-            | MinimizerType::Bruteforce => {
-                vec![*self]
-            }
             MinimizerType::BdAnchor { .. } => {
                 let r_max = k;
                 (0.min(r_max)..=10.min(r_max))
                     .map(|r| MinimizerType::BdAnchor { r })
                     .collect()
             }
-            MinimizerType::Miniception { .. } => {
+            MinimizerType::Miniception { ao, aot, .. } => {
                 let k0 = max(k as isize - w as isize, 4) as usize;
-                return vec![MinimizerType::Miniception { k0 }];
-                // let k0_min = (2 * k).saturating_sub(l + 1).max(1);
-                // let k0_max = k;
-                // if k0_min > k0_max {
-                //     return vec![];
-                // }
-
-                // return vec![MinimizerType::Miniception { k0: k0_min }];
-                // FIXME
-                // let start = 1.max(k0_min);
-                // let end = 10.max(k0_min + 2).min(k0_max);
-                // (start..=end)
-                //     .map(|k0| MinimizerType::Miniception { k0 })
-                //     .collect()
+                return vec![MinimizerType::Miniception {
+                    k0,
+                    ao: *ao,
+                    aot: *aot,
+                }];
             }
             MinimizerType::MiniceptionNew { .. } => {
                 let k0 = max(k as isize - w as isize, 4) as usize;
                 return vec![MinimizerType::MiniceptionNew { k0 }];
-
-                // let k0_min = (2 * k).saturating_sub(l + 1).max(1);
-                // let k0_max = k;
-                // if k0_min > k0_max {
-                //     return vec![];
-                // }
-                // return vec![MinimizerType::MiniceptionNew { k0: k0_min }];
-
-                // FIXME
-                // let start = 1.max(k0_min);
-                // let end = 10.max(k0_min + 2).min(k0_max);
-                // (start..=end)
-                //     .map(|k0| MinimizerType::MiniceptionNew { k0 })
-                //     .collect()
             }
             MinimizerType::ModSampling { .. } => {
                 let k0_min = 1;
@@ -270,13 +286,6 @@ impl MinimizerType {
             }
             MinimizerType::LrMinimizer => {
                 if k > w + 4 {
-                    vec![*self]
-                } else {
-                    vec![]
-                }
-            }
-            MinimizerType::ModMinimizer => {
-                if k > 1 {
                     vec![*self]
                 } else {
                     vec![]
@@ -303,6 +312,9 @@ impl MinimizerType {
                 vec![MinimizerType::OpenClosedSyncmerMinimizer { t: 4 }]
             }
             MinimizerType::FracMin { .. } => (1..w).map(|f| MinimizerType::FracMin { f }).collect(),
+            _ => {
+                vec![*self]
+            }
         }
     }
 }
@@ -400,28 +412,29 @@ impl SamplingScheme for ExplicitLocalScheme {
 }
 
 pub struct BdAnchor {
-    l: usize,
+    w: usize,
     r: usize,
 }
 
 impl BdAnchor {
-    pub fn new(l: usize, r: usize) -> Self {
-        Self { l, r }
+    pub fn new(w: usize, r: usize) -> Self {
+        Self { w, r }
     }
 }
 
 impl SamplingScheme for BdAnchor {
     fn l(&self) -> usize {
-        self.l
+        self.w
     }
 
     fn sample(&self, lmer: &[u8]) -> usize {
-        debug_assert_eq!(lmer.len(), self.l());
+        let w = self.w;
+        debug_assert_eq!(lmer.len(), w);
         let mut best = 0;
-        for i in 1..lmer.len().saturating_sub(self.r) {
-            for j in 0..lmer.len() {
-                if lmer[(i + j) % lmer.len()] != lmer[(best + j) % lmer.len()] {
-                    if lmer[(i + j) % lmer.len()] < lmer[(best + j) % lmer.len()] {
+        for i in 1..w.saturating_sub(self.r) {
+            for j in 0..w {
+                if lmer[(i + j) % w] != lmer[(best + j) % w] {
+                    if lmer[(i + j) % w] < lmer[(best + j) % w] {
                         best = i;
                     }
                     break;
@@ -441,11 +454,11 @@ pub struct Miniception<O: Order> {
     /// The order used for k-mers.
     o: O,
     /// The order used for k0-mers.
-    rand_mini: RandomMinimizer,
+    ot: Minimizer<OT>,
 }
 
-impl<O: Order> Miniception<O> {
-    pub fn new(w: usize, k: usize, k0: usize, o: O) -> Self {
+impl<O: Order, OT: DirectedOrder> Miniception<O, OT> {
+    pub fn new(w: usize, k: usize, k0: usize, o: O, ot: OT) -> Self {
         assert!(k0 >= k.saturating_sub(w));
         assert!(k0 <= k);
         let w0 = k - k0;
@@ -456,12 +469,12 @@ impl<O: Order> Miniception<O> {
             k0,
             w0,
             o,
-            rand_mini: RandomMinimizer::new(k0, k - k0 + 1, RandomOrder),
+            ot: Minimizer::new(k0, k - k0 + 1, ot),
         }
     }
 }
 
-impl<O: Order> SamplingScheme for Miniception<O> {
+impl<O: Order, OT: Order> SamplingScheme for Miniception<O, OT> {
     fn l(&self) -> usize {
         self.l
     }
@@ -470,7 +483,7 @@ impl<O: Order> SamplingScheme for Miniception<O> {
         lmer.windows(self.k)
             .enumerate()
             .filter(|(_, kmer)| {
-                let j = self.rand_mini.sample(kmer);
+                let j = self.ot.sample(kmer);
                 j == 0 || j == self.k - self.k0
             })
             .min_by_key(|&(_i, kmer)| self.o.key(kmer))
@@ -489,7 +502,7 @@ impl<O: Order> SamplingScheme for Miniception<O> {
         // j: position of kmer
         // j0: position of k0mer
 
-        let o0 = &self.rand_mini.o;
+        let o0 = &self.ot.o;
 
         // 1: init k0-mers.
         let mut k0mers = text.windows(self.k0).enumerate();
@@ -684,22 +697,16 @@ impl<O: Order> ModSampling<O> {
     }
 }
 
-impl ModSampling<RandomOrder> {
-    pub fn lr_minimizer(k: usize, w: usize) -> Self {
+impl<O: Order> ModSampling<O> {
+    pub fn lr_minimizer(k: usize, w: usize, o: O) -> Self {
         assert!(k > w);
         let t = k - w;
-        Self::new(k, w, t, RandomOrder)
+        Self::new(k, w, t, o)
     }
-    pub fn mod_minimizer(k: usize, w: usize, sigma: usize) -> Self {
-        // Hack r based on performance of sigma=2, 4, and 256
-        let r = match sigma {
-            2 => 5,
-            4 => 3,
-            _ => 1,
-        }
-        .min(k);
+    pub fn mod_minimizer(k: usize, w: usize, r: usize, o: O) -> Self {
+        let r = r.min(k);
         let t = (k - r) % w + r;
-        Self::new(k, w, t, RandomOrder)
+        Self::new(k, w, t, o)
     }
 }
 
@@ -857,6 +864,7 @@ impl<O: Order> SamplingScheme for Decycling<O> {
         self.k + self.w - 1
     }
 
+    // TODO: Implement streaming version.
     fn sample(&self, lmer: &[u8]) -> usize {
         lmer.windows(self.k)
             .enumerate()
@@ -1024,7 +1032,4 @@ impl SamplingScheme for FracMin {
     }
 }
 
-#[ctor::ctor]
-fn init_color_backtrace() {
-    color_backtrace::install();
 }

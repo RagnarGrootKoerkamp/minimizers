@@ -12,7 +12,7 @@ use minimizers::{de_bruijn_seq::de_bruijn_sequence, *};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_derive::Serialize;
 
-#[derive(Clone, Debug, Serialize, Default)]
+#[derive(Clone, Debug, Serialize)]
 struct Result {
     sigma: usize,
     k: usize,
@@ -92,7 +92,11 @@ fn main() {
             let mut base_types = vec![
                 // MinimizerType::Minimizer,
                 // MinimizerType::BdAnchor { r: 0 },
-                MinimizerType::Miniception { k0: 0 },
+                MinimizerType::Miniception {
+                    k0: 0,
+                    ao: false,
+                    aot: false,
+                },
                 // MinimizerType::MiniceptionNew { k0: 0 },
                 // MinimizerType::ModSampling { k0: 0 },
                 MinimizerType::LrMinimizer,
@@ -235,7 +239,7 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let m = Miniception::new(w, k, k0, RandomOrder);
+                    let m = Miniception::new(w, k, k0, RandomOrder, RandomOrder);
                     let stream = m.stream(&text).collect_vec();
                     let stream_naive = m.stream_naive(&text).collect_vec();
                     assert_eq!(stream, stream_naive);
