@@ -1,5 +1,3 @@
-#![feature(type_alias_impl_trait, trait_alias)]
-
 pub mod bruteforce;
 pub mod de_bruijn_seq;
 pub mod ilp_scheme;
@@ -31,7 +29,8 @@ fn init_color_backtrace() {
 /// An iterator over *all* minimizer positions. Not yet deduplicated.
 ///
 /// NOTE: For non-forward schemes, positions may be returned twice.
-pub trait MinimizerIt = Iterator<Item = usize>;
+pub trait MinimizerIt: Iterator<Item = usize> {}
+impl<I: Iterator<Item = usize>> MinimizerIt for I {}
 
 pub trait SamplingScheme {
     fn w(&self) -> usize {
