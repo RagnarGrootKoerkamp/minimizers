@@ -5,7 +5,7 @@ use wide::u32x8;
     any(target_arch = "x86", target_arch = "x86_64"),
     target_feature = "avx"
 ))]
-unsafe fn lookup_avx(t: u32x8, idx: u32x8) -> u32x8 {
+unsafe fn table_lookup_avx(t: u32x8, idx: u32x8) -> u32x8 {
     #[cfg(target_arch = "x86")]
     use core::arch::x86::_mm256_permutevar_ps;
     #[cfg(target_arch = "x86_64")]
@@ -17,7 +17,7 @@ unsafe fn lookup_avx(t: u32x8, idx: u32x8) -> u32x8 {
 
 #[inline(always)]
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-unsafe fn lookup_neon(t: u32x8, idx: u32x8) -> u32x8 {
+unsafe fn table_lookup_neon(t: u32x8, idx: u32x8) -> u32x8 {
     use core::arch::aarch64::{uint8x16_t, vqtbl1q_u8};
     use core::mem::transmute;
 
@@ -39,7 +39,7 @@ unsafe fn lookup_neon(t: u32x8, idx: u32x8) -> u32x8 {
 #[deprecated(
     note = "This function does not use SIMD, make sure you are compiling using `-C target-cpu=native` to get the expected NtHash and minimizers performance."
 )]
-unsafe fn lookup_fallback(t: u32x8, idx: u32x8) -> u32x8 {
+unsafe fn table_lookup_fallback(t: u32x8, idx: u32x8) -> u32x8 {
     let t = t.as_array_ref();
     u32x8::new(idx.to_array().map(|i| *t.get_unchecked(i as usize)))
 }
@@ -47,17 +47,17 @@ unsafe fn lookup_fallback(t: u32x8, idx: u32x8) -> u32x8 {
 /// Given a 'table' `t` consisting of 8 values, and an index `idx` consisting of 8 indices from 0 to 4,
 /// look up the first four indices in the first half of `t`, and the second four indices in the second half of `t`.
 #[inline(always)]
-pub fn lookup(t: u32x8, idx: u32x8) -> u32x8 {
+pub fn table_lookup(t: u32x8, idx: u32x8) -> u32x8 {
     #[cfg(all(
         any(target_arch = "x86", target_arch = "x86_64"),
         target_feature = "avx"
     ))]
     unsafe {
-        lookup_avx(t, idx)
+        table_lookup_avx(t, idx)
     }
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     unsafe {
-        lookup_neon(t, idx)
+        table_lookup_neon(t, idx)
     }
     #[cfg(not(any(
         all(
@@ -67,7 +67,7 @@ pub fn lookup(t: u32x8, idx: u32x8) -> u32x8 {
         all(target_arch = "aarch64", target_feature = "neon")
     )))]
     unsafe {
-        lookup_fallback(t, idx)
+        table_lookup_fallback(t, idx)
     }
 }
 
@@ -76,10 +76,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_lookup() {
+    fn test_table_lookup() {
         let t = u32x8::new([1000, 1001, 1002, 1003, 1000, 1001, 1002, 1003]);
         let idx = u32x8::new([2, 0, 3, 1, 0, 2, 1, 0]);
-        let res = lookup(t, idx);
+        let res = table_lookup(t, idx);
 
         assert_eq!(
             res.to_array(),
