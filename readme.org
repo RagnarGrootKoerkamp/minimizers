@@ -1,14 +1,18 @@
-* Minimizer reference implementations
+This repository hosts a number of different projects related to minimizers.
 
-This repository implements various types of sampling schemes and accompanies
-the mod-minimizer preprint:
+1. In [[file:src/lib.rs][src/lib.rs]], reference implementations for the schemes presented in the mod-minimizer
+   [[https://doi.org/10.4230/LIPIcs.WABI.2024.11][paper]] with Giulio Ermanno Pibiri.
+   - See also [[https://curiouscoding.nl/posts/minimizers/][this blogpost]].
+   - These are also used for the lower bound [[https://doi.org/10.1101/2024.09.06.611668][paper]] with Bryce Kille:
+   - Python bindings available in [[file:src/py.rs][src/py.rs]].
+2. A fast implementation of random minimizers in [[file:src/par/][src/par/]], corresponding to [[https://curiouscoding.nl/posts/fast-minimizers/][this post]].
+   - Computes the minimizers of a human genome in around two seconds.
+   - Code for the blogpost and corresponding benchmarks are in [[file:benches/blog/][benches/blog]] and [[file:benches/bench.rs][benches/bench.rs]].
+3. Ongoing research on new sampling schemes.
+   - Plots and experiments are in [[file:py/plot.ipynb][py/plot.ipynb]].
 
-- *Ragnar Groot Korekamp, Giulio Ermanno Pibiri.* "The mod-minimizer: a simple
-  and efficient sampling algorithm for long $k$-mers". bioRxiv (2024). [[https://doi.org/10.1101/2024.05.25.595898][10.1101/2024.05.25.595898]]
+* Implemented minimizer schemes
 
-See also my corresponding blogpost: [[https://curiouscoding.nl/posts/minimizers/][curiouscoding.nl/posts/minimizers]].
-
-Implemented sampling schemes:
 - *Random minimizers*.
 - two versions of asymptotically optimal *Rotational minimizers* (Marçais et al., 2018) .
 - *Miniception*, and a small slightly improved variant of it.
@@ -16,15 +20,4 @@ Implemented sampling schemes:
 - *Bidirectional anchors* (Loukides et al., 2023)
 - *Mod-sampling*, with *lr-minimizers* and *mod-minimizers* (our work).
 
-Density plot for $\sigma=4$. Reproduce using:
-- ~cargo run -r -- -n 5000000 -s 4 eval -o data/density_4.json~
-- ~plot.ipynb~
-
 [[file:./fig/density_4.svg]]
-
-* Fast random minimizers
-Additionally, the =benches/blog= directory contains a fast implementation of
-ntHash and a fast random minimizer implementation on top of that. This computes
-the minimizers of a human genome in under half a second, or =0.16ns/window=.
-
-See the corresponding blogpost for details: [[https://curiouscoding.nl/posts/fast-minimizers/][curiouscoding.nl/posts/fast-minimizers]]
