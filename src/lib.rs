@@ -141,6 +141,9 @@ pub enum MinimizerType {
     BdAnchor {
         r: usize,
     },
+    SusAnchor {
+        ao: bool,
+    },
     Miniception {
         k0: usize,
         ao: bool,
@@ -198,6 +201,13 @@ impl MinimizerType {
             MinimizerType::BdAnchor { r } => {
                 assert_eq!(k, 1);
                 collect_stats(w, text, BdAnchor::new(w, *r))
+            }
+            MinimizerType::SusAnchor { ao } => {
+                if !ao {
+                    collect_stats(w, text, SusAnchor::new(w, k, Lex))
+                } else {
+                    collect_stats(w, text, SusAnchor::new(w, k, al))
+                }
             }
             MinimizerType::Miniception { k0, ao, aot } => {
                 if !ao {
@@ -445,7 +455,34 @@ impl SamplingScheme for BdAnchor {
     }
 }
 
-pub struct Miniception<O: Order> {
+/// NOTE: O should be Lex or AntiLex order. Random order will not be good.
+pub struct SusAnchor<O: Order> {
+    w: usize,
+    k: usize,
+    o: O,
+}
+
+impl<O: Order> SusAnchor<O> {
+    pub fn new(w: usize, k: usize, o: O) -> Self {
+        Self { w, k, o }
+    }
+}
+
+impl<O: Order> SamplingScheme for SusAnchor<O> {
+    fn l(&self) -> usize {
+        self.w + self.k - 1
+    }
+
+    fn sample(&self, lmer: &[u8]) -> usize {
+        let mut best = (self.o.key(lmer), 0);
+        for i in 1..self.w {
+            best = best.min((self.o.key(&lmer[i..]), i));
+        }
+        best.1
+    }
+}
+
+pub struct Miniception<O: Order, OT: DirectedOrder> {
     w: usize,
     k: usize,
     l: usize,
