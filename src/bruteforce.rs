@@ -7,9 +7,9 @@ use crate::ExplicitOrder;
 use crate::Minimizer;
 use crate::SamplingScheme;
 
+use itertools::repeat_n;
 use itertools::Itertools;
 use rayon::iter::{ParallelBridge, ParallelIterator};
-use std::iter::repeat_n;
 use std::iter::zip;
 
 /// Finds the best order for a minimizer scheme.
