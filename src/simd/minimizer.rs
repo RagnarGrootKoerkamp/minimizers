@@ -196,7 +196,7 @@ pub fn minimizer_par_it<const RC: bool>(
 
 #[cfg(test)]
 mod test {
-    use crate::par::packed::Packed;
+    use crate::simd::packed::Packed;
 
     use super::*;
     use rand::random;

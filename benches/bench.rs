@@ -3,7 +3,7 @@
 mod blog;
 use blog::*;
 use itertools::Itertools;
-use minimizers::par::{minimizer::minimizer_par_it, nthash::nthash32_par_it, packed::Packed};
+use minimizers::simd::{minimizer::minimizer_par_it, nthash::nthash32_par_it, packed::Packed};
 use std::{cell::LazyCell, simd::Simd, time::Duration};
 use wide::u32x8;
 
