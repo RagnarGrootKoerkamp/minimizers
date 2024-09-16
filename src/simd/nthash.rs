@@ -108,18 +108,18 @@ pub fn nthash32_par_it<const RC: bool>(
     let (remove, _tail) = seq.par_iter_bp(k + w - 1);
 
     add.by_ref().take(k - 1).for_each(|a| {
-        h_fw = ((h_fw << 1) | (h_fw >> 31)) ^ intrinsics::lookup(table_fw, a);
+        h_fw = ((h_fw << 1) | (h_fw >> 31)) ^ intrinsics::table_lookup(table_fw, a);
         if RC {
-            h_rc = ((h_rc >> 1) | (h_rc << 31)) ^ intrinsics::lookup(table_rc_rot, a);
+            h_rc = ((h_rc >> 1) | (h_rc << 31)) ^ intrinsics::table_lookup(table_rc_rot, a);
         }
     });
 
     let it = add.zip(remove).map(move |(a, r)| {
-        let hfw_out = ((h_fw << 1) | (h_fw >> 31)) ^ intrinsics::lookup(table_fw, a);
-        h_fw = hfw_out ^ intrinsics::lookup(table_fw_rot, r);
+        let hfw_out = ((h_fw << 1) | (h_fw >> 31)) ^ intrinsics::table_lookup(table_fw, a);
+        h_fw = hfw_out ^ intrinsics::table_lookup(table_fw_rot, r);
         if RC {
-            let hrc_out = ((h_rc >> 1) | (h_rc << 31)) ^ intrinsics::lookup(table_rc_rot, a);
-            h_rc = hrc_out ^ intrinsics::lookup(table_rc, r);
+            let hrc_out = ((h_rc >> 1) | (h_rc << 31)) ^ intrinsics::table_lookup(table_rc_rot, a);
+            h_rc = hrc_out ^ intrinsics::table_lookup(table_rc, r);
             // Wrapping SIMD add
             hfw_out + hrc_out
         } else {

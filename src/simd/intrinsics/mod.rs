@@ -2,8 +2,8 @@
 
 mod deinterleave;
 mod gather;
-mod lookup;
+mod table_lookup;
 
 pub use deinterleave::deinterleave;
 pub use gather::gather;
-pub use lookup::lookup;
+pub use table_lookup::table_lookup;
