@@ -5,7 +5,7 @@
 //! 3. Each kmer selected by the local scheme must be true.
 //! 4. Minimizer the number of selected kmers.
 
-use std::iter::repeat_n;
+use itertools::repeat_n;
 
 use good_lp::*;
 use itertools::Itertools;
