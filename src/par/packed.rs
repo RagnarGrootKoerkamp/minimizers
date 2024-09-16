@@ -1,13 +1,10 @@
-use std::{
-    array::from_fn,
-    mem::transmute,
-    simd::{ptr::SimdConstPtr, Simd},
-};
-
+use super::intrinsics::{deinterleave::deinterleave, gather::gather};
+use core::{array::from_fn, mem::transmute};
 use num::Integer;
+use wide::u64x4;
 
+pub(crate) use wide::u32x8 as S;
 pub(crate) const L: usize = 8;
-pub(crate) type S = Simd<u32, L>;
 
 /// Iterate over the 2-bit characters of a sequence type.
 pub trait IntoBpIterator: Copy {
@@ -68,25 +65,22 @@ impl<'s> IntoBpIterator for &'s [u8] {
         let num_kmers = self.len().saturating_sub(k - 1);
         let n = num_kmers / L;
 
-        let offsets_lanes_0_4: Simd<*const u8, 4> =
-            from_fn(|l| unsafe { self.as_ptr().add(l * n) }).into();
-        let offsets_lanes_4_8: Simd<*const u8, 4> =
-            from_fn(|l| unsafe { self.as_ptr().add((4 + l) * n) }).into();
-        let mut upcoming_1 = S::splat(0);
-        let mut upcoming_2 = S::splat(0);
+        let base_ptr = self.as_ptr();
+        let offsets_lanes_0_4: u64x4 = from_fn(|l| (l * n) as u64).into();
+        let offsets_lanes_4_8: u64x4 = from_fn(|l| ((4 + l) * n) as u64).into();
+        let mut upcoming_1 = S::ZERO;
+        let mut upcoming_2 = S::ZERO;
 
         let it = (0..if num_kmers == 0 { 0 } else { n + k - 1 }).map(move |i| {
             if i % 4 == 0 {
                 if i % 8 == 0 {
                     // Read a u64 containing the next 8 characters.
-                    let idx_0_4 = offsets_lanes_0_4.wrapping_add(Simd::splat(i));
-                    let idx_4_8 = offsets_lanes_4_8.wrapping_add(Simd::splat(i));
-                    let u64_0_4: Simd<u32, 8> =
-                        unsafe { transmute(Simd::<u64, 4>::gather_ptr(transmute(idx_0_4))) };
-                    let u64_4_8: Simd<u32, 8> =
-                        unsafe { transmute(Simd::<u64, 4>::gather_ptr(transmute(idx_4_8))) };
+                    let idx_0_4 = offsets_lanes_0_4 + u64x4::splat(i as u64);
+                    let idx_4_8 = offsets_lanes_4_8 + u64x4::splat(i as u64);
+                    let u64_0_4: S = unsafe { transmute(gather(base_ptr, idx_0_4)) };
+                    let u64_4_8: S = unsafe { transmute(gather(base_ptr, idx_4_8)) };
                     // Split into two vecs containing a u32 of 4 characters each.
-                    (upcoming_1, upcoming_2) = u64_0_4.deinterleave(u64_4_8);
+                    (upcoming_1, upcoming_2) = deinterleave(u64_0_4, u64_4_8);
                 } else {
                     // Move on to the next u32 containing 4 buffered characters.
                     upcoming_1 = upcoming_2;
@@ -95,8 +89,8 @@ impl<'s> IntoBpIterator for &'s [u8] {
             // Extract the last 2 bits of each character.
             let chars = upcoming_1 & S::splat(0x03);
             // Shift remaining characters to the right.
-            upcoming_1 >>= S::splat(8);
-            chars.into()
+            upcoming_1 = upcoming_1 >> S::splat(8);
+            chars
         });
 
         (it, &self[L * n..])
@@ -189,25 +183,22 @@ impl<'s> IntoBpIterator for Packed<'s> {
         let n = (num_kmers / L).prev_multiple_of(&4);
         let bytes_per_chunk = n / 4;
 
-        let offsets_lanes_0_4: Simd<*const u8, 4> =
-            from_fn(|l| unsafe { self.seq.as_ptr().add(l * bytes_per_chunk) }).into();
-        let offsets_lanes_4_8: Simd<*const u8, 4> =
-            from_fn(|l| unsafe { self.seq.as_ptr().add((4 + l) * bytes_per_chunk) }).into();
-        let mut upcoming_1 = S::splat(0);
-        let mut upcoming_2 = S::splat(0);
+        let base_ptr = self.as_ptr();
+        let offsets_lanes_0_4: u64x4 = from_fn(|l| (l * bytes_per_chunk) as u64).into();
+        let offsets_lanes_4_8: u64x4 = from_fn(|l| ((4 + l) * bytes_per_chunk) as u64).into();
+        let mut upcoming_1 = S::ZERO;
+        let mut upcoming_2 = S::ZERO;
 
         let it = (0..if num_kmers == 0 { 0 } else { n + k - 1 }).map(move |i| {
             if i % 16 == 0 {
                 if i % 32 == 0 {
                     // Read a u64 containing the next 8 characters.
-                    let idx_0_4 = offsets_lanes_0_4.wrapping_add(Simd::splat(i / 4));
-                    let idx_4_8 = offsets_lanes_4_8.wrapping_add(Simd::splat(i / 4));
-                    let u64_0_4: Simd<u32, 8> =
-                        unsafe { transmute(Simd::<u64, 4>::gather_ptr(transmute(idx_0_4))) };
-                    let u64_4_8: Simd<u32, 8> =
-                        unsafe { transmute(Simd::<u64, 4>::gather_ptr(transmute(idx_4_8))) };
+                    let idx_0_4 = offsets_lanes_0_4 + u64x4::splat((i / 4) as u64);
+                    let idx_4_8 = offsets_lanes_4_8 + u64x4::splat((i / 4) as u64);
+                    let u64_0_4: S = unsafe { transmute(gather(base_ptr, idx_0_4)) };
+                    let u64_4_8: S = unsafe { transmute(gather(base_ptr, idx_4_8)) };
                     // Split into two vecs containing a u32 of 4 characters each.
-                    (upcoming_1, upcoming_2) = u64_0_4.deinterleave(u64_4_8);
+                    (upcoming_1, upcoming_2) = deinterleave(u64_0_4, u64_4_8);
                 } else {
                     // Move on to the next u32 containing 4 buffered characters.
                     upcoming_1 = upcoming_2;
@@ -216,8 +207,8 @@ impl<'s> IntoBpIterator for Packed<'s> {
             // Extract the last 2 bits of each character.
             let chars = upcoming_1 & S::splat(0x03);
             // Shift remaining characters to the right.
-            upcoming_1 >>= S::splat(2);
-            chars.into()
+            upcoming_1 = upcoming_1 >> S::splat(2);
+            chars
         });
 
         (
