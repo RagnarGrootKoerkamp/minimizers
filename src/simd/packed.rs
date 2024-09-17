@@ -6,19 +6,23 @@ use wide::u64x4;
 pub(crate) use wide::u32x8 as S;
 pub(crate) const L: usize = 8;
 
-/// Iterate over the 2-bit characters of a sequence type.
+/// Interface to sequences over a 2-bit alphabet.
+///
+/// Currently supports `&[u8]`, where each `u8` must be in `0..4`, and the
+/// `Packed` type that contains packed sequences.
 pub trait IntoBpIterator: Copy {
     const BASES_PER_BYTE: usize;
 
+    /// The length of the sequence in bp.
     fn len(&self) -> usize;
 
-    fn normalize(&mut self) {}
-
+    /// Convert a short sequence (kmer) to a single underlying word.
+    /// Note that this does no additional packing, so for `&[u8]` it can only contain up to 8 characters.
+    /// Panic if the sequence is too long.
     fn to_word(&self) -> usize;
 
+    /// Get a sub-slice of the sequence.
     fn sub_slice(&self, idx: usize, len: usize) -> Self;
-
-    fn as_ptr(&self) -> *const u8;
 
     /// A simple iterator over characters.
     /// Returns u8 values in [0, 4).
@@ -48,11 +52,6 @@ impl<'s> IntoBpIterator for &'s [u8] {
     #[inline(always)]
     fn sub_slice(&self, idx: usize, len: usize) -> Self {
         &self[idx..idx + len]
-    }
-
-    #[inline(always)]
-    fn as_ptr(&self) -> *const u8 {
-        (self as &[u8]).as_ptr()
     }
 
     #[inline(always)]
@@ -97,14 +96,26 @@ impl<'s> IntoBpIterator for &'s [u8] {
     }
 }
 
+/// A 2-bit packed sequence representation.
 #[derive(Copy, Clone)]
 pub struct Packed<'s> {
     /// Packed data.
     pub seq: &'s [u8],
-    /// Offset in bp from the start of the sequence.
+    /// Offset in bp from the start of the `seq`.
     pub offset: usize,
-    /// Length of the sequence in bp, starting at `offset` from the start.
+    /// Length of the sequence in bp, starting at `offset` from the start of `seq`.
     pub len: usize,
+}
+
+impl<'s> Packed<'s> {
+    /// Shrink `seq` to only just cover the data.
+    #[inline(always)]
+    fn normalize(&mut self) {
+        let start = self.offset / 4;
+        let end = (self.offset + self.len).div_ceil(4);
+        self.seq = &self.seq[start..end];
+        self.offset %= 4;
+    }
 }
 
 impl<'s> IntoBpIterator for Packed<'s> {
@@ -115,20 +126,11 @@ impl<'s> IntoBpIterator for Packed<'s> {
         self.len
     }
 
-    /// Shrink `seq` to only just cover the data.
-    #[inline(always)]
-    fn normalize(&mut self) {
-        let start = self.offset / 4;
-        let end = (self.offset + self.len).div_ceil(4);
-        self.seq = &self.seq[start..end];
-        self.offset %= 4;
-    }
-
     #[inline(always)]
     fn to_word(&self) -> usize {
         assert!(self.len() <= usize::BITS as usize / 2 - 3);
         let mask = usize::MAX >> (64 - 2 * self.len());
-        unsafe { (*(self.as_ptr() as *const usize) >> (2 * self.offset)) & mask }
+        unsafe { (*(self.seq.as_ptr() as *const usize) >> (2 * self.offset)) & mask }
     }
 
     #[inline(always)]
@@ -141,11 +143,6 @@ impl<'s> IntoBpIterator for Packed<'s> {
         };
         slice.normalize();
         slice
-    }
-
-    #[inline(always)]
-    fn as_ptr(&self) -> *const u8 {
-        self.seq.as_ptr()
     }
 
     #[inline(always)]
@@ -183,7 +180,7 @@ impl<'s> IntoBpIterator for Packed<'s> {
         let n = (num_kmers / L).prev_multiple_of(&4);
         let bytes_per_chunk = n / 4;
 
-        let base_ptr = self.as_ptr();
+        let base_ptr = self.seq.as_ptr();
         let offsets_lanes_0_4: u64x4 = from_fn(|l| (l * bytes_per_chunk) as u64).into();
         let offsets_lanes_4_8: u64x4 = from_fn(|l| ((4 + l) * bytes_per_chunk) as u64).into();
         let mut upcoming_1 = S::ZERO;
