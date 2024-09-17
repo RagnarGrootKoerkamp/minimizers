@@ -10,8 +10,8 @@
 // TODO: Write about 2bit encoded packed represenatation.
 
 use super::intrinsics;
+use super::linearize;
 use super::packed::IntoBpIterator;
-use super::packed::L;
 use wide::u32x8 as S;
 
 // TODO: Update to guarantee unique hash values for k<=16?
@@ -91,7 +91,7 @@ pub fn nthash32_simd_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
 ) -> impl ExactSizeIterator<Item = u32> {
-    NtHash32ForwardIterator::<RC, _>::new(seq, k)
+    linearize::linearize(seq, k, move |seq| nthash32_par_it::<RC>(seq, k, 1))
 }
 
 /// Split the kmers of the sequence into 8 chunks of equal length ~len/8.
@@ -154,164 +154,10 @@ pub fn nthash32_par_it<const RC: bool>(
     (it, tail)
 }
 
-/// See `nthash32_simd_it`.
-struct NtHash32ForwardIterator<const RC: bool, BI: IntoBpIterator> {
-    seq: BI,
-    k: usize,
-
-    chunk_size: usize,
-    par_size: usize,
-    num_chunks: usize,
-
-    cache: Vec<S>,
-    tail_cache: Vec<u32>,
-
-    /// current chunk
-    c: usize,
-    /// current lane in chunk
-    l: usize,
-    /// current index
-    i: usize,
-
-    /// number of lanes in the current chunk.
-    max_l: usize,
-    /// length of the current lane
-    max_i: usize,
-}
-
-impl<const RC: bool, BI: IntoBpIterator> NtHash32ForwardIterator<RC, BI> {
-    fn new(seq: BI, k: usize) -> NtHash32ForwardIterator<RC, BI> {
-        assert!(k > 0);
-        let len = seq.len();
-        let chunk_size = 1 << 13;
-        assert!(chunk_size % L == 0);
-        let par_size = chunk_size / L;
-
-        let num_chunks = len.saturating_sub(k - 1).div_ceil(chunk_size);
-
-        let mut cache = vec![S::splat(0); par_size];
-        let mut tail_cache = vec![];
-        if num_chunks == 1 {
-            buffer_chunk::<RC>(seq, k, &mut cache, &mut tail_cache);
-        }
-
-        Self {
-            seq,
-            k,
-            cache,
-            tail_cache,
-
-            chunk_size,
-            par_size,
-            num_chunks,
-
-            c: usize::MAX,
-            i: par_size - 1,
-            l: L - 1,
-
-            max_i: par_size,
-            max_l: L,
-        }
-    }
-}
-
-impl<const RC: bool, BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<RC, BI> {
-    type Item = u32;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.i += 1;
-        if self.i == self.max_i {
-            self.i = 0;
-            self.l += 1;
-            if self.l == self.max_l {
-                self.l = 0;
-                self.c = self.c.wrapping_add(1);
-                if self.c < self.num_chunks {
-                    let offset = self.c * self.chunk_size;
-                    buffer_chunk::<RC>(
-                        self.seq.sub_slice(
-                            offset,
-                            (self.chunk_size + self.k - 1).min(self.seq.len() - offset),
-                        ),
-                        self.k,
-                        &mut self.cache,
-                        &mut self.tail_cache,
-                    );
-                    if self.c + 1 < self.num_chunks {
-                        assert_eq!(self.cache.len(), self.par_size);
-                        assert!(self.tail_cache.is_empty());
-                    } else {
-                        assert!(self.cache.len() <= self.par_size);
-                        self.max_i = self.cache.len();
-                        if self.max_i == 0 {
-                            self.c += 1;
-                        }
-                    }
-                }
-                if self.c == self.num_chunks {
-                    // Run one extra iteration on the tail.
-                    self.max_l = 1;
-                    self.max_i = self.tail_cache.len();
-                    assert!(self.tail_cache.len() <= self.par_size);
-                    self.cache.resize(self.max_i, S::splat(0));
-                    for i in 0..self.max_i {
-                        self.cache[i].as_array_mut()[0] = self.tail_cache[i];
-                    }
-                    if self.max_i == 0 {
-                        self.c += 1;
-                    }
-                }
-                if self.c == self.num_chunks + 1 {
-                    return None;
-                }
-            }
-        }
-
-        Some(self.cache[self.i].as_array_ref()[self.l])
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = if self.c >= self.num_chunks + 1 {
-            0
-        } else if self.c == self.num_chunks {
-            self.max_i - self.i
-        } else {
-            let total_kmers = self.seq.len() - self.k + 1;
-            let processed_kmers = 1 + self.c * L * self.par_size + self.l * self.max_i + self.i;
-            total_kmers - processed_kmers
-        };
-        (len, Some(len))
-    }
-}
-
-impl<const RC: bool, BI: IntoBpIterator> ExactSizeIterator for NtHash32ForwardIterator<RC, BI> {}
-
-/// Fill a buffer with NT hash values by using `nthash32_par_it`.
-fn buffer_chunk<const RC: bool>(
-    seq: impl IntoBpIterator,
-    k: usize,
-    buf: &mut Vec<S>,
-    tail_buf: &mut Vec<u32>,
-) {
-    let (mut par_it, mut tail) = nthash32_par_it::<RC>(seq, k, 1);
-    buf.resize(par_it.size_hint().0, S::splat(0));
-    for i in 0..buf.len() {
-        unsafe {
-            *buf.get_unchecked_mut(i) = par_it.next().unwrap();
-        }
-    }
-    tail_buf.resize(tail.size_hint().0, 0);
-    for i in 0..tail_buf.len() {
-        unsafe {
-            *tail_buf.get_unchecked_mut(i) = tail.next().unwrap();
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::simd::packed::Packed;
+    use crate::simd::packed::{Packed, L};
     use itertools::Itertools;
     use rand::random;
     use std::{cell::LazyCell, iter::once};
@@ -487,6 +333,25 @@ mod test {
                     .chain(tail)
                     .collect::<Vec<_>>();
                 assert_eq!(scalar, parallel_iter, "k={}, len={}", k, len);
+            }
+        }
+    }
+
+    #[test]
+    fn linearized() {
+        let seq = Packed {
+            seq: &*PACKED_SEQ,
+            offset: 0,
+            len: 1024,
+        };
+        for k in [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
+        ] {
+            for len in (0..100).chain([973, 1024]) {
+                let seq = seq.sub_slice(0, len);
+                let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
+                let simd = nthash32_simd_it::<true>(seq, k).collect::<Vec<_>>();
+                assert_eq!(scalar, simd, "k={}, len={}", k, len);
             }
         }
     }
