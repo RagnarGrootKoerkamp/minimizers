@@ -21,11 +21,7 @@ unsafe fn table_lookup_neon(t: u32x8, idx: u32x8) -> u32x8 {
     use core::arch::aarch64::{uint8x16_t, vqtbl1q_u8};
     use core::mem::transmute;
 
-    const OFFSET: u32 = if cfg!(target_endian = "little") {
-        0x03_02_01_00
-    } else {
-        0x00_01_02_03
-    };
+    const OFFSET: u32 = 0x03_02_01_00;
 
     let idx = idx * u32x8::splat(0x04_04_04_04) + u32x8::splat(OFFSET);
     let (t1, t2): (uint8x16_t, uint8x16_t) = transmute(t);
