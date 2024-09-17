@@ -32,9 +32,6 @@ unsafe fn table_lookup_neon(t: u32x8, idx: u32x8) -> u32x8 {
 }
 
 #[inline(always)]
-#[deprecated(
-    note = "This function does not use SIMD, make sure you are compiling using `-C target-cpu=native` to get the expected NtHash and minimizers performance."
-)]
 unsafe fn table_lookup_fallback(t: u32x8, idx: u32x8) -> u32x8 {
     let t = t.as_array_ref();
     u32x8::new(idx.to_array().map(|i| *t.get_unchecked(i as usize)))

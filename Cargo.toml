@@ -45,6 +45,9 @@ criterion = "*"
 minimizer-iter = "1.2.1"
 needletail = "0.5.1"
 
+[features]
+hide-simd-warning = []
+
 [lib]
 bench = false
 crate-type = ["cdylib", "rlib"]
