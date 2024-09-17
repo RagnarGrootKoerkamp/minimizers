@@ -177,7 +177,7 @@ pub fn minimizer_window_naive<const RC: bool>(seq: impl IntoBpIterator, k: usize
 /// Returns one value for each window of size `w+k-1` in the input. Use
 /// `Itertools::dedup()` to obtain the distinct positions of the minimizers.
 ///
-/// TODO: Create a version based on `minimizer_par_it` with internal buffering.
+/// Prefer `minimizer_simd_it` that internally used SIMD, or `minimizer_par_it` if it works for you.
 pub fn minimizer_scalar_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
@@ -195,6 +195,10 @@ pub fn minimizer_scalar_it<const RC: bool>(
 /// Minimizers for each chunk are eagerly computed using 8 parallel streams using SIMD using `minimizers_par_it`.
 /// Then returns a linear iterator over the buffer.
 /// Once the buffer runs out, the next chunk is computed.
+///
+/// NOTE: This method is ~4x slower than the minimizer computation itself, and
+///       only ~2x faster than the scalar version. Mostly because shuffling memory is slow.
+/// TODO: Fix this.
 pub fn minimizer_simd_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
