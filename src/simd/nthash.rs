@@ -24,7 +24,7 @@ const HASHES_F: [u32; 4] = [
 const fn cmpl(base: u32) -> u32 {
     base ^ 0x2
 }
-/// Compliment hashes.
+/// Complement hashes.
 const HASHES_C: [u32; 4] = [
     HASHES_F[cmpl(0) as usize],
     HASHES_F[cmpl(1) as usize],
@@ -32,7 +32,10 @@ const HASHES_C: [u32; 4] = [
     HASHES_F[cmpl(3) as usize],
 ];
 
-pub fn nthash32_kmer<const RC: bool>(seq: impl IntoBpIterator) -> u32 {
+/// Naively compute the 32-bit NT hash of a single k-mer.
+/// When `RC` is false, compute a forward hash.
+/// When `RC` is true, compute a canonical hash.
+pub fn nthash32_kmer_naive<const RC: bool>(seq: impl IntoBpIterator) -> u32 {
     let k = seq.len();
     let mut hfw: u32 = 0;
     let mut hrc: u32 = 0;
@@ -45,6 +48,10 @@ pub fn nthash32_kmer<const RC: bool>(seq: impl IntoBpIterator) -> u32 {
     hfw.wrapping_add(hrc.rotate_left(k as u32 - 1))
 }
 
+/// Returns an iterator over the 32-bit NT hashes of all k-mers in the sequence.
+/// Set `RC` to true for canonical hashes.
+///
+/// Prefer `nthash32_simd_it` which fills an internal buffer using the parallel SIMD version.
 pub fn nthash32_scalar_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
@@ -73,9 +80,24 @@ pub fn nthash32_scalar_it<const RC: bool>(
     })
 }
 
-// Split the kmers of the sequence into 8 chunks of equal length ~len/8.
-// Then return the hashes of each of them, and the remaining few using the second iterator.
-// The tail end has up to 31*8 = 248 elements.
+/// Returns an iterator over the 32-bit NT hashes of all k-mers in the sequence.
+/// Set `RC` to true for canonical hashes.
+///
+/// This splits the sequence into chunks of size 2^13 bp.
+/// Hashes for each chunk are eagerly computed using 8 parallel streams using SIMD using `nthash32_par_it`.
+/// Then returns a linear iterator over the buffer.
+/// Once the buffer runs out, the next chunk is computed.
+pub fn nthash32_simd_it<const RC: bool>(
+    seq: impl IntoBpIterator,
+    k: usize,
+) -> impl ExactSizeIterator<Item = u32> {
+    NtHash32ForwardIterator::<RC, _>::new(seq, k)
+}
+
+/// Split the kmers of the sequence into 8 chunks of equal length ~len/8.
+/// Then return the hashes of each of them in parallel using SIMD,
+/// and return the remaining few using the second iterator.
+/// The tail end has up to 31*8 = 248 elements.
 // TODO: SMALL_K + reusing gathers?
 pub fn nthash32_par_it<const RC: bool>(
     seq: impl IntoBpIterator,
@@ -132,16 +154,7 @@ pub fn nthash32_par_it<const RC: bool>(
     (it, tail)
 }
 
-// This splits the input in ~2^15bp chunks, and computes the hashes of
-// each chunk using 8 streams in parallel. Those results are buffered and a
-// linear iterator over them is returned. Once it runs out, the next 2^15bp chunk is computed.
-pub fn nthash32_fast_it<const RC: bool>(
-    seq: impl IntoBpIterator,
-    k: usize,
-) -> impl ExactSizeIterator<Item = u32> {
-    NtHash32ForwardIterator::<RC, _>::new(seq, k)
-}
-
+/// See `nthash32_simd_it`.
 struct NtHash32ForwardIterator<const RC: bool, BI: IntoBpIterator> {
     seq: BI,
     k: usize,
@@ -273,6 +286,7 @@ impl<const RC: bool, BI: IntoBpIterator> Iterator for NtHash32ForwardIterator<RC
 
 impl<const RC: bool, BI: IntoBpIterator> ExactSizeIterator for NtHash32ForwardIterator<RC, BI> {}
 
+/// Fill a buffer with NT hash values by using `nthash32_par_it`.
 fn buffer_chunk<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
@@ -318,7 +332,7 @@ mod test {
                 let seq = seq.sub_slice(0, len);
                 let single = seq
                     .windows(k)
-                    .map(|seq| nthash32_kmer::<false>(seq))
+                    .map(|seq| nthash32_kmer_naive::<false>(seq))
                     .collect::<Vec<_>>();
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
                 assert_eq!(single, scalar, "k={}, len={}", k, len);
@@ -335,7 +349,7 @@ mod test {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.sub_slice(0, len);
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
-                let parallel = nthash32_fast_it::<false>(seq, k).collect::<Vec<_>>();
+                let parallel = nthash32_simd_it::<false>(seq, k).collect::<Vec<_>>();
                 assert_eq!(scalar, parallel, "k={}, len={}", k, len);
             }
         }
@@ -354,7 +368,7 @@ mod test {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.sub_slice(0, len);
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
-                let parallel = nthash32_fast_it::<false>(seq, k).collect::<Vec<_>>();
+                let parallel = nthash32_simd_it::<false>(seq, k).collect::<Vec<_>>();
                 assert_eq!(scalar, parallel, "k={}, len={}", k, len);
             }
         }
@@ -445,7 +459,7 @@ mod test {
                 let seq = seq.sub_slice(0, len);
                 let single = seq
                     .windows(k)
-                    .map(|seq| nthash32_kmer::<true>(seq))
+                    .map(|seq| nthash32_kmer_naive::<true>(seq))
                     .collect::<Vec<_>>();
                 let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
                 assert_eq!(single, scalar, "k={}, len={}", k, len);
