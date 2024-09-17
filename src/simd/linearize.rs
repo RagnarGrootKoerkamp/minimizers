@@ -1,3 +1,5 @@
+// TODO: The linearized functions are quite slow.
+
 use super::packed::IntoBpIterator;
 use super::packed::{L, S};
 
@@ -129,6 +131,54 @@ impl<
             }
         }
     }
+
+    /// Returns true when iterator is exhausted.
+    #[inline(always)]
+    fn next_line(&mut self) -> bool {
+        self.i = 0;
+        self.l += 1;
+        if self.l == self.max_l {
+            self.l = 0;
+            self.c = self.c.wrapping_add(1);
+            if self.c < self.num_chunks {
+                let offset = self.c * self.chunk_size;
+                self.buffer_chunk(
+                    offset,
+                    self.seq.sub_slice(
+                        offset,
+                        (self.chunk_size + self.context - 1).min(self.seq.len() - offset),
+                    ),
+                );
+                if self.c + 1 < self.num_chunks {
+                    assert_eq!(self.cache.len(), self.par_size);
+                    assert!(self.tail_cache.is_empty());
+                } else {
+                    assert!(self.cache.len() <= self.par_size);
+                    self.max_i = self.cache.len();
+                    if self.max_i == 0 {
+                        self.c += 1;
+                    }
+                }
+            }
+            if self.c == self.num_chunks {
+                // Run one extra iteration on the tail.
+                self.max_l = 1;
+                self.max_i = self.tail_cache.len();
+                assert!(self.tail_cache.len() <= self.par_size);
+                self.cache.resize(self.max_i, S::splat(0));
+                for i in 0..self.max_i {
+                    self.cache[i].as_array_mut()[0] = self.tail_cache[i];
+                }
+                if self.max_i == 0 {
+                    self.c += 1;
+                }
+            }
+            if self.c == self.num_chunks + 1 {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl<
@@ -141,56 +191,25 @@ impl<
 {
     type Item = u32;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         self.i += 1;
         if self.i == self.max_i {
-            self.i = 0;
-            self.l += 1;
-            if self.l == self.max_l {
-                self.l = 0;
-                self.c = self.c.wrapping_add(1);
-                if self.c < self.num_chunks {
-                    let offset = self.c * self.chunk_size;
-                    self.buffer_chunk(
-                        offset,
-                        self.seq.sub_slice(
-                            offset,
-                            (self.chunk_size + self.context - 1).min(self.seq.len() - offset),
-                        ),
-                    );
-                    if self.c + 1 < self.num_chunks {
-                        assert_eq!(self.cache.len(), self.par_size);
-                        assert!(self.tail_cache.is_empty());
-                    } else {
-                        assert!(self.cache.len() <= self.par_size);
-                        self.max_i = self.cache.len();
-                        if self.max_i == 0 {
-                            self.c += 1;
-                        }
-                    }
-                }
-                if self.c == self.num_chunks {
-                    // Run one extra iteration on the tail.
-                    self.max_l = 1;
-                    self.max_i = self.tail_cache.len();
-                    assert!(self.tail_cache.len() <= self.par_size);
-                    self.cache.resize(self.max_i, S::splat(0));
-                    for i in 0..self.max_i {
-                        self.cache[i].as_array_mut()[0] = self.tail_cache[i];
-                    }
-                    if self.max_i == 0 {
-                        self.c += 1;
-                    }
-                }
-                if self.c == self.num_chunks + 1 {
-                    return None;
-                }
+            if self.next_line() {
+                return None;
             }
         }
 
-        Some(self.cache[self.i].as_array_ref()[self.l])
+        Some(unsafe {
+            *self
+                .cache
+                .get_unchecked(self.i)
+                .as_array_ref()
+                .get_unchecked(self.l)
+        })
     }
 
+    #[inline(always)]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let len = if self.c >= self.num_chunks + 1 {
             0

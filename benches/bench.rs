@@ -3,7 +3,11 @@
 mod blog;
 use blog::*;
 use itertools::Itertools;
-use minimizers::simd::{minimizer::minimizer_par_it, nthash::nthash32_par_it, packed::Packed};
+use minimizers::simd::{
+    minimizer::{minimizer_par_it, minimizer_scalar_it, minimizer_simd_it},
+    nthash::{nthash32_par_it, nthash32_simd_it},
+    packed::Packed,
+};
 use std::{cell::LazyCell, simd::Simd, time::Duration};
 use wide::u32x8;
 
@@ -277,6 +281,12 @@ fn local_nthash(c: &mut Criterion) {
     g.bench_with_input("nthash_par_it_sum_c", &packed_text, |b, packed_text| {
         b.iter(|| nthash32_par_it::<true>(*packed_text, k, 1).0.sum::<u32x8>());
     });
+    g.bench_with_input("nthash_simd_it_vec", &packed_text, |b, packed_text| {
+        b.iter(|| nthash32_simd_it::<false>(*packed_text, k).collect_vec());
+    });
+    g.bench_with_input("nthash_simd_it_sum", &packed_text, |b, packed_text| {
+        b.iter(|| nthash32_simd_it::<false>(*packed_text, k).sum::<u32>());
+    });
 }
 
 fn simd_minimizer(c: &mut Criterion) {
@@ -330,15 +340,14 @@ fn simd_minimizer(c: &mut Criterion) {
     });
 
     let packed_text = Packed { seq: packed_text, offset: 0, len: packed_text.len() * 4 };
-    g.bench_function("minimizer_par_it_sum", |b| {
-        b.iter(|| {
-            minimizer_par_it::<false>(packed_text, k, w)
-                .0
-                .sum::<u32x8>()
-        });
+    g.bench_function("minimizer_scalar_it_vec", |b| {
+        b.iter(|| minimizer_scalar_it::<false>(packed_text, k, w).collect_vec());
     });
     g.bench_function("minimizer_par_it_vec", |b| {
         b.iter(|| minimizer_par_it::<false>(packed_text, k, w).0.collect_vec());
+    });
+    g.bench_function("minimizer_simd_it_vec", |b| {
+        b.iter(|| minimizer_simd_it::<false>(packed_text, k, w).collect_vec());
     });
 }
 
