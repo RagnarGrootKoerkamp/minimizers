@@ -162,13 +162,20 @@ fn sliding_min_par_it(
     it
 }
 
-pub fn minimizer_window<const RC: bool>(seq: impl IntoBpIterator, k: usize) -> usize {
+/// Returns the minimizer of a window using a naive linear scan.
+/// Uses NT hash with canonical hashes when `RC` is true.
+pub fn minimizer_window_naive<const RC: bool>(seq: impl IntoBpIterator, k: usize) -> usize {
     nthash32_scalar_it::<RC>(seq, k)
         .map(|x| x & 0xffff_0000)
         .position_min()
         .unwrap()
 }
 
+/// Returns an iterator over the absolute positions of the minimizers of a sequence.
+/// Returns one value for each window of size `w+k-1` in the input. Use
+/// `Itertools::dedup()` to obtain the distinct positions of the minimizers.
+///
+/// TODO: Create a version based on `minimizer_par_it` with internal buffering.
 pub fn minimizer_scalar_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
@@ -178,6 +185,26 @@ pub fn minimizer_scalar_it<const RC: bool>(
     sliding_min_scalar_it(it, w)
 }
 
+/// Returns an iterator over the absolute positions of the minimizers of a sequence.
+/// Returns one value for each window of size `w+k-1` in the input. Use
+/// `Itertools::dedup()` to obtain the distinct positions of the minimizers.
+///
+/// This splits the windows of the sequence into chunks of 2^13.
+/// Minimizers for each chunk are eagerly computed using 8 parallel streams using SIMD using `minimizers_par_it`.
+/// Then returns a linear iterator over the buffer.
+/// Once the buffer runs out, the next chunk is computed.
+pub fn minimizers_simd_it<const RC: bool>(
+    seq: impl IntoBpIterator,
+    k: usize,
+    w: usize,
+) -> impl ExactSizeIterator<Item = u32> {
+    todo!();
+    std::iter::empty()
+}
+
+/// Split the windows of the sequence into 8 chunks of equal length ~len/8.
+/// Then return the positions of the minimizers of each of them in parallel using SIMD,
+/// and return the remaining few using the second iterator.
 // TODO: Take a hash function as argument.
 pub fn minimizer_par_it<const RC: bool>(
     seq: impl IntoBpIterator,
@@ -217,7 +244,7 @@ mod test {
                     let single = seq[0..len]
                         .windows(w + k - 1)
                         .enumerate()
-                        .map(|(pos, seq)| (pos + minimizer_window::<false>(seq, k)) as u32)
+                        .map(|(pos, seq)| (pos + minimizer_window_naive::<false>(seq, k)) as u32)
                         .collect::<Vec<_>>();
                     let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
                     assert_eq!(single, scalar, "k={k}, w={w}, len={len}");
