@@ -1,3 +1,5 @@
+use crate::simd::linearize;
+
 use super::{
     nthash::{nthash32_par_it, nthash32_scalar_it},
     packed::IntoBpIterator,
@@ -193,13 +195,12 @@ pub fn minimizer_scalar_it<const RC: bool>(
 /// Minimizers for each chunk are eagerly computed using 8 parallel streams using SIMD using `minimizers_par_it`.
 /// Then returns a linear iterator over the buffer.
 /// Once the buffer runs out, the next chunk is computed.
-pub fn minimizers_simd_it<const RC: bool>(
+pub fn minimizer_simd_it<const RC: bool>(
     seq: impl IntoBpIterator,
     k: usize,
     w: usize,
 ) -> impl ExactSizeIterator<Item = u32> {
-    todo!();
-    std::iter::empty()
+    linearize::linearize_with_offset(seq, k + w - 1, move |seq| minimizer_par_it::<RC>(seq, k, w))
 }
 
 /// Split the windows of the sequence into 8 chunks of equal length ~len/8.
@@ -293,6 +294,33 @@ mod test {
                         .chain(tail)
                         .collect::<Vec<_>>();
                     assert_eq!(scalar, parallel_iter, "k={k}, w={w}, len={len}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn linearized() {
+        let seq = Packed {
+            seq: &*PACKED_SEQ,
+            offset: 0,
+            len: 1024 * 1024,
+        };
+        for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
+            for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
+                for len in (0..100).chain(once(1024 * 128 + 765)) {
+                    let seq = seq.sub_slice(0, len);
+                    let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
+                    let simd = minimizer_simd_it::<false>(seq, k, w).collect::<Vec<_>>();
+                    assert_eq!(
+                        scalar,
+                        simd,
+                        "k={}, len={} len left {} len right {}",
+                        k,
+                        len,
+                        scalar.len(),
+                        simd.len()
+                    );
                 }
             }
         }

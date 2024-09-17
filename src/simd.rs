@@ -13,6 +13,7 @@
 )]
 
 mod intrinsics;
+mod linearize;
 pub mod minimizer;
 pub mod nthash;
 pub mod packed;
