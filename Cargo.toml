@@ -46,6 +46,7 @@ minimizer-iter = "1.2.1"
 needletail = "0.5.1"
 
 [features]
+# Hides the `simd` warnings when neither AVX nor NEON is detected.
 hide-simd-warning = []
 
 [lib]
