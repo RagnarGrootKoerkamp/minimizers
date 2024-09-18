@@ -34,7 +34,7 @@ wyhash = "0.5"
 color-backtrace = "0.6"
 ctor = "0.2"
 nthash = "0.5.1"
-pyo3 = { version = "0.22.2", features = ["extension-module"] }
+pyo3 = { version = "0.22.2", features = ["extension-module"], optional = true }
 wide = "0.7"
 
 [[example]]
@@ -48,6 +48,10 @@ needletail = "0.5.1"
 [features]
 # Hides the `simd` warnings when neither AVX nor NEON is detected.
 hide-simd-warning = []
+# Enable python bindings
+python-bindings = ['dep:pyo3']
+
+default = ['python-bindings']
 
 [lib]
 bench = false
