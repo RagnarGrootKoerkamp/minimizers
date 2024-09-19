@@ -110,7 +110,7 @@ pub struct Packed<'s> {
 impl<'s> Packed<'s> {
     /// Shrink `seq` to only just cover the data.
     #[inline(always)]
-    fn normalize(&mut self) {
+    pub fn normalize(&mut self) {
         let start = self.offset / 4;
         let end = (self.offset + self.len).div_ceil(4);
         self.seq = &self.seq[start..end];
