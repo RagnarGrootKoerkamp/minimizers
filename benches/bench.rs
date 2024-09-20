@@ -352,10 +352,10 @@ fn human_genome(c: &mut Criterion) {
     let packed_text = LazyCell::new(|| {
         eprintln!("Reading..");
         let start = std::time::Instant::now();
-        let mut packed_text = vec![];
+        let mut packed_text = OwnedPackedSeq::default();
         let Ok(mut reader) = needletail::parse_fastx_file("human-genome.fa") else {
             eprintln!("Did not find human-genome.fa. Add/symlink it to test runtime on it.");
-            return vec![];
+            return OwnedPackedSeq::default();
         };
         while let Some(r) = reader.next() {
             let r = r.unwrap();
@@ -364,8 +364,8 @@ fn human_genome(c: &mut Criterion) {
                 std::str::from_utf8(r.id()),
                 r.raw_seq().len()
             );
-            pack(&r.raw_seq(), &mut packed_text);
-            eprintln!("Packed len {:?}", packed_text.len());
+            packed_text.push_ascii(r.raw_seq());
+            eprintln!("Packed len {:?}", packed_text.len);
         }
         eprintln!("Packing took {:?}", start.elapsed());
         packed_text
@@ -373,36 +373,15 @@ fn human_genome(c: &mut Criterion) {
 
     let mut hasher = NtHashSimd::<true>;
     c.bench_function("human_genome", |b| {
-        let packed_text = &*packed_text;
+        let raw_packed_text = &(*packed_text).seq;
         b.iter(|| {
-            if packed_text.is_empty() {
+            if raw_packed_text.is_empty() {
                 return Default::default();
             }
             SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, &packed_text))
+                .sliding_min(w, hasher.hash_kmers(k, &raw_packed_text))
                 .map(|x| Simd::<u32, 8>::from(x))
                 .sum::<Simd<u32, 8>>()
         });
     });
-}
-
-fn pack(text: &[u8], packed: &mut Vec<u8>) {
-    let mut packed_byte = 0;
-    let mut packed_len = 0;
-    for &base in text {
-        packed_byte |= match base {
-            b'a' | b'A' => 0,
-            b'c' | b'C' => 1,
-            b'g' | b'G' => 2,
-            b't' | b'T' => 3,
-            b'\r' | b'\n' => continue,
-            _ => panic!(),
-        } << (packed_len * 2);
-        packed_len += 1;
-        if packed_len == 4 {
-            packed.push(packed_byte);
-            packed_byte = 0;
-            packed_len = 0;
-        }
-    }
 }
