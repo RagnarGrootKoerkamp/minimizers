@@ -20,16 +20,11 @@ use rand_chacha::{
     rand_core::{RngCore, SeedableRng},
     ChaChaRng,
 };
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::{
     cmp::{max, Reverse},
     f64::consts::PI,
 };
-
-#[ctor::ctor]
-fn init_color_backtrace() {
-    color_backtrace::install();
-}
 
 /// An iterator over *all* minimizer positions. Not yet deduplicated.
 ///

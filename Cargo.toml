@@ -7,43 +7,30 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [profile.release]
-opt-level = 3
 debug = true
-# lto = 'thin'
-# lto = true
-[profile.bench]
-opt-level = 3
-# lto = true
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-colored = "2"
-fxhash = "0.2"
 itertools = "0.12"
 rand = "0.8"
 rand_chacha = "0.9.0-alpha.1"
 rayon = "1"
-serde = "1"
-serde_derive = "1"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# good_lp = { version = "1.7.0", features = ["scip"], default-features = false}
-# good_lp = { version = "1.7.0", features = ["highs"], default-features = false}
-good_lp = { version = "1.7", features = ["lp-solvers"], default-features = false}
 num = "0.4"
 wyhash = "0.5"
-color-backtrace = "0.6"
-ctor = "0.2"
-nthash = "0.5.1"
 pyo3 = { version = "0.22.2", features = ["extension-module"], optional = true }
 wide = "0.7"
-
-[[example]]
-name = "lp"
+good_lp = { version = "1.7", features = ["lp-solvers"], default-features = false}
+ctor = "0.2"
+color-backtrace = "0.6"
 
 [dev-dependencies]
-criterion = "*"
+criterion = "0.5.1"
+fxhash = "0.2"
 minimizer-iter = "1.2.1"
 needletail = "0.5.1"
+nthash = "0.5.1"
 
 [features]
 # Hides the `simd` warnings when neither AVX nor NEON is detected.
@@ -56,6 +43,9 @@ default = ['python-bindings']
 [lib]
 bench = false
 crate-type = ["cdylib", "rlib"]
+
+[[example]]
+name = "lp"
 
 [[bench]]
 name = "bench"

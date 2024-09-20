@@ -64,6 +64,11 @@ struct Args {
     command: Command,
 }
 
+#[ctor::ctor]
+fn init_color_backtrace() {
+    color_backtrace::install();
+}
+
 fn main() {
     let args = Args::parse();
     let text = &generate_random_string(args.n, args.sigma);
