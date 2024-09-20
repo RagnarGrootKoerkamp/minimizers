@@ -1,14 +1,10 @@
 // TODO: The linearized functions are quite slow.
 
-use super::packed::IntoBpIterator;
-use super::packed::{L, S};
+use packed_seq::Seq;
+use packed_seq::{L, S};
 
 /// Take a sequence and a function to parallel iterate over it, and return a buffered linear iterator.
-pub fn linearize<
-    BI: IntoBpIterator,
-    I1: ExactSizeIterator<Item = S>,
-    I2: ExactSizeIterator<Item = u32>,
->(
+pub fn linearize<BI: Seq, I1: ExactSizeIterator<Item = S>, I2: ExactSizeIterator<Item = u32>>(
     seq: BI,
     context: usize,
     par_it: impl Fn(BI) -> (I1, I2),
@@ -17,7 +13,7 @@ pub fn linearize<
 }
 
 pub fn linearize_with_offset<
-    BI: IntoBpIterator,
+    BI: Seq,
     I1: ExactSizeIterator<Item = S>,
     I2: ExactSizeIterator<Item = u32>,
 >(
@@ -30,7 +26,7 @@ pub fn linearize_with_offset<
 
 struct Linear<
     const OFFSET: bool,
-    BI: IntoBpIterator,
+    BI: Seq,
     I1: ExactSizeIterator<Item = S>,
     I2: ExactSizeIterator<Item = u32>,
     ParIt: Fn(BI) -> (I1, I2),
@@ -61,7 +57,7 @@ struct Linear<
 
 impl<
         const OFFSET: bool,
-        BI: IntoBpIterator,
+        BI: Seq,
         I1: ExactSizeIterator<Item = S>,
         I2: ExactSizeIterator<Item = u32>,
         ParIt: Fn(BI) -> (I1, I2),
@@ -144,9 +140,8 @@ impl<
                 let offset = self.c * self.chunk_size;
                 self.buffer_chunk(
                     offset,
-                    self.seq.sub_slice(
-                        offset,
-                        (self.chunk_size + self.context - 1).min(self.seq.len() - offset),
+                    self.seq.slice(
+                        offset..(offset + self.chunk_size + self.context - 1).min(self.seq.len()),
                     ),
                 );
                 if self.c + 1 < self.num_chunks {
@@ -183,7 +178,7 @@ impl<
 
 impl<
         const OFFSET: bool,
-        BI: IntoBpIterator,
+        BI: Seq,
         I1: ExactSizeIterator<Item = S>,
         I2: ExactSizeIterator<Item = u32>,
         ParIt: Fn(BI) -> (I1, I2),
@@ -226,7 +221,7 @@ impl<
 
 impl<
         const OFFSET: bool,
-        BI: IntoBpIterator,
+        BI: Seq,
         I1: ExactSizeIterator<Item = S>,
         I2: ExactSizeIterator<Item = u32>,
         ParIt: Fn(BI) -> (I1, I2),

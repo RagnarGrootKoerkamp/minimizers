@@ -1,12 +1,9 @@
 use crate::simd::linearize;
 
-use super::{
-    nthash::{nthash32_par_it, nthash32_scalar_it},
-    packed::IntoBpIterator,
-};
+use super::nthash::{nthash32_par_it, nthash32_scalar_it};
 use core::array::from_fn;
 use itertools::Itertools;
-use wide::u32x8 as S;
+use packed_seq::{Seq, S};
 
 /// A custom RingBuf implementation that has a fixed size `w` and wraps around.
 struct RingBuf<V> {
@@ -166,7 +163,7 @@ fn sliding_min_par_it(
 
 /// Returns the minimizer of a window using a naive linear scan.
 /// Uses NT hash with canonical hashes when `RC` is true.
-pub fn minimizer_window_naive<const RC: bool>(seq: impl IntoBpIterator, k: usize) -> usize {
+pub fn minimizer_window_naive<const RC: bool>(seq: impl Seq, k: usize) -> usize {
     nthash32_scalar_it::<RC>(seq, k)
         .map(|x| x & 0xffff_0000)
         .position_min()
@@ -179,7 +176,7 @@ pub fn minimizer_window_naive<const RC: bool>(seq: impl IntoBpIterator, k: usize
 ///
 /// Prefer `minimizer_simd_it` that internally used SIMD, or `minimizer_par_it` if it works for you.
 pub fn minimizer_scalar_it<const RC: bool>(
-    seq: impl IntoBpIterator,
+    seq: impl Seq,
     k: usize,
     w: usize,
 ) -> impl ExactSizeIterator<Item = u32> {
@@ -200,7 +197,7 @@ pub fn minimizer_scalar_it<const RC: bool>(
 ///       only ~2x faster than the scalar version. Mostly because shuffling memory is slow.
 /// TODO: Fix this.
 pub fn minimizer_simd_it<const RC: bool>(
-    seq: impl IntoBpIterator,
+    seq: impl Seq,
     k: usize,
     w: usize,
 ) -> impl ExactSizeIterator<Item = u32> {
@@ -212,7 +209,7 @@ pub fn minimizer_simd_it<const RC: bool>(
 /// and return the remaining few using the second iterator.
 // TODO: Take a hash function as argument.
 pub fn minimizer_par_it<const RC: bool>(
-    seq: impl IntoBpIterator,
+    seq: impl Seq,
     k: usize,
     w: usize,
 ) -> (
@@ -228,7 +225,7 @@ pub fn minimizer_par_it<const RC: bool>(
 
 #[cfg(test)]
 mod test {
-    use crate::simd::packed::Packed;
+    use packed_seq::PackedSeq;
 
     use super::*;
     use rand::random;
@@ -245,7 +242,7 @@ mod test {
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 32)) {
-                    let seq = seq.sub_slice(0, len);
+                    let seq = seq.slice(0..len);
                     let single = seq[0..len]
                         .windows(w + k - 1)
                         .enumerate()
@@ -264,7 +261,7 @@ mod test {
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128)) {
-                    let seq = seq.sub_slice(0, len);
+                    let seq = seq.slice(0..len);
                     let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
                     let (par_head, tail) = minimizer_par_it::<false>(seq, k, w);
                     let par_head = par_head.collect::<Vec<_>>();
@@ -281,7 +278,7 @@ mod test {
 
     #[test]
     fn parallel_iter_packed() {
-        let seq = Packed {
+        let seq = PackedSeq {
             seq: &*PACKED_SEQ,
             offset: 0,
             len: 1024 * 1024,
@@ -289,7 +286,7 @@ mod test {
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128)) {
-                    let seq = seq.sub_slice(0, len);
+                    let seq = seq.slice(0..len);
                     let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
                     let (par_head, tail) = minimizer_par_it::<false>(seq, k, w);
                     let par_head = par_head.collect::<Vec<_>>();
@@ -305,7 +302,7 @@ mod test {
 
     #[test]
     fn linearized() {
-        let seq = Packed {
+        let seq = PackedSeq {
             seq: &*PACKED_SEQ,
             offset: 0,
             len: 1024 * 1024,
@@ -313,7 +310,7 @@ mod test {
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128 + 765)) {
-                    let seq = seq.sub_slice(0, len);
+                    let seq = seq.slice(0..len);
                     let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
                     let simd = minimizer_simd_it::<false>(seq, k, w).collect::<Vec<_>>();
                     assert_eq!(

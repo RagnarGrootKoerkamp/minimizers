@@ -6,8 +6,8 @@ use itertools::Itertools;
 use minimizers::simd::{
     minimizer::{minimizer_par_it, minimizer_scalar_it, minimizer_simd_it},
     nthash::{nthash32_par_it, nthash32_simd_it},
-    packed::Packed,
 };
+use packed_seq::{OwnedPackedSeq, OwnedSeq, PackedSeq};
 use std::{cell::LazyCell, simd::Simd, time::Duration};
 use wide::u32x8;
 
@@ -267,7 +267,7 @@ fn local_nthash(c: &mut Criterion) {
         b.iter(|| drop(black_box(hasher.hash_kmers(k, packed_text))));
     });
 
-    let packed_text = Packed { seq: packed_text, offset: 0, len: packed_text.len() * 4 };
+    let packed_text = PackedSeq { seq: packed_text, offset: 0, len: packed_text.len() * 4 };
     g.bench_with_input("nthash_par_it_sum", &packed_text, |b, packed_text| {
         b.iter(|| {
             nthash32_par_it::<false>(*packed_text, k, 1)
@@ -291,9 +291,9 @@ fn local_nthash(c: &mut Criterion) {
 
 fn simd_minimizer(c: &mut Criterion) {
     // Create a random string of length 1Mbp.
-    let packed_text = &(0..1000000 / 4)
-        .map(|_| rand::random::<u8>())
-        .collect::<Vec<_>>();
+    let owned_packed_seq = OwnedPackedSeq::random(1000000);
+    let raw_packed_seq = &owned_packed_seq.seq;
+    let packed_seq = owned_packed_seq.as_slice();
 
     let w = 11;
     let k = 21;
@@ -303,7 +303,7 @@ fn simd_minimizer(c: &mut Criterion) {
     g.bench_function("split_simd_sum", |b| {
         b.iter(|| {
             SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, packed_text))
+                .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
                 .map(|x| Simd::<u32, 8>::from(x))
                 .sum::<Simd<u32, 8>>()
         });
@@ -314,7 +314,7 @@ fn simd_minimizer(c: &mut Criterion) {
     g.bench_function("split_simd_buf_sum", |b| {
         b.iter(|| {
             SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, packed_text))
+                .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
                 .map(|x| Simd::<u32, 8>::from(x))
                 .sum::<Simd<u32, 8>>()
         });
@@ -324,7 +324,7 @@ fn simd_minimizer(c: &mut Criterion) {
     g.bench_function("split_simd_collect", |b| {
         b.iter(|| {
             SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, packed_text))
+                .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
                 .collect_vec()
         });
     });
@@ -334,20 +334,19 @@ fn simd_minimizer(c: &mut Criterion) {
     g.bench_function("split_simd_buf_collect", |b| {
         b.iter(|| {
             SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, packed_text))
+                .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
                 .collect_vec()
         });
     });
 
-    let packed_text = Packed { seq: packed_text, offset: 0, len: packed_text.len() * 4 };
     g.bench_function("minimizer_scalar_it_vec", |b| {
-        b.iter(|| minimizer_scalar_it::<false>(packed_text, k, w).collect_vec());
+        b.iter(|| minimizer_scalar_it::<false>(packed_seq, k, w).collect_vec());
     });
     g.bench_function("minimizer_par_it_vec", |b| {
-        b.iter(|| minimizer_par_it::<false>(packed_text, k, w).0.collect_vec());
+        b.iter(|| minimizer_par_it::<false>(packed_seq, k, w).0.collect_vec());
     });
     g.bench_function("minimizer_simd_it_vec", |b| {
-        b.iter(|| minimizer_simd_it::<false>(packed_text, k, w).collect_vec());
+        b.iter(|| minimizer_simd_it::<false>(packed_seq, k, w).collect_vec());
     });
 }
 

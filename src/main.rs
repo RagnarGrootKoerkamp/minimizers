@@ -9,7 +9,7 @@ use clap::Parser;
 use itertools::Itertools;
 use minimizers::{de_bruijn_seq::de_bruijn_sequence, *};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use serde_derive::Serialize;
+use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
 struct Result {

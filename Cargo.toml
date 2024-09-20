@@ -12,6 +12,7 @@ debug = true
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 itertools = "0.12"
+packed-seq = { version = "0.1.0", git = "https://github.com/rust-seq/packed-seq" }
 rand = "0.8"
 rand_chacha = "0.9.0-alpha.1"
 rayon = "1"

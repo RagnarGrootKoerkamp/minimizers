@@ -11,8 +11,7 @@
 
 use super::intrinsics;
 use super::linearize;
-use super::packed::IntoBpIterator;
-use wide::u32x8 as S;
+use packed_seq::{Seq, S};
 
 // TODO: Update to guarantee unique hash values for k<=16?
 const HASHES_F: [u32; 4] = [
@@ -35,7 +34,7 @@ const HASHES_C: [u32; 4] = [
 /// Naively compute the 32-bit NT hash of a single k-mer.
 /// When `RC` is false, compute a forward hash.
 /// When `RC` is true, compute a canonical hash.
-pub fn nthash32_kmer_naive<const RC: bool>(seq: impl IntoBpIterator) -> u32 {
+pub fn nthash32_kmer_naive<const RC: bool>(seq: impl Seq) -> u32 {
     let k = seq.len();
     let mut hfw: u32 = 0;
     let mut hrc: u32 = 0;
@@ -53,7 +52,7 @@ pub fn nthash32_kmer_naive<const RC: bool>(seq: impl IntoBpIterator) -> u32 {
 ///
 /// Prefer `nthash32_simd_it` which fills an internal buffer using the parallel SIMD version.
 pub fn nthash32_scalar_it<const RC: bool>(
-    seq: impl IntoBpIterator,
+    seq: impl Seq,
     k: usize,
 ) -> impl ExactSizeIterator<Item = u32> {
     assert!(k > 0);
@@ -88,7 +87,7 @@ pub fn nthash32_scalar_it<const RC: bool>(
 /// Then returns a linear iterator over the buffer.
 /// Once the buffer runs out, the next chunk is computed.
 pub fn nthash32_simd_it<const RC: bool>(
-    seq: impl IntoBpIterator,
+    seq: impl Seq,
     k: usize,
 ) -> impl ExactSizeIterator<Item = u32> {
     linearize::linearize(seq, k, move |seq| nthash32_par_it::<RC>(seq, k, 1))
@@ -100,7 +99,7 @@ pub fn nthash32_simd_it<const RC: bool>(
 /// The tail end has up to 31*8 = 248 elements.
 // TODO: SMALL_K + reusing gathers?
 pub fn nthash32_par_it<const RC: bool>(
-    seq: impl IntoBpIterator,
+    seq: impl Seq,
     k: usize,
     w: usize,
 ) -> (
@@ -157,16 +156,15 @@ pub fn nthash32_par_it<const RC: bool>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::simd::packed::{Packed, L};
     use itertools::Itertools;
+    use packed_seq::{OwnedPackedSeq, OwnedSeq, L};
     use rand::random;
     use std::{cell::LazyCell, iter::once};
 
     const BYTE_SEQ: LazyCell<Vec<u8>> =
         LazyCell::new(|| (0..1024).map(|_| random::<u8>() % 4).collect());
 
-    const PACKED_SEQ: LazyCell<Vec<u8>> =
-        LazyCell::new(|| (0..256).map(|_| random::<u8>()).collect());
+    const PACKED_SEQ: LazyCell<OwnedPackedSeq> = LazyCell::new(|| OwnedPackedSeq::random(1024));
 
     #[test]
     fn scalar_byte() {
@@ -175,7 +173,7 @@ mod test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
-                let seq = seq.sub_slice(0, len);
+                let seq = seq.slice(0..len);
                 let single = seq
                     .windows(k)
                     .map(|seq| nthash32_kmer_naive::<false>(seq))
@@ -193,7 +191,7 @@ mod test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
-                let seq = seq.sub_slice(0, len);
+                let seq = seq.slice(0..len);
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
                 let parallel = nthash32_simd_it::<false>(seq, k).collect::<Vec<_>>();
                 assert_eq!(scalar, parallel, "k={}, len={}", k, len);
@@ -203,16 +201,12 @@ mod test {
 
     #[test]
     fn parallel_packed() {
-        let seq = Packed {
-            seq: &*PACKED_SEQ,
-            offset: 0,
-            len: 1024,
-        };
+        let seq = &*PACKED_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
-                let seq = seq.sub_slice(0, len);
+                let seq = seq.slice(0..len);
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
                 let parallel = nthash32_simd_it::<false>(seq, k).collect::<Vec<_>>();
                 assert_eq!(scalar, parallel, "k={}, len={}", k, len);
@@ -227,7 +221,7 @@ mod test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
-                let seq = seq.sub_slice(0, len);
+                let seq = seq.slice(0..len);
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
                 let (par_head, tail) = nthash32_par_it::<false>(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
@@ -243,16 +237,12 @@ mod test {
 
     #[test]
     fn parallel_iter_packed() {
-        let seq = Packed {
-            seq: &*PACKED_SEQ,
-            offset: 0,
-            len: 1024,
-        };
+        let seq = &*PACKED_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
-                let seq = seq.sub_slice(0, len);
+                let seq = seq.slice(0..len);
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
                 let (par_head, tail) = nthash32_par_it::<false>(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
@@ -277,7 +267,7 @@ mod test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
-                let seq = seq.sub_slice(0, len);
+                let seq = seq.slice(0..len);
                 let seq_rc = &seq_rc[seq_rc.len() - len..];
                 let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
                 let scalar_rc = nthash32_scalar_it::<true>(seq_rc, k).collect::<Vec<_>>();
@@ -302,7 +292,7 @@ mod test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
-                let seq = seq.sub_slice(0, len);
+                let seq = seq.slice(0..len);
                 let single = seq
                     .windows(k)
                     .map(|seq| nthash32_kmer_naive::<true>(seq))
@@ -315,16 +305,12 @@ mod test {
 
     #[test]
     fn parallel_iter_packed_canonical() {
-        let seq = Packed {
-            seq: &*PACKED_SEQ,
-            offset: 0,
-            len: 1024,
-        };
+        let seq = &*PACKED_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
-                let seq = seq.sub_slice(0, len);
+                let seq = seq.slice(0..len);
                 let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
                 let (par_head, tail) = nthash32_par_it::<true>(seq, k, 1);
                 let par_head = par_head.collect::<Vec<_>>();
@@ -339,16 +325,12 @@ mod test {
 
     #[test]
     fn linearized() {
-        let seq = Packed {
-            seq: &*PACKED_SEQ,
-            offset: 0,
-            len: 1024,
-        };
+        let seq = &*PACKED_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain([973, 1024]) {
-                let seq = seq.sub_slice(0, len);
+                let seq = seq.slice(0..len);
                 let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
                 let simd = nthash32_simd_it::<true>(seq, k).collect::<Vec<_>>();
                 assert_eq!(scalar, simd, "k={}, len={}", k, len);
