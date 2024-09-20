@@ -732,7 +732,6 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "wide",
  "wyhash",
 ]
 

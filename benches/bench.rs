@@ -7,9 +7,8 @@ use minimizers::simd::{
     minimizer::{minimizer_par_it, minimizer_scalar_it, minimizer_simd_it},
     nthash::{nthash32_par_it, nthash32_simd_it},
 };
-use packed_seq::{OwnedPackedSeq, OwnedSeq, PackedSeq};
+use packed_seq::{OwnedPackedSeq, OwnedSeq, PackedSeq, S};
 use std::{cell::LazyCell, simd::Simd, time::Duration};
-use wide::u32x8;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
@@ -269,17 +268,13 @@ fn local_nthash(c: &mut Criterion) {
 
     let packed_text = PackedSeq { seq: packed_text, offset: 0, len: packed_text.len() * 4 };
     g.bench_with_input("nthash_par_it_sum", &packed_text, |b, packed_text| {
-        b.iter(|| {
-            nthash32_par_it::<false>(*packed_text, k, 1)
-                .0
-                .sum::<u32x8>()
-        });
+        b.iter(|| nthash32_par_it::<false>(*packed_text, k, 1).0.sum::<S>());
     });
     g.bench_with_input("nthash_par_it_vec", &packed_text, |b, packed_text| {
         b.iter(|| nthash32_par_it::<false>(*packed_text, k, 1).0.collect_vec());
     });
     g.bench_with_input("nthash_par_it_sum_c", &packed_text, |b, packed_text| {
-        b.iter(|| nthash32_par_it::<true>(*packed_text, k, 1).0.sum::<u32x8>());
+        b.iter(|| nthash32_par_it::<true>(*packed_text, k, 1).0.sum::<S>());
     });
     g.bench_with_input("nthash_simd_it_vec", &packed_text, |b, packed_text| {
         b.iter(|| nthash32_simd_it::<false>(*packed_text, k).collect_vec());
