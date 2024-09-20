@@ -22,7 +22,6 @@ num = "0.4"
 wyhash = "0.5"
 pyo3 = { version = "0.22.2", features = ["extension-module"], optional = true }
 wide = "0.7"
-good_lp = { version = "1.7", features = ["lp-solvers"], default-features = false}
 ctor = "0.2"
 color-backtrace = "0.6"
 
@@ -32,6 +31,7 @@ fxhash = "0.2"
 minimizer-iter = "1.2.1"
 needletail = "0.5.1"
 nthash = "0.5.1"
+good_lp = { version = "1.7", features = ["lp-solvers"], default-features = false}
 
 [features]
 # Hides the `simd` warnings when neither AVX nor NEON is detected.
