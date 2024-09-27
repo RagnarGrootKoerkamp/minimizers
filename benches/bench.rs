@@ -286,7 +286,7 @@ fn local_nthash(c: &mut Criterion) {
 
 fn simd_minimizer(c: &mut Criterion) {
     // Create a random string of length 1Mbp.
-    let owned_packed_seq = OwnedPackedSeq::random(1000000);
+    let owned_packed_seq = OwnedPackedSeq::random(1000000, 4);
     let raw_packed_seq = &owned_packed_seq.seq;
     let packed_seq = owned_packed_seq.as_slice();
 

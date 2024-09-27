@@ -164,7 +164,7 @@ mod test {
     const BYTE_SEQ: LazyCell<Vec<u8>> =
         LazyCell::new(|| (0..1024).map(|_| random::<u8>() % 4).collect());
 
-    const PACKED_SEQ: LazyCell<OwnedPackedSeq> = LazyCell::new(|| OwnedPackedSeq::random(1024));
+    const PACKED_SEQ: LazyCell<OwnedPackedSeq> = LazyCell::new(|| OwnedPackedSeq::random(1024, 4));
 
     #[test]
     fn scalar_byte() {
