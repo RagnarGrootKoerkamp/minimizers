@@ -97,10 +97,10 @@ pub fn generate_random_string(n: usize, sigma: usize) -> Vec<u8> {
 /// - position distribution
 /// - distance distribution
 /// - transfer distribution
-fn collect_stats(
+pub fn collect_stats(
     w: usize,
     text: &[u8],
-    scheme: impl SamplingScheme,
+    scheme: &dyn SamplingScheme,
 ) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
     let it = scheme.stream(text);
 
@@ -139,7 +139,7 @@ fn collect_stats(
 }
 
 /// Compute statistics on number of sampled positions on cycles of a given length.
-fn cycle_stats(l: usize, text: &[u8], scheme: impl SamplingScheme) -> (f64, Vec<f64>) {
+pub fn cycle_stats(l: usize, text: &[u8], scheme: &dyn SamplingScheme) -> (f64, Vec<f64>) {
     let mut cycle = vec![0; 4 * l];
     let mut stats = vec![0; l + 1];
     let mut total = 0;
@@ -234,92 +234,77 @@ pub enum MinimizerType {
 
 /// TODO: Analyze non-forward schemes.
 impl MinimizerType {
-    #[inline(never)]
-    pub fn collect_stats(
-        &self,
-        text: &[u8],
-        w: usize,
-        k: usize,
-        sigma: usize,
-    ) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
+    pub fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
         let o = RandomOrder;
         let al = AntiLex;
         match self {
             MinimizerType::Minimizer { ao } => {
                 if !ao {
-                    collect_stats(w, text, Minimizer::new(k, w, o))
+                    Box::new(Minimizer::new(k, w, o))
                 } else {
-                    collect_stats(w, text, Minimizer::new(k, w, al))
+                    Box::new(Minimizer::new(k, w, al))
                 }
             }
             MinimizerType::BdAnchor { r } => {
                 assert_eq!(k, 1);
-                collect_stats(w, text, BdAnchor::new(w, *r))
+                Box::new(BdAnchor::new(w, *r))
             }
             MinimizerType::SusAnchor { ao, modulo } => {
                 if !ao {
-                    collect_stats(w, text, SusAnchor::new(w, k, Lex, *modulo))
+                    Box::new(SusAnchor::new(w, k, Lex, *modulo))
                 } else {
-                    collect_stats(w, text, SusAnchor::new(w, k, al, *modulo))
+                    Box::new(SusAnchor::new(w, k, al, *modulo))
                 }
             }
             MinimizerType::Miniception { k0, ao, aot } => {
                 if !ao {
                     if !aot {
-                        collect_stats(w, text, Miniception::new(w, k, *k0, o, o))
+                        Box::new(Miniception::new(w, k, *k0, o, o))
                     } else {
-                        collect_stats(w, text, Miniception::new(w, k, *k0, o, al))
+                        Box::new(Miniception::new(w, k, *k0, o, al))
                     }
                 } else {
                     if !aot {
-                        collect_stats(w, text, Miniception::new(w, k, *k0, al, o))
+                        Box::new(Miniception::new(w, k, *k0, al, o))
                     } else {
-                        collect_stats(w, text, Miniception::new(w, k, *k0, al, al))
+                        Box::new(Miniception::new(w, k, *k0, al, al))
                     }
                 }
             }
-            MinimizerType::MiniceptionNew { k0 } => {
-                collect_stats(w, text, MiniceptionNew::new(w, k, *k0, o))
-            }
-            MinimizerType::ModSampling { k0 } => {
-                collect_stats(w, text, ModSampling::new(k, w, *k0, o))
-            }
-            MinimizerType::LrMinimizer => {
-                collect_stats(w, text, ModSampling::lr_minimizer(k, w, o))
-            }
+            MinimizerType::MiniceptionNew { k0 } => Box::new(MiniceptionNew::new(w, k, *k0, o)),
+            MinimizerType::ModSampling { k0 } => Box::new(ModSampling::new(k, w, *k0, o)),
+            MinimizerType::LrMinimizer => Box::new(ModSampling::lr_minimizer(k, w, o)),
             MinimizerType::ModMinimizer { r, aot } => {
                 if !aot {
-                    collect_stats(w, text, ModSampling::mod_minimizer(k, w, *r, o))
+                    Box::new(ModSampling::mod_minimizer(k, w, *r, o))
                 } else {
-                    collect_stats(w, text, ModSampling::mod_minimizer(k, w, *r, al))
+                    Box::new(ModSampling::mod_minimizer(k, w, *r, al))
                 }
             }
-            MinimizerType::RotMinimizer => collect_stats(w, text, RotMinimizer::new(k, w, o)),
-            MinimizerType::AltRotMinimizer => collect_stats(w, text, AltRotMinimizer::new(k, w, o)),
-            MinimizerType::DecyclingMinimizer => {
-                collect_stats(w, text, Decycling::new(k, w, o, false))
-            }
+            MinimizerType::RotMinimizer => Box::new(RotMinimizer::new(k, w, o)),
+            MinimizerType::AltRotMinimizer => Box::new(AltRotMinimizer::new(k, w, o)),
+            MinimizerType::DecyclingMinimizer => Box::new(Decycling::new(k, w, o, false)),
             MinimizerType::DoubleDecyclingMinimizer { ao } => {
                 if !ao {
-                    collect_stats(w, text, Decycling::new(k, w, o, true))
+                    Box::new(Decycling::new(k, w, o, true))
                 } else {
-                    collect_stats(w, text, Decycling::new(k, w, al, true))
+                    Box::new(Decycling::new(k, w, al, true))
                 }
             }
             MinimizerType::Bruteforce => {
                 let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
-                collect_stats(w, text, m)
+                Box::new(m)
             }
             MinimizerType::OpenSyncmerMinimizer { t } => {
-                collect_stats(w, text, OpenSyncmer::new(k, w, *t, true, false))
+                Box::new(OpenSyncmer::new(k, w, *t, true, false))
             }
             MinimizerType::ClosedSyncmerMinimizer { t, loose, open, h } => {
-                collect_stats(w, text, ClosedSyncmer::new(k, w, *t, *loose, *open, *h))
+                Box::new(ClosedSyncmer::new(k, w, *t, *loose, *open, *h))
             }
             MinimizerType::OpenClosedSyncmerMinimizer { t } => {
-                collect_stats(w, text, OpenSyncmer::new(k, w, *t, true, true))
+                Box::new(OpenSyncmer::new(k, w, *t, true, true))
             }
-            MinimizerType::FracMin { f } => collect_stats(w, text, FracMin::new(k, w, *f)),
+            MinimizerType::FracMin { f } => Box::new(FracMin::new(k, w, *f)),
             MinimizerType::OcModMinimizer {
                 t,
                 offset,
@@ -333,256 +318,63 @@ impl MinimizerType {
             } => {
                 if !ao {
                     if !aot {
-                        collect_stats(
+                        Box::new(OcModMinimizer::new(
+                            k,
                             w,
-                            text,
-                            OcModMinimizer::new(
-                                k,
-                                w,
-                                *t,
-                                *offset,
-                                *use_closed,
-                                *prefer_prefix,
-                                *open_tmer,
-                                *closed_tmer,
-                                *other_tmer,
-                                o,
-                                o,
-                            ),
-                        )
+                            *t,
+                            *offset,
+                            *use_closed,
+                            *prefer_prefix,
+                            *open_tmer,
+                            *closed_tmer,
+                            *other_tmer,
+                            o,
+                            o,
+                        ))
                     } else {
-                        collect_stats(
+                        Box::new(OcModMinimizer::new(
+                            k,
                             w,
-                            text,
-                            OcModMinimizer::new(
-                                k,
-                                w,
-                                *t,
-                                *offset,
-                                *use_closed,
-                                *prefer_prefix,
-                                *open_tmer,
-                                *closed_tmer,
-                                *other_tmer,
-                                o,
-                                al,
-                            ),
-                        )
+                            *t,
+                            *offset,
+                            *use_closed,
+                            *prefer_prefix,
+                            *open_tmer,
+                            *closed_tmer,
+                            *other_tmer,
+                            o,
+                            al,
+                        ))
                     }
                 } else {
                     if !aot {
-                        collect_stats(
+                        Box::new(OcModMinimizer::new(
+                            k,
                             w,
-                            text,
-                            OcModMinimizer::new(
-                                k,
-                                w,
-                                *t,
-                                *offset,
-                                *use_closed,
-                                *prefer_prefix,
-                                *open_tmer,
-                                *closed_tmer,
-                                *other_tmer,
-                                al,
-                                o,
-                            ),
-                        )
+                            *t,
+                            *offset,
+                            *use_closed,
+                            *prefer_prefix,
+                            *open_tmer,
+                            *closed_tmer,
+                            *other_tmer,
+                            al,
+                            o,
+                        ))
                     } else {
-                        collect_stats(
+                        Box::new(OcModMinimizer::new(
+                            k,
                             w,
-                            text,
-                            OcModMinimizer::new(
-                                k,
-                                w,
-                                *t,
-                                *offset,
-                                *use_closed,
-                                *prefer_prefix,
-                                *open_tmer,
-                                *closed_tmer,
-                                *other_tmer,
-                                al,
-                                al,
-                            ),
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    #[inline(never)]
-    pub fn cycle_stats(
-        &self,
-        text: &[u8],
-        w: usize,
-        k: usize,
-        l: usize,
-        sigma: usize,
-    ) -> (f64, Vec<f64>) {
-        let o = RandomOrder;
-        let al = AntiLex;
-        match self {
-            MinimizerType::Minimizer { ao } => {
-                if !ao {
-                    cycle_stats(l, text, Minimizer::new(k, w, o))
-                } else {
-                    cycle_stats(l, text, Minimizer::new(k, w, al))
-                }
-            }
-            MinimizerType::BdAnchor { r } => {
-                assert_eq!(k, 1);
-                cycle_stats(l, text, BdAnchor::new(w, *r))
-            }
-            MinimizerType::SusAnchor { ao, modulo } => {
-                if !ao {
-                    cycle_stats(l, text, SusAnchor::new(w, k, Lex, *modulo))
-                } else {
-                    cycle_stats(l, text, SusAnchor::new(w, k, al, *modulo))
-                }
-            }
-            MinimizerType::Miniception { k0, ao, aot } => {
-                if !ao {
-                    if !aot {
-                        cycle_stats(l, text, Miniception::new(w, k, *k0, o, o))
-                    } else {
-                        cycle_stats(l, text, Miniception::new(w, k, *k0, o, al))
-                    }
-                } else {
-                    if !aot {
-                        cycle_stats(l, text, Miniception::new(w, k, *k0, al, o))
-                    } else {
-                        cycle_stats(l, text, Miniception::new(w, k, *k0, al, al))
-                    }
-                }
-            }
-            MinimizerType::MiniceptionNew { k0 } => {
-                cycle_stats(l, text, MiniceptionNew::new(w, k, *k0, o))
-            }
-            MinimizerType::ModSampling { k0 } => {
-                cycle_stats(l, text, ModSampling::new(k, w, *k0, o))
-            }
-            MinimizerType::LrMinimizer => cycle_stats(l, text, ModSampling::lr_minimizer(k, w, o)),
-            MinimizerType::ModMinimizer { r, aot } => {
-                if !aot {
-                    cycle_stats(l, text, ModSampling::mod_minimizer(k, w, *r, o))
-                } else {
-                    cycle_stats(l, text, ModSampling::mod_minimizer(k, w, *r, al))
-                }
-            }
-            MinimizerType::RotMinimizer => cycle_stats(l, text, RotMinimizer::new(k, w, o)),
-            MinimizerType::AltRotMinimizer => cycle_stats(l, text, AltRotMinimizer::new(k, w, o)),
-            MinimizerType::DecyclingMinimizer => {
-                cycle_stats(l, text, Decycling::new(k, w, o, false))
-            }
-            MinimizerType::DoubleDecyclingMinimizer { ao } => {
-                if !ao {
-                    cycle_stats(l, text, Decycling::new(k, w, o, true))
-                } else {
-                    cycle_stats(l, text, Decycling::new(k, w, al, true))
-                }
-            }
-            MinimizerType::Bruteforce => {
-                let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
-                cycle_stats(l, text, m)
-            }
-            MinimizerType::OpenSyncmerMinimizer { t } => {
-                cycle_stats(l, text, OpenSyncmer::new(k, w, *t, true, false))
-            }
-            MinimizerType::ClosedSyncmerMinimizer { t, loose, open, h } => {
-                cycle_stats(l, text, ClosedSyncmer::new(k, w, *t, *loose, *open, *h))
-            }
-            MinimizerType::OpenClosedSyncmerMinimizer { t } => {
-                cycle_stats(l, text, OpenSyncmer::new(k, w, *t, true, true))
-            }
-            MinimizerType::FracMin { f } => cycle_stats(w, text, FracMin::new(k, w, *f)),
-            MinimizerType::OcModMinimizer {
-                t,
-                offset,
-                use_closed,
-                prefer_prefix,
-                open_tmer,
-                closed_tmer,
-                other_tmer,
-                ao,
-                aot,
-            } => {
-                if !ao {
-                    if !aot {
-                        cycle_stats(
-                            l,
-                            text,
-                            OcModMinimizer::new(
-                                k,
-                                w,
-                                *t,
-                                *offset,
-                                *use_closed,
-                                *prefer_prefix,
-                                *open_tmer,
-                                *closed_tmer,
-                                *other_tmer,
-                                o,
-                                o,
-                            ),
-                        )
-                    } else {
-                        cycle_stats(
-                            l,
-                            text,
-                            OcModMinimizer::new(
-                                k,
-                                w,
-                                *t,
-                                *offset,
-                                *use_closed,
-                                *prefer_prefix,
-                                *open_tmer,
-                                *closed_tmer,
-                                *other_tmer,
-                                o,
-                                al,
-                            ),
-                        )
-                    }
-                } else {
-                    if !aot {
-                        cycle_stats(
-                            l,
-                            text,
-                            OcModMinimizer::new(
-                                k,
-                                w,
-                                *t,
-                                *offset,
-                                *use_closed,
-                                *prefer_prefix,
-                                *open_tmer,
-                                *closed_tmer,
-                                *other_tmer,
-                                al,
-                                o,
-                            ),
-                        )
-                    } else {
-                        cycle_stats(
-                            l,
-                            text,
-                            OcModMinimizer::new(
-                                k,
-                                w,
-                                *t,
-                                *offset,
-                                *use_closed,
-                                *prefer_prefix,
-                                *open_tmer,
-                                *closed_tmer,
-                                *other_tmer,
-                                al,
-                                al,
-                            ),
-                        )
+                            *t,
+                            *offset,
+                            *use_closed,
+                            *prefer_prefix,
+                            *open_tmer,
+                            *closed_tmer,
+                            *other_tmer,
+                            al,
+                            al,
+                        ))
                     }
                 }
             }

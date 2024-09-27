@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 
-use crate::MinimizerType;
+use crate::{collect_stats, MinimizerType};
 
 fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
     Ok(dict
@@ -92,8 +92,8 @@ fn stats(
     sigma: usize,
     params: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<(f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>)> {
-    let scheme = get_scheme(tp, params)?;
-    let stats = scheme.collect_stats(&text, w, k, sigma);
+    let scheme = get_scheme(tp, params)?.build(w, k, sigma);
+    let stats = collect_stats(w, &text, &*scheme);
     Ok(stats)
 }
 
@@ -108,8 +108,8 @@ fn cycle_stats(
     sigma: usize,
     params: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<(f64, Vec<f64>)> {
-    let scheme = get_scheme(tp, params)?;
-    let stats = scheme.cycle_stats(&text, w, k, l, sigma);
+    let scheme = get_scheme(tp, params)?.build(w, k, sigma);
+    let stats = super::cycle_stats(l, &text, &*scheme);
     Ok(stats)
 }
 
