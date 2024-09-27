@@ -221,7 +221,7 @@ pub enum MinimizerType {
 /// TODO: Analyze non-forward schemes.
 impl MinimizerType {
     #[inline(never)]
-    pub fn stats(
+    pub fn collect_stats(
         &self,
         text: &[u8],
         w: usize,

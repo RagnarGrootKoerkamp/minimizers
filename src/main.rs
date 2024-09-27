@@ -76,7 +76,7 @@ fn main() {
     match args.command {
         Command::Run { tp, w, k } => {
             eprintln!("Running {tp:?}:");
-            let (d, _ps, _ds, _transfer) = tp.stats(text, w, k, args.sigma);
+            let (d, _ps, _ds, _transfer) = tp.collect_stats(text, w, k, args.sigma);
             eprintln!("  Density : {d:.3}");
             // eprintln!("  Poss    : {ps:.5?}");
             // eprintln!("  Dists<0 : {:.5?}", &ds[0..w]);
@@ -167,7 +167,8 @@ fn main() {
                 let l = w + k - 1;
                 let tps = tp.try_params(w, k);
                 for tp in tps {
-                    let (density, positions, dists, transfer) = tp.stats(text, w, k, args.sigma);
+                    let (density, positions, dists, transfer) =
+                        tp.collect_stats(text, w, k, args.sigma);
                     let mut results = results.lock().unwrap();
                     results.push(Some(Result {
                         sigma: args.sigma,
