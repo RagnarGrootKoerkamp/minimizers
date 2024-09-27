@@ -3,6 +3,7 @@
 //       Currently they are 4x slower than the `*_par_it` versions.
 
 pub mod bruteforce;
+pub mod cycle_partition_lp;
 pub mod de_bruijn_seq;
 pub mod local_scheme;
 pub mod monotone_queue;

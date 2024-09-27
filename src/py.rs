@@ -102,6 +102,16 @@ pub fn generate_random_string(n: usize, sigma: usize) -> PyResult<Vec<u8>> {
     Ok(super::generate_random_string(n, sigma))
 }
 
+#[pyfunction]
+#[pyo3(signature = (w, k, l))]
+fn cycle_partition_lp(w: usize, k: usize, l: usize) -> PyResult<f64> {
+    Ok(super::cycle_partition_lp::cycle_partition_lp(
+        w,
+        k,
+        l..l + 1,
+    ))
+}
+
 /// A Python module implemented in Rust. The name of this function must match
 /// the `lib.name` setting in the `Cargo.toml`, else Python will not be able to
 /// import the module.
@@ -110,5 +120,6 @@ fn minimizers(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(stats, m)?)?;
     m.add_function(wrap_pyfunction!(density, m)?)?;
     m.add_function(wrap_pyfunction!(generate_random_string, m)?)?;
+    m.add_function(wrap_pyfunction!(cycle_partition_lp, m)?)?;
     Ok(())
 }
