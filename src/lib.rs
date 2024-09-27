@@ -51,9 +51,10 @@ pub trait SamplingScheme {
     /// This default implementation simply calls `sample` on each lmer.
     // TODO: Take an iterator over u8 instead?
     #[inline(always)]
-    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+    fn stream(&self, text: &[u8]) -> Vec<usize> {
         self.stream_naive(text)
     }
+
     /// Sample all lmers in a cyclic text of length `len`.
     /// Text must have length at least `len + l-1`, and the additional
     /// characters must equal a prefix of the text.
@@ -61,22 +62,26 @@ pub trait SamplingScheme {
     /// Returns the number of selected minimizers.
     fn cyclic_text_density(&self, text: &[u8], len: usize) -> usize {
         let text = &text[..len + self.l() - 1];
-        let mut poss: Vec<_> = self.stream(text).map(|p| p % len).collect();
+        let mut poss: Vec<_> = self.stream(text).iter().map(|p| p % len).collect();
         poss.sort();
         poss.dedup();
         poss.len()
     }
 
     fn is_forward(&self, text: &[u8]) -> bool {
-        self.stream(text).tuple_windows().all(|(a, b)| a <= b)
+        self.stream(text)
+            .iter()
+            .tuple_windows()
+            .all(|(a, b)| a <= b)
     }
 
     /// Sample all lmers in a text.
     /// This default implementation simply calls `sample` on each lmer.
-    fn stream_naive(&self, text: &[u8]) -> impl MinimizerIt {
+    fn stream_naive(&self, text: &[u8]) -> Vec<usize> {
         text.windows(self.l())
             .enumerate()
             .map(|(i, lmer)| i + self.sample(lmer))
+            .collect()
     }
 }
 /// Generate a random string.
@@ -105,7 +110,7 @@ fn collect_stats(
     let mut ds = vec![0; 2 * w + 1];
     let mut transfer = vec![vec![0; w]; w];
     let mut last = 0;
-    for (i, idx) in it.enumerate() {
+    for (i, idx) in it.into_iter().enumerate() {
         assert!(
             i <= idx && idx < i + w,
             "Sampled index not in range: {i}<={idx}<{}",
@@ -688,7 +693,7 @@ impl<O: DirectedOrder> SamplingScheme for Minimizer<O> {
 
     // TODO: Rolling hash using NtHash.
     #[inline(always)]
-    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+    fn stream(&self, text: &[u8]) -> Vec<usize> {
         let mut q = monotone_queue::MonotoneQueue::new();
         let mut kmers = text.windows(self.k).enumerate();
         // Push the first w-1 kmers onto the queue.
@@ -697,10 +702,13 @@ impl<O: DirectedOrder> SamplingScheme for Minimizer<O> {
         }
         // i: position of lmer
         // j: position of kmer
-        kmers.enumerate().map(move |(i, (j, kmer))| {
-            q.push(j, self.o.key(kmer));
-            q.pop(i).unwrap().0
-        })
+        kmers
+            .enumerate()
+            .map(move |(i, (j, kmer))| {
+                q.push(j, self.o.key(kmer));
+                q.pop(i).unwrap().0
+            })
+            .collect()
     }
 }
 
@@ -859,7 +867,7 @@ impl<O: Order, OT: Order> SamplingScheme for Miniception<O, OT> {
     }
 
     #[inline(always)]
-    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+    fn stream(&self, text: &[u8]) -> Vec<usize> {
         // Queue of all k0-mers.
         let mut q0 = MonotoneQueue::new();
         // Queue of filtered k-mers.
@@ -888,15 +896,18 @@ impl<O: Order, OT: Order> SamplingScheme for Miniception<O, OT> {
         }
 
         // 3: Iterate l-mers.
-        kmers.enumerate().map(move |(i, ((j, kmer), (j0, k0mer)))| {
-            q0.push(j0, Order::key(o0, k0mer));
-            let min_pos = q0.pop(j).unwrap().0;
-            if min_pos == j || min_pos == j + self.w0 {
-                q.push(j, self.o.key(kmer));
-            }
+        kmers
+            .enumerate()
+            .map(move |(i, ((j, kmer), (j0, k0mer)))| {
+                q0.push(j0, Order::key(o0, k0mer));
+                let min_pos = q0.pop(j).unwrap().0;
+                if min_pos == j || min_pos == j + self.w0 {
+                    q.push(j, self.o.key(kmer));
+                }
 
-            q.pop(i).unwrap().0
-        })
+                q.pop(i).unwrap().0
+            })
+            .collect()
     }
 }
 
@@ -956,7 +967,7 @@ impl<O: Order> SamplingScheme for MiniceptionNew<O> {
     }
 
     #[inline(always)]
-    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+    fn stream(&self, text: &[u8]) -> Vec<usize> {
         // Queue of all k0-mers.
         let mut q0 = MonotoneQueue::new();
         // Queue of filtered k-mers.
@@ -992,22 +1003,25 @@ impl<O: Order> SamplingScheme for MiniceptionNew<O> {
         }
 
         // 3: Iterate l-mers.
-        kmers.enumerate().map(move |(i, ((j, kmer), (j0, k0mer)))| {
-            q0.push(j0, Order::key(o0, k0mer));
-            let min_pos = q0.pop(j).unwrap().0;
-            if min_pos == j || min_pos == j + self.w0 {
-                q.push(
-                    j,
-                    (
-                        min_pos == j,
-                        Order::key(o0, &text[min_pos..min_pos + self.k0]),
-                        self.o.key(kmer),
-                    ),
-                );
-            }
+        kmers
+            .enumerate()
+            .map(move |(i, ((j, kmer), (j0, k0mer)))| {
+                q0.push(j0, Order::key(o0, k0mer));
+                let min_pos = q0.pop(j).unwrap().0;
+                if min_pos == j || min_pos == j + self.w0 {
+                    q.push(
+                        j,
+                        (
+                            min_pos == j,
+                            Order::key(o0, &text[min_pos..min_pos + self.k0]),
+                            self.o.key(kmer),
+                        ),
+                    );
+                }
 
-            q.pop(i).unwrap().0
-        })
+                q.pop(i).unwrap().0
+            })
+            .collect()
     }
 }
 
@@ -1094,7 +1108,7 @@ impl<O: Order> SamplingScheme for ModSampling<O> {
 
     /// NOTE: This is not always a forward scheme.
     #[inline(always)]
-    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+    fn stream(&self, text: &[u8]) -> Vec<usize> {
         let mut q = MonotoneQueue::new();
         let mut tmers = text.windows(self.t).enumerate();
 
@@ -1103,10 +1117,13 @@ impl<O: Order> SamplingScheme for ModSampling<O> {
         }
         // i: position of lmer
         // j: position of tmer
-        tmers.enumerate().map(move |(i, (j, tmer))| {
-            q.push(j, self.o.key(tmer));
-            i + self.fastmod_w.reduce(q.pop(i).unwrap().0 - i)
-        })
+        tmers
+            .enumerate()
+            .map(move |(i, (j, tmer))| {
+                q.push(j, self.o.key(tmer));
+                i + self.fastmod_w.reduce(q.pop(i).unwrap().0 - i)
+            })
+            .collect()
     }
 }
 
@@ -1321,7 +1338,7 @@ impl SamplingScheme for OpenSyncmer {
     }
 
     #[inline(always)]
-    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+    fn stream(&self, text: &[u8]) -> Vec<usize> {
         // Queue of t-mers.
         let mut qt = MonotoneQueue::new();
         // Queue of k-mers.
@@ -1347,11 +1364,14 @@ impl SamplingScheme for OpenSyncmer {
         }
 
         // 3: Iterate l-mers.
-        kmers.enumerate().map(move |(i, ((j, kmer), (jt, tmer)))| {
-            qt.push(jt, Order::key(ot, tmer));
-            q.push(j, self.hash_kmer(kmer, qt.pop(j).unwrap().0 - j));
-            q.pop(i).unwrap().0
-        })
+        kmers
+            .enumerate()
+            .map(move |(i, ((j, kmer), (jt, tmer)))| {
+                qt.push(jt, Order::key(ot, tmer));
+                q.push(j, self.hash_kmer(kmer, qt.pop(j).unwrap().0 - j));
+                q.pop(i).unwrap().0
+            })
+            .collect()
     }
 }
 
@@ -1501,7 +1521,7 @@ impl<O: Order, OT: Order> SamplingScheme for OcModMinimizer<O, OT> {
     }
 
     #[inline(always)]
-    fn stream(&self, text: &[u8]) -> impl MinimizerIt {
+    fn stream(&self, text: &[u8]) -> Vec<usize> {
         // Queue of t-mers.
         let mut qt = MonotoneQueue::new();
         // Queue of k-mers.
@@ -1527,11 +1547,14 @@ impl<O: Order, OT: Order> SamplingScheme for OcModMinimizer<O, OT> {
         }
 
         // 3: Iterate l-mers.
-        kmers.enumerate().map(move |(i, ((j, kmer), (jt, tmer)))| {
-            qt.push(jt, Order::key(ot, tmer));
-            q.push(j, self.hash_kmer(kmer, qt.pop(j).unwrap().0 - j));
-            q.pop(i).unwrap().0
-        })
+        kmers
+            .enumerate()
+            .map(move |(i, ((j, kmer), (jt, tmer)))| {
+                qt.push(jt, Order::key(ot, tmer));
+                q.push(j, self.hash_kmer(kmer, qt.pop(j).unwrap().0 - j));
+                q.pop(i).unwrap().0
+            })
+            .collect()
     }
 }
 

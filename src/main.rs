@@ -215,8 +215,8 @@ mod test {
         for k in 1..=20 {
             for w in 1..=20 {
                 let m = RandomMinimizer::new(k, w, RandomOrder);
-                let stream = m.stream(&text).collect_vec();
-                let stream_naive = m.stream_naive(&text).collect_vec();
+                let stream = m.stream(&text);
+                let stream_naive = m.stream_naive(&text);
                 assert_eq!(stream, stream_naive);
             }
         }
@@ -230,8 +230,8 @@ mod test {
                 let l = k + w - 1;
                 for t in 1..=l {
                     let m = ModSampling::new(k, w, t, RandomOrder);
-                    let stream = m.stream(&text).collect_vec();
-                    let stream_naive = m.stream_naive(&text).collect_vec();
+                    let stream = m.stream(&text);
+                    let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
                 }
             }
@@ -245,8 +245,8 @@ mod test {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
                     let m = Miniception::new(w, k, k0, RandomOrder, RandomOrder);
-                    let stream = m.stream(&text).collect_vec();
-                    let stream_naive = m.stream_naive(&text).collect_vec();
+                    let stream = m.stream(&text);
+                    let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
                 }
             }
@@ -260,8 +260,8 @@ mod test {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
                     let m = MiniceptionNew::new(w, k, k0, RandomOrder);
-                    let stream = m.stream(&text).collect_vec();
-                    let stream_naive = m.stream_naive(&text).collect_vec();
+                    let stream = m.stream(&text);
+                    let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
                 }
             }
@@ -276,8 +276,8 @@ mod test {
                 for t in 1..k {
                     eprintln!("k {k} w {w} t {t}");
                     let m = OpenSyncmer::new(k, w, t, true, false);
-                    let stream = m.stream(&text).collect_vec();
-                    let stream_naive = m.stream_naive(&text).collect_vec();
+                    let stream = m.stream(&text);
+                    let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
                 }
             }

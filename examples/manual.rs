@@ -44,7 +44,13 @@ fn contexts(f: &impl SamplingScheme) -> Vec<Vec<u8>> {
     let ctx = 2 * f.w() + f.k() - 2;
     let text = &text[..len + ctx - 1];
     let mut seen = std::collections::HashSet::new();
-    for (i, pos) in f.stream(text).skip(f.w() - 1).enumerate().take(len) {
+    for (i, pos) in f
+        .stream(text)
+        .into_iter()
+        .skip(f.w() - 1)
+        .enumerate()
+        .take(len)
+    {
         assert!(
             pos - i < ctx - f.k() + 1,
             "{} < {}",
