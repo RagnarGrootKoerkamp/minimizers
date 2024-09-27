@@ -39,6 +39,7 @@ fn get_scheme(tp: &str, params: Option<&Bound<'_, PyDict>>) -> PyResult<Minimize
         },
         "SusAnchor" => super::MinimizerType::SusAnchor {
             ao: get(params, "ao").map_or(false, |x| x == 1),
+            modulo: get(params, "modulo").map_or(false, |x| x == 1),
         },
         "Miniception" => super::MinimizerType::Miniception {
             k0: get(params, "k0")?,

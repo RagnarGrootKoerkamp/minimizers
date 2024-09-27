@@ -172,6 +172,7 @@ pub enum MinimizerType {
     },
     SusAnchor {
         ao: bool,
+        modulo: bool,
     },
     Miniception {
         k0: usize,
@@ -242,11 +243,11 @@ impl MinimizerType {
                 assert_eq!(k, 1);
                 collect_stats(w, text, BdAnchor::new(w, *r))
             }
-            MinimizerType::SusAnchor { ao } => {
+            MinimizerType::SusAnchor { ao, modulo } => {
                 if !ao {
-                    collect_stats(w, text, SusAnchor::new(w, k, Lex))
+                    collect_stats(w, text, SusAnchor::new(w, k, Lex, *modulo))
                 } else {
-                    collect_stats(w, text, SusAnchor::new(w, k, al))
+                    collect_stats(w, text, SusAnchor::new(w, k, al, *modulo))
                 }
             }
             MinimizerType::Miniception { k0, ao, aot } => {
@@ -766,11 +767,12 @@ pub struct SusAnchor<O: Order> {
     w: usize,
     k: usize,
     o: O,
+    modulo: bool,
 }
 
 impl<O: Order> SusAnchor<O> {
-    pub fn new(w: usize, k: usize, o: O) -> Self {
-        Self { w, k, o }
+    pub fn new(w: usize, k: usize, o: O, modulo: bool) -> Self {
+        Self { w, k, o, modulo }
     }
 }
 
@@ -781,10 +783,21 @@ impl<O: Order> SamplingScheme for SusAnchor<O> {
 
     fn sample(&self, lmer: &[u8]) -> usize {
         let mut best = (self.o.key(lmer), 0);
-        for i in 1..self.w {
-            best = best.min((self.o.key(&lmer[i..]), i));
+        if self.modulo {
+            if lmer.iter().all(|&c| c == 0) {
+                return 1;
+            }
+            let t = (self.k - 1) % self.w + 1;
+            for i in 1..=self.l() - t {
+                best = best.min((self.o.key(&lmer[i..]), i));
+            }
+            best.1 % self.w
+        } else {
+            for i in 1..self.w {
+                best = best.min((self.o.key(&lmer[i..]), i));
+            }
+            best.1
         }
-        best.1
     }
 }
 
