@@ -132,6 +132,35 @@ fn collect_stats(
     (density, ps, ds, transfer)
 }
 
+/// Compute statistics on number of sampled positions on cycles of a given length.
+fn cycle_stats(l: usize, text: &[u8], scheme: impl SamplingScheme) -> (f64, Vec<f64>) {
+    let mut cycle = vec![0; 4 * l];
+    let mut stats = vec![0; l + 1];
+    let mut total = 0;
+    let mut num_windows = 0;
+    let mut num_cycles = 0;
+
+    // Find length-l cycles.
+    for c in text.chunks_exact(l) {
+        // fill cycle with c twice
+        cycle[..l].copy_from_slice(c);
+        cycle[l..2 * l].copy_from_slice(c);
+        cycle[2 * l..3 * l].copy_from_slice(c);
+        cycle[3 * l..4 * l].copy_from_slice(c);
+        let samples = scheme.cyclic_text_density(&cycle, l);
+        stats[samples] += 1;
+        total += samples;
+        num_windows += l;
+        num_cycles += 1;
+    }
+    let density = total as f64 / num_windows as f64;
+    let stats = stats
+        .into_iter()
+        .map(|c| c as f64 / num_cycles as f64)
+        .collect();
+    (density, stats)
+}
+
 #[derive(Clone, Copy, clap::Subcommand, Debug, Serialize, Deserialize)]
 #[serde(tag = "minimizer_type")]
 pub enum MinimizerType {
@@ -345,6 +374,183 @@ impl MinimizerType {
                     } else {
                         collect_stats(
                             w,
+                            text,
+                            OcModMinimizer::new(
+                                k,
+                                w,
+                                *t,
+                                *offset,
+                                *use_closed,
+                                *prefer_prefix,
+                                *open_tmer,
+                                *closed_tmer,
+                                *other_tmer,
+                                al,
+                                al,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    #[inline(never)]
+    pub fn cycle_stats(
+        &self,
+        text: &[u8],
+        w: usize,
+        k: usize,
+        l: usize,
+        sigma: usize,
+    ) -> (f64, Vec<f64>) {
+        let o = RandomOrder;
+        let al = AntiLex;
+        match self {
+            MinimizerType::Minimizer { ao } => {
+                if !ao {
+                    cycle_stats(l, text, Minimizer::new(k, w, o))
+                } else {
+                    cycle_stats(l, text, Minimizer::new(k, w, al))
+                }
+            }
+            MinimizerType::BdAnchor { r } => {
+                assert_eq!(k, 1);
+                cycle_stats(l, text, BdAnchor::new(w, *r))
+            }
+            MinimizerType::SusAnchor { ao, modulo } => {
+                if !ao {
+                    cycle_stats(l, text, SusAnchor::new(w, k, Lex, *modulo))
+                } else {
+                    cycle_stats(l, text, SusAnchor::new(w, k, al, *modulo))
+                }
+            }
+            MinimizerType::Miniception { k0, ao, aot } => {
+                if !ao {
+                    if !aot {
+                        cycle_stats(l, text, Miniception::new(w, k, *k0, o, o))
+                    } else {
+                        cycle_stats(l, text, Miniception::new(w, k, *k0, o, al))
+                    }
+                } else {
+                    if !aot {
+                        cycle_stats(l, text, Miniception::new(w, k, *k0, al, o))
+                    } else {
+                        cycle_stats(l, text, Miniception::new(w, k, *k0, al, al))
+                    }
+                }
+            }
+            MinimizerType::MiniceptionNew { k0 } => {
+                cycle_stats(l, text, MiniceptionNew::new(w, k, *k0, o))
+            }
+            MinimizerType::ModSampling { k0 } => {
+                cycle_stats(l, text, ModSampling::new(k, w, *k0, o))
+            }
+            MinimizerType::LrMinimizer => cycle_stats(l, text, ModSampling::lr_minimizer(k, w, o)),
+            MinimizerType::ModMinimizer { r, aot } => {
+                if !aot {
+                    cycle_stats(l, text, ModSampling::mod_minimizer(k, w, *r, o))
+                } else {
+                    cycle_stats(l, text, ModSampling::mod_minimizer(k, w, *r, al))
+                }
+            }
+            MinimizerType::RotMinimizer => cycle_stats(l, text, RotMinimizer::new(k, w, o)),
+            MinimizerType::AltRotMinimizer => cycle_stats(l, text, AltRotMinimizer::new(k, w, o)),
+            MinimizerType::DecyclingMinimizer => {
+                cycle_stats(l, text, Decycling::new(k, w, o, false))
+            }
+            MinimizerType::DoubleDecyclingMinimizer { ao } => {
+                if !ao {
+                    cycle_stats(l, text, Decycling::new(k, w, o, true))
+                } else {
+                    cycle_stats(l, text, Decycling::new(k, w, al, true))
+                }
+            }
+            MinimizerType::Bruteforce => {
+                let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
+                cycle_stats(l, text, m)
+            }
+            MinimizerType::OpenSyncmerMinimizer { t } => {
+                cycle_stats(l, text, OpenSyncmer::new(k, w, *t, true, false))
+            }
+            MinimizerType::ClosedSyncmerMinimizer { t, loose, open, h } => {
+                cycle_stats(l, text, ClosedSyncmer::new(k, w, *t, *loose, *open, *h))
+            }
+            MinimizerType::OpenClosedSyncmerMinimizer { t } => {
+                cycle_stats(l, text, OpenSyncmer::new(k, w, *t, true, true))
+            }
+            MinimizerType::FracMin { f } => cycle_stats(w, text, FracMin::new(k, w, *f)),
+            MinimizerType::OcModMinimizer {
+                t,
+                offset,
+                use_closed,
+                prefer_prefix,
+                open_tmer,
+                closed_tmer,
+                other_tmer,
+                ao,
+                aot,
+            } => {
+                if !ao {
+                    if !aot {
+                        cycle_stats(
+                            l,
+                            text,
+                            OcModMinimizer::new(
+                                k,
+                                w,
+                                *t,
+                                *offset,
+                                *use_closed,
+                                *prefer_prefix,
+                                *open_tmer,
+                                *closed_tmer,
+                                *other_tmer,
+                                o,
+                                o,
+                            ),
+                        )
+                    } else {
+                        cycle_stats(
+                            l,
+                            text,
+                            OcModMinimizer::new(
+                                k,
+                                w,
+                                *t,
+                                *offset,
+                                *use_closed,
+                                *prefer_prefix,
+                                *open_tmer,
+                                *closed_tmer,
+                                *other_tmer,
+                                o,
+                                al,
+                            ),
+                        )
+                    }
+                } else {
+                    if !aot {
+                        cycle_stats(
+                            l,
+                            text,
+                            OcModMinimizer::new(
+                                k,
+                                w,
+                                *t,
+                                *offset,
+                                *use_closed,
+                                *prefer_prefix,
+                                *open_tmer,
+                                *closed_tmer,
+                                *other_tmer,
+                                al,
+                                o,
+                            ),
+                        )
+                    } else {
+                        cycle_stats(
+                            l,
                             text,
                             OcModMinimizer::new(
                                 k,
