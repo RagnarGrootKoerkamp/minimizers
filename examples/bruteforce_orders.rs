@@ -13,7 +13,7 @@
 //! 4   3   2   30/67   = 0.447
 
 use clap::Parser;
-use minimizers::{bruteforce, ExplicitLocalScheme};
+use minimizers::schemes::*;
 
 #[derive(clap::ValueEnum, Clone)]
 enum Method {
@@ -49,19 +49,19 @@ fn main() {
 
     match method {
         Method::BFMinimizer => {
-            let best = bruteforce::bruteforce_minimizer(k, w, sigma);
+            let best = bruteforce_minimizer(k, w, sigma);
             eprintln!("  best cnt : {} / {}", best.0 .0, best.0 .1);
             eprintln!("  density  : {}", (best.0 .0) as f32 / (best.0 .1) as f32);
             eprintln!("  best perm: {:?}", best.1.ord().idx);
         }
         Method::BFDirectedMinimizer => {
-            let best = bruteforce::bruteforce_directed_minimizer(k, w, sigma);
+            let best = bruteforce_directed_minimizer(k, w, sigma);
             eprintln!("  best cnt : {} / {}", best.0 .0, best.0 .1);
             eprintln!("  density  : {}", (best.0 .0) as f32 / (best.0 .1) as f32);
             eprintln!("  best perm: {:?}", best.1.ord().idx);
         }
         Method::BFLocalScheme => {
-            let best = bruteforce::bruteforce_local_scheme(k, w, sigma);
+            let best = bruteforce_local_scheme(k, w, sigma);
             eprintln!("  best cnt : {} / {}", best.0 .0, best.0 .1);
             eprintln!("  density  : {}", (best.0 .0) as f32 / (best.0 .1) as f32);
             eprintln!("  best map: {:?}", best.1.map);
@@ -174,14 +174,11 @@ mod ilp_scheme {
     //! 3. Each kmer selected by the local scheme must be true.
     //! 4. Minimizer the number of selected kmers.
 
-    use itertools::repeat_n;
-
+    use super::*;
     use good_lp::*;
+    use itertools::repeat_n;
     use itertools::Itertools;
-
-    use minimizers::{
-        de_bruijn_seq::cyclic_exact_density_string, order::pack, ExplicitLocalScheme,
-    };
+    use minimizers::{de_bruijn_seq::cyclic_exact_density_string, order::pack};
 
     pub fn best_local_scheme(
         k: usize,

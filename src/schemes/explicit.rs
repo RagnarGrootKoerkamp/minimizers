@@ -1,4 +1,37 @@
 use super::*;
+
+#[derive(Debug, Clone)]
+pub struct ExplicitLocalScheme {
+    pub k: usize,
+    pub w: usize,
+    pub sigma: usize,
+    /// The index in [w] to choose for each of sigma^(k+w-1) possible l-mers.
+    pub map: Vec<u8>,
+}
+
+impl SamplingScheme for ExplicitLocalScheme {
+    fn w(&self) -> usize {
+        self.w
+    }
+    fn k(&self) -> usize {
+        self.k
+    }
+    fn l(&self) -> usize {
+        self.k + self.w - 1
+    }
+
+    fn sample(&self, lmer: &[u8]) -> usize {
+        debug_assert_eq!(lmer.len(), self.l());
+        debug_assert_eq!(self.map.len(), self.sigma.pow(self.l() as u32));
+        let mut v = 0;
+        for c in lmer {
+            assert!(*c < self.sigma as u8);
+            v = self.sigma * v + *c as usize;
+        }
+        self.map[v] as usize
+    }
+}
+
 impl ExplicitLocalScheme {
     /// Check if the local scheme corresponds to a directed order on kmers.
     /// If so, return one such order.
@@ -31,7 +64,7 @@ impl ExplicitLocalScheme {
                         lmer /= self.sigma;
                         kmer
                     })
-                    .collect_vec();
+                    .collect::<Vec<_>>();
                 kmers.reverse();
                 kmers
             };

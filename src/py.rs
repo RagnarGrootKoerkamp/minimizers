@@ -19,55 +19,56 @@ fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
 }
 
 fn get_scheme(tp: &str, params: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn super::Params>> {
+    use super::schemes;
     Ok(match tp {
         "LrMinimizer" | "RotMinimizer" | "AltRotMinimizer" | "DecyclingMinimizer"
         | "Bruteforce" => {
             serde_json::from_str(&format!("{{\"minimizer_type\": \"{tp}\"}}")).unwrap()
         }
-        "Minimizer" => Box::new(super::MinimizerP {
+        "Minimizer" => Box::new(schemes::MinimizerP {
             ao: get(params, "ao").map_or(false, |x| x == 1),
         }),
-        "DoubleDecyclingMinimizer" => Box::new(super::DoubleDecyclingMinimizerP {
+        "DoubleDecyclingMinimizer" => Box::new(schemes::DoubleDecyclingP {
             ao: get(params, "ao").map_or(false, |x| x == 1),
         }),
-        "ModMinimizer" => Box::new(super::ModMinimizerP {
+        "ModMinimizer" => Box::new(schemes::ModMinimizerP {
             r: get(params, "r")?,
             aot: get(params, "aot").map_or(false, |x| x == 1),
         }),
-        "BdAnchor" => Box::new(super::BdAnchorP {
+        "BdAnchor" => Box::new(schemes::BdAnchorP {
             r: get(params, "r")?,
         }),
-        "SusAnchor" => Box::new(super::SusAnchorP {
+        "SusAnchor" => Box::new(schemes::SusAnchorP {
             ao: get(params, "ao").map_or(false, |x| x == 1),
             modulo: get(params, "modulo").map_or(false, |x| x == 1),
         }),
-        "Miniception" => Box::new(super::MiniceptionP {
+        "Miniception" => Box::new(schemes::MiniceptionP {
             k0: get(params, "k0")?,
             ao: get(params, "ao").map_or(false, |x| x == 1),
             aot: get(params, "aot").map_or(false, |x| x == 1),
         }),
-        "MiniceptionNew" => Box::new(super::MiniceptionNewP {
+        "MiniceptionNew" => Box::new(schemes::MiniceptionNewP {
             k0: get(params, "k0")?,
         }),
-        "ModSampling" => Box::new(super::ModSamplingP {
+        "ModSampling" => Box::new(schemes::ModSamplingP {
             k0: get(params, "k0")?,
         }),
-        "OpenSyncmerMinimizer" => Box::new(super::OpenSyncmerMinimizerP {
+        "OpenSyncmerMinimizer" => Box::new(schemes::OpenSyncmerMinimizerP {
             t: get(params, "t")?,
         }),
-        "ClosedSyncmerMinimizer" => Box::new(super::ClosedSyncmerMinimizerP {
+        "ClosedSyncmerMinimizer" => Box::new(schemes::ThresholdMinimizerP {
             t: get(params, "t")?,
             h: get(params, "h")?,
             loose: get(params, "loose")? == 1,
             open: get(params, "open")? == 1,
         }),
-        "OpenClosedSyncmerMinimizer" => Box::new(super::OpenClosedSyncmerMinimizerP {
+        "OpenClosedSyncmerMinimizer" => Box::new(schemes::OpenClosedSyncmerMinimizerP {
             t: get(params, "t")?,
         }),
-        "FracMin" => Box::new(super::FracMinP {
+        "FracMin" => Box::new(schemes::FracMinP {
             f: get(params, "f")?,
         }),
-        "OcModMinimizer" => Box::new(super::OcModMinimizerP {
+        "OcModMinimizer" => Box::new(schemes::OcModMinimizerP {
             t: get(params, "t")?,
             offset: get(params, "offset")?,
             use_closed: get(params, "use_closed")? == 1,

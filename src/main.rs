@@ -81,6 +81,7 @@ fn main() {
             practical,
             input,
         } => {
+            use schemes::*;
             let mut base_types = vec![
                 // &MinimizerP,
                 // &BdAnchorP { r: 0 },
@@ -194,7 +195,7 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{schemes::*, *};
     use order::RandomOrder;
 
     #[test]

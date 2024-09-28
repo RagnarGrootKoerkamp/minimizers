@@ -1,16 +1,28 @@
 use super::ExplicitLocalScheme;
+use super::*;
 use crate::de_bruijn_seq::cyclic_exact_density_string;
 use crate::de_bruijn_seq::exact_density_string;
 use crate::Direction;
 use crate::ExplicitDirectedOrder;
 use crate::ExplicitOrder;
-use crate::Minimizer;
 use crate::SamplingScheme;
 
 use itertools::repeat_n;
 use itertools::Itertools;
+use random::Minimizer;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::iter::zip;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BruteforceP;
+
+#[typetag::serde]
+impl Params for BruteforceP {
+    fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
+        let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
+        Box::new(m)
+    }
+}
 
 /// Finds the best order for a minimizer scheme.
 ///

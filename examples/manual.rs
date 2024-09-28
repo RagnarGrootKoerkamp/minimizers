@@ -1,6 +1,8 @@
 #![allow(unused)]
 use itertools::Itertools;
-use minimizers::{de_bruijn_seq::cyclic_exact_density_string, ExplicitLocalScheme, SamplingScheme};
+use minimizers::{
+    de_bruijn_seq::cyclic_exact_density_string, schemes::ExplicitLocalScheme, SamplingScheme,
+};
 
 fn rev(n: usize, k: usize) -> usize {
     let mut n = n;
