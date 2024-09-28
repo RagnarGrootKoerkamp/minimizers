@@ -14,6 +14,12 @@ pub struct ModMinimizerP {
     pub aot: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ModP {
+    pub r: usize,
+    pub params: Box<dyn Params>,
+}
+
 #[typetag::serde]
 impl Params for ModSamplingP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
@@ -36,6 +42,13 @@ impl Params for ModMinimizerP {
         } else {
             Box::new(ModSampling::mod_minimizer(k, w, self.r, AntiLex))
         }
+    }
+}
+
+#[typetag::serde]
+impl Params for ModP {
+    fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(Mod::new(w, k, sigma, self.r, &*self.params))
     }
 }
 
@@ -114,6 +127,42 @@ impl<O: Order> SamplingScheme for ModSampling<O> {
                 q.push(j, self.o.key(tmer));
                 i + self.fastmod_w.reduce(q.pop(i).unwrap().0 - i)
             })
+            .collect()
+    }
+}
+
+pub struct Mod {
+    scheme: Box<dyn SamplingScheme>,
+    /// Fast modulo w operations.
+    fastmod_w: FM32,
+}
+
+impl Mod {
+    pub fn new(w: usize, k: usize, sigma: usize, r: usize, params: &dyn Params) -> Self {
+        let t = if k < r { k } else { (k - r) % w + r };
+        let scheme = params.build(w + k - t, t, sigma);
+        Self {
+            scheme,
+            fastmod_w: FM32::new(w),
+        }
+    }
+}
+
+impl SamplingScheme for Mod {
+    fn l(&self) -> usize {
+        self.scheme.l()
+    }
+
+    fn sample(&self, lmer: &[u8]) -> usize {
+        self.fastmod_w.reduce(self.scheme.sample(lmer))
+    }
+
+    fn stream(&self, text: &[u8]) -> Vec<usize> {
+        self.scheme
+            .stream(text)
+            .into_iter()
+            .enumerate()
+            .map(|(i, x)| i + self.fastmod_w.reduce(x - i))
             .collect()
     }
 }
