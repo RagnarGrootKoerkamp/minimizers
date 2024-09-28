@@ -35,10 +35,6 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "DoubleDecyclingMinimizer" => Box::new(schemes::DoubleDecyclingP {
             ao: get_bool(args, "ao"),
         }),
-        "ModMinimizer" => Box::new(schemes::ModMinimizerP {
-            r: get(args, "r")?,
-            aot: get_bool(args, "aot"),
-        }),
         "BdAnchor" => Box::new(schemes::BdAnchorP { r: get(args, "r")? }),
         "SusAnchor" => Box::new(schemes::SusAnchorP {
             ao: get_bool(args, "ao"),
@@ -49,9 +45,6 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
             aot: get_bool(args, "aot"),
         }),
         "MiniceptionNew" => Box::new(schemes::MiniceptionNewP {
-            k0: get(args, "k0")?,
-        }),
-        "ModSampling" => Box::new(schemes::ModSamplingP {
             k0: get(args, "k0")?,
         }),
         "OpenSyncmerMinimizer" => Box::new(schemes::OpenSyncmerMinimizerP { t: get(args, "t")? }),
@@ -80,7 +73,9 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
     };
     if get_bool(args, "mod") {
         params = Box::new(schemes::ModP {
-            r: get(args, "r")?,
+            r: get(args, "r").unwrap_or(1),
+            lr: get_bool(args, "lr"),
+            t: get(args, "sampling").unwrap_or(0),
             params,
         });
     }

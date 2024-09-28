@@ -82,6 +82,12 @@ fn main() {
             input,
         } => {
             use schemes::*;
+            let modmini = ModP {
+                r: 1,
+                t: 0,
+                lr: true,
+                params: Box::new(MinimizerP { ao: false }),
+            };
             let mut base_types = vec![
                 // &MinimizerP,
                 // &BdAnchorP { r: 0 },
@@ -92,7 +98,7 @@ fn main() {
                 } as &dyn Params,
                 // &MiniceptionNewP { k0: 0 },
                 // &ModSamplingP{ k0: 0 },
-                &LrMinimizerP,
+                &modmini,
                 // &ModMinimizerP
                 // NOTE: These Rotmini/AltRotmini assume alphabet size 4.
                 // &RotMinimizerP
@@ -218,7 +224,7 @@ mod test {
             for w in 1..=20 {
                 let l = k + w - 1;
                 for t in 1..=l {
-                    let m = ModSampling::new(k, w, t, RandomOrder);
+                    let m = Mod::new_with_t(w, k, 4, t, &MinimizerP { ao: false });
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
