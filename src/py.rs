@@ -18,69 +18,74 @@ fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
         .extract()?)
 }
 
-fn get_scheme(tp: &str, params: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn super::Params>> {
+fn get_bool(dict: Option<&Bound<'_, PyDict>>, key: &str) -> bool {
+    get(dict, key).map_or(false, |x| x == 1)
+}
+
+fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn super::Params>> {
     use super::schemes;
-    Ok(match tp {
+    let mut params: Box<dyn super::Params> = match tp {
         "LrMinimizer" | "RotMinimizer" | "AltRotMinimizer" | "DecyclingMinimizer"
         | "Bruteforce" => {
             serde_json::from_str(&format!("{{\"minimizer_type\": \"{tp}\"}}")).unwrap()
         }
         "Minimizer" => Box::new(schemes::MinimizerP {
-            ao: get(params, "ao").map_or(false, |x| x == 1),
+            ao: get_bool(args, "ao"),
         }),
         "DoubleDecyclingMinimizer" => Box::new(schemes::DoubleDecyclingP {
-            ao: get(params, "ao").map_or(false, |x| x == 1),
+            ao: get_bool(args, "ao"),
         }),
         "ModMinimizer" => Box::new(schemes::ModMinimizerP {
-            r: get(params, "r")?,
-            aot: get(params, "aot").map_or(false, |x| x == 1),
+            r: get(args, "r")?,
+            aot: get_bool(args, "aot"),
         }),
-        "BdAnchor" => Box::new(schemes::BdAnchorP {
-            r: get(params, "r")?,
-        }),
+        "BdAnchor" => Box::new(schemes::BdAnchorP { r: get(args, "r")? }),
         "SusAnchor" => Box::new(schemes::SusAnchorP {
-            ao: get(params, "ao").map_or(false, |x| x == 1),
-            modulo: get(params, "modulo").map_or(false, |x| x == 1),
+            ao: get_bool(args, "ao"),
+            modulo: get_bool(args, "modulo"),
         }),
         "Miniception" => Box::new(schemes::MiniceptionP {
-            k0: get(params, "k0")?,
-            ao: get(params, "ao").map_or(false, |x| x == 1),
-            aot: get(params, "aot").map_or(false, |x| x == 1),
+            k0: get(args, "k0")?,
+            ao: get_bool(args, "ao"),
+            aot: get_bool(args, "aot"),
         }),
         "MiniceptionNew" => Box::new(schemes::MiniceptionNewP {
-            k0: get(params, "k0")?,
+            k0: get(args, "k0")?,
         }),
         "ModSampling" => Box::new(schemes::ModSamplingP {
-            k0: get(params, "k0")?,
+            k0: get(args, "k0")?,
         }),
-        "OpenSyncmerMinimizer" => Box::new(schemes::OpenSyncmerMinimizerP {
-            t: get(params, "t")?,
-        }),
+        "OpenSyncmerMinimizer" => Box::new(schemes::OpenSyncmerMinimizerP { t: get(args, "t")? }),
         "ClosedSyncmerMinimizer" => Box::new(schemes::ThresholdMinimizerP {
-            t: get(params, "t")?,
-            h: get(params, "h")?,
-            loose: get(params, "loose")? == 1,
-            open: get(params, "open")? == 1,
+            t: get(args, "t")?,
+            h: get(args, "h")?,
+            loose: get_bool(args, "loose"),
+            open: get_bool(args, "open"),
         }),
-        "OpenClosedSyncmerMinimizer" => Box::new(schemes::OpenClosedSyncmerMinimizerP {
-            t: get(params, "t")?,
-        }),
-        "FracMin" => Box::new(schemes::FracMinP {
-            f: get(params, "f")?,
-        }),
+        "OpenClosedSyncmerMinimizer" => {
+            Box::new(schemes::OpenClosedSyncmerMinimizerP { t: get(args, "t")? })
+        }
+        "FracMin" => Box::new(schemes::FracMinP { f: get(args, "f")? }),
         "OcModMinimizer" => Box::new(schemes::OcModMinimizerP {
-            t: get(params, "t")?,
-            offset: get(params, "offset")?,
-            use_closed: get(params, "use_closed")? == 1,
-            prefer_prefix: get(params, "prefer_prefix")? == 1,
-            open_tmer: get(params, "open_tmer")? == 1,
-            closed_tmer: get(params, "closed_tmer")? == 1,
-            other_tmer: get(params, "other_tmer")? == 1,
-            ao: get(params, "ao").map_or(false, |x| x == 1),
-            aot: get(params, "aot").map_or(false, |x| x == 1),
+            t: get(args, "t")?,
+            offset: get(args, "offset")?,
+            use_closed: get_bool(args, "use_closed"),
+            prefer_prefix: get_bool(args, "prefer_prefix"),
+            open_tmer: get_bool(args, "open_tmer"),
+            closed_tmer: get_bool(args, "closed_tmer"),
+            other_tmer: get_bool(args, "other_tmer"),
+            ao: get_bool(args, "ao"),
+            aot: get_bool(args, "aot"),
         }),
         _ => PyResult::Err(PyValueError::new_err("Invalid minimizer type"))?,
-    })
+    };
+    if get_bool(args, "mod") {
+        params = Box::new(schemes::ModP {
+            r: get(args, "r")?,
+            params,
+        });
+    }
+    Ok(params)
 }
 
 #[pyfunction]
