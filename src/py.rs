@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 
-use crate::{collect_stats, MinimizerType};
+use crate::collect_stats;
 
 fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
     Ok(dict
@@ -18,56 +18,56 @@ fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
         .extract()?)
 }
 
-fn get_scheme(tp: &str, params: Option<&Bound<'_, PyDict>>) -> PyResult<MinimizerType> {
+fn get_scheme(tp: &str, params: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn super::Params>> {
     Ok(match tp {
         "LrMinimizer" | "RotMinimizer" | "AltRotMinimizer" | "DecyclingMinimizer"
         | "Bruteforce" => {
             serde_json::from_str(&format!("{{\"minimizer_type\": \"{tp}\"}}")).unwrap()
         }
-        "Minimizer" => super::MinimizerType::Minimizer {
+        "Minimizer" => Box::new(super::MinimizerP {
             ao: get(params, "ao").map_or(false, |x| x == 1),
-        },
-        "DoubleDecyclingMinimizer" => super::MinimizerType::DoubleDecyclingMinimizer {
+        }),
+        "DoubleDecyclingMinimizer" => Box::new(super::DoubleDecyclingMinimizerP {
             ao: get(params, "ao").map_or(false, |x| x == 1),
-        },
-        "ModMinimizer" => super::MinimizerType::ModMinimizer {
+        }),
+        "ModMinimizer" => Box::new(super::ModMinimizerP {
             r: get(params, "r")?,
             aot: get(params, "aot").map_or(false, |x| x == 1),
-        },
-        "BdAnchor" => super::MinimizerType::BdAnchor {
+        }),
+        "BdAnchor" => Box::new(super::BdAnchorP {
             r: get(params, "r")?,
-        },
-        "SusAnchor" => super::MinimizerType::SusAnchor {
+        }),
+        "SusAnchor" => Box::new(super::SusAnchorP {
             ao: get(params, "ao").map_or(false, |x| x == 1),
             modulo: get(params, "modulo").map_or(false, |x| x == 1),
-        },
-        "Miniception" => super::MinimizerType::Miniception {
+        }),
+        "Miniception" => Box::new(super::MiniceptionP {
             k0: get(params, "k0")?,
             ao: get(params, "ao").map_or(false, |x| x == 1),
             aot: get(params, "aot").map_or(false, |x| x == 1),
-        },
-        "MiniceptionNew" => super::MinimizerType::MiniceptionNew {
+        }),
+        "MiniceptionNew" => Box::new(super::MiniceptionNewP {
             k0: get(params, "k0")?,
-        },
-        "ModSampling" => super::MinimizerType::ModSampling {
+        }),
+        "ModSampling" => Box::new(super::ModSamplingP {
             k0: get(params, "k0")?,
-        },
-        "OpenSyncmerMinimizer" => super::MinimizerType::OpenSyncmerMinimizer {
+        }),
+        "OpenSyncmerMinimizer" => Box::new(super::OpenSyncmerMinimizerP {
             t: get(params, "t")?,
-        },
-        "ClosedSyncmerMinimizer" => super::MinimizerType::ClosedSyncmerMinimizer {
+        }),
+        "ClosedSyncmerMinimizer" => Box::new(super::ClosedSyncmerMinimizerP {
             t: get(params, "t")?,
             h: get(params, "h")?,
             loose: get(params, "loose")? == 1,
             open: get(params, "open")? == 1,
-        },
-        "OpenClosedSyncmerMinimizer" => super::MinimizerType::OpenClosedSyncmerMinimizer {
+        }),
+        "OpenClosedSyncmerMinimizer" => Box::new(super::OpenClosedSyncmerMinimizerP {
             t: get(params, "t")?,
-        },
-        "FracMin" => super::MinimizerType::FracMin {
+        }),
+        "FracMin" => Box::new(super::FracMinP {
             f: get(params, "f")?,
-        },
-        "OcModMinimizer" => super::MinimizerType::OcModMinimizer {
+        }),
+        "OcModMinimizer" => Box::new(super::OcModMinimizerP {
             t: get(params, "t")?,
             offset: get(params, "offset")?,
             use_closed: get(params, "use_closed")? == 1,
@@ -77,7 +77,7 @@ fn get_scheme(tp: &str, params: Option<&Bound<'_, PyDict>>) -> PyResult<Minimize
             other_tmer: get(params, "other_tmer")? == 1,
             ao: get(params, "ao").map_or(false, |x| x == 1),
             aot: get(params, "aot").map_or(false, |x| x == 1),
-        },
+        }),
         _ => PyResult::Err(PyValueError::new_err("Invalid minimizer type"))?,
     })
 }

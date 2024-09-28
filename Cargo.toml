@@ -30,6 +30,7 @@ pyo3 = { version = "0.22.2", features = ["extension-module"], optional = true }
 packed-seq = { version = "0.1.0", git = "https://github.com/rust-seq/packed-seq" }
 # packed-seq = { version = "0.1.0", path = "../packed-seq" }
 good_lp = { version = "1.7", features = ["lp-solvers"], default-features = false}
+typetag = "0.2.18"
 
 [dev-dependencies]
 criterion = "0.5.1"

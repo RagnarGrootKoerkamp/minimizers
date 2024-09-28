@@ -21,17 +21,18 @@ use rand_chacha::{
     ChaChaRng,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    cell::Cell,
-    cmp::{max, Reverse},
-    f64::consts::PI,
-};
+use std::{cell::Cell, cmp::Reverse, f64::consts::PI, fmt::Debug};
 
 /// An iterator over *all* minimizer positions. Not yet deduplicated.
 ///
 /// NOTE: For non-forward schemes, positions may be returned twice.
 pub trait MinimizerIt: Iterator<Item = usize> {}
 impl<I: Iterator<Item = usize>> MinimizerIt for I {}
+
+#[typetag::serde(tag = "minimizer_type")]
+pub trait Params: Debug + Sync {
+    fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme>;
+}
 
 pub trait SamplingScheme {
     fn w(&self) -> usize {
@@ -167,216 +168,283 @@ pub fn cycle_stats(l: usize, text: &[u8], scheme: &dyn SamplingScheme) -> (f64, 
     (density, stats)
 }
 
-#[derive(Clone, Copy, clap::Subcommand, Debug, Serialize, Deserialize)]
-#[serde(tag = "minimizer_type")]
-pub enum MinimizerType {
-    Minimizer {
-        ao: bool,
-    },
-    BdAnchor {
-        r: usize,
-    },
-    SusAnchor {
-        ao: bool,
-        modulo: bool,
-    },
-    Miniception {
-        k0: usize,
-        ao: bool,
-        aot: bool,
-    },
-    MiniceptionNew {
-        k0: usize,
-    },
-    ModSampling {
-        k0: usize,
-    },
-    LrMinimizer,
-    ModMinimizer {
-        r: usize,
-        aot: bool,
-    },
-    RotMinimizer,
-    AltRotMinimizer,
-    DecyclingMinimizer,
-    DoubleDecyclingMinimizer {
-        ao: bool,
-    },
-    Bruteforce,
-    OpenSyncmerMinimizer {
-        t: usize,
-    },
-    ClosedSyncmerMinimizer {
-        t: usize,
-        h: usize,
-
-        loose: bool,
-        open: bool,
-    },
-    OpenClosedSyncmerMinimizer {
-        t: usize,
-    },
-    FracMin {
-        f: usize,
-    },
-    OcModMinimizer {
-        t: usize,
-        offset: usize,
-        use_closed: bool,
-        prefer_prefix: bool,
-        open_tmer: bool,
-        closed_tmer: bool,
-        other_tmer: bool,
-        ao: bool,
-        aot: bool,
-    },
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MinimizerP {
+    ao: bool,
+}
+#[typetag::serde]
+impl Params for MinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        if !self.ao {
+            Box::new(Minimizer::new(k, w, RandomOrder))
+        } else {
+            Box::new(Minimizer::new(k, w, AntiLex))
+        }
+    }
 }
 
-/// TODO: Analyze non-forward schemes.
-impl MinimizerType {
-    pub fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
-        let o = RandomOrder;
-        let al = AntiLex;
-        match self {
-            MinimizerType::Minimizer { ao } => {
-                if !ao {
-                    Box::new(Minimizer::new(k, w, o))
-                } else {
-                    Box::new(Minimizer::new(k, w, al))
-                }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BdAnchorP {
+    r: usize,
+}
+#[typetag::serde]
+impl Params for BdAnchorP {
+    fn build(&self, w: usize, _k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(BdAnchor::new(w, self.r))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SusAnchorP {
+    ao: bool,
+    modulo: bool,
+}
+#[typetag::serde]
+impl Params for SusAnchorP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        if !self.ao {
+            Box::new(SusAnchor::new(w, k, Lex, self.modulo))
+        } else {
+            Box::new(SusAnchor::new(w, k, AntiLex, self.modulo))
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MiniceptionP {
+    pub k0: usize,
+    pub ao: bool,
+    pub aot: bool,
+}
+#[typetag::serde]
+impl Params for MiniceptionP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        if !self.ao {
+            if !self.aot {
+                Box::new(Miniception::new(w, k, self.k0, RandomOrder, RandomOrder))
+            } else {
+                Box::new(Miniception::new(w, k, self.k0, RandomOrder, AntiLex))
             }
-            MinimizerType::BdAnchor { r } => {
-                assert_eq!(k, 1);
-                Box::new(BdAnchor::new(w, *r))
+        } else {
+            if !self.aot {
+                Box::new(Miniception::new(w, k, self.k0, AntiLex, RandomOrder))
+            } else {
+                Box::new(Miniception::new(w, k, self.k0, AntiLex, AntiLex))
             }
-            MinimizerType::SusAnchor { ao, modulo } => {
-                if !ao {
-                    Box::new(SusAnchor::new(w, k, Lex, *modulo))
-                } else {
-                    Box::new(SusAnchor::new(w, k, al, *modulo))
-                }
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MiniceptionNewP {
+    pub k0: usize,
+}
+#[typetag::serde]
+impl Params for MiniceptionNewP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(MiniceptionNew::new(w, k, self.k0, RandomOrder))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModSamplingP {
+    pub k0: usize,
+}
+#[typetag::serde]
+impl Params for ModSamplingP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(ModSampling::new(k, w, self.k0, RandomOrder))
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LrMinimizerP;
+#[typetag::serde]
+impl Params for LrMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(ModSampling::lr_minimizer(k, w, RandomOrder))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModMinimizerP {
+    pub r: usize,
+    pub aot: bool,
+}
+#[typetag::serde]
+impl Params for ModMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        if !self.aot {
+            Box::new(ModSampling::mod_minimizer(k, w, self.r, RandomOrder))
+        } else {
+            Box::new(ModSampling::mod_minimizer(k, w, self.r, AntiLex))
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotMinimizerP;
+#[typetag::serde]
+impl Params for RotMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(RotMinimizer::new(k, w, RandomOrder))
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AltRotMinimizerP;
+#[typetag::serde]
+impl Params for AltRotMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(AltRotMinimizer::new(k, w, RandomOrder))
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecyclingMinimizerP;
+#[typetag::serde]
+impl Params for DecyclingMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(Decycling::new(k, w, RandomOrder, false))
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DoubleDecyclingMinimizerP {
+    pub ao: bool,
+}
+#[typetag::serde]
+impl Params for DoubleDecyclingMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        if !self.ao {
+            Box::new(Decycling::new(k, w, RandomOrder, true))
+        } else {
+            Box::new(Decycling::new(k, w, AntiLex, true))
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BruteforceP;
+#[typetag::serde]
+impl Params for BruteforceP {
+    fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
+        let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
+        Box::new(m)
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenSyncmerMinimizerP {
+    pub t: usize,
+}
+#[typetag::serde]
+impl Params for OpenSyncmerMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(OpenSyncmer::new(k, w, self.t, true, false))
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClosedSyncmerMinimizerP {
+    pub t: usize,
+    pub h: usize,
+
+    pub loose: bool,
+    pub open: bool,
+}
+#[typetag::serde]
+impl Params for ClosedSyncmerMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(ClosedSyncmer::new(
+            k, w, self.t, self.loose, self.open, self.h,
+        ))
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenClosedSyncmerMinimizerP {
+    pub t: usize,
+}
+#[typetag::serde]
+impl Params for OpenClosedSyncmerMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(OpenSyncmer::new(k, w, self.t, true, true))
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FracMinP {
+    pub f: usize,
+}
+#[typetag::serde]
+impl Params for FracMinP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(FracMin::new(k, w, self.f))
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcModMinimizerP {
+    pub t: usize,
+    pub offset: usize,
+    pub use_closed: bool,
+    pub prefer_prefix: bool,
+    pub open_tmer: bool,
+    pub closed_tmer: bool,
+    pub other_tmer: bool,
+    pub ao: bool,
+    pub aot: bool,
+}
+#[typetag::serde]
+impl Params for OcModMinimizerP {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        if !self.ao {
+            if !self.aot {
+                Box::new(OcModMinimizer::new(
+                    k,
+                    w,
+                    self.t,
+                    self.offset,
+                    self.use_closed,
+                    self.prefer_prefix,
+                    self.open_tmer,
+                    self.closed_tmer,
+                    self.other_tmer,
+                    RandomOrder,
+                    RandomOrder,
+                ))
+            } else {
+                Box::new(OcModMinimizer::new(
+                    k,
+                    w,
+                    self.t,
+                    self.offset,
+                    self.use_closed,
+                    self.prefer_prefix,
+                    self.open_tmer,
+                    self.closed_tmer,
+                    self.other_tmer,
+                    RandomOrder,
+                    AntiLex,
+                ))
             }
-            MinimizerType::Miniception { k0, ao, aot } => {
-                if !ao {
-                    if !aot {
-                        Box::new(Miniception::new(w, k, *k0, o, o))
-                    } else {
-                        Box::new(Miniception::new(w, k, *k0, o, al))
-                    }
-                } else {
-                    if !aot {
-                        Box::new(Miniception::new(w, k, *k0, al, o))
-                    } else {
-                        Box::new(Miniception::new(w, k, *k0, al, al))
-                    }
-                }
-            }
-            MinimizerType::MiniceptionNew { k0 } => Box::new(MiniceptionNew::new(w, k, *k0, o)),
-            MinimizerType::ModSampling { k0 } => Box::new(ModSampling::new(k, w, *k0, o)),
-            MinimizerType::LrMinimizer => Box::new(ModSampling::lr_minimizer(k, w, o)),
-            MinimizerType::ModMinimizer { r, aot } => {
-                if !aot {
-                    Box::new(ModSampling::mod_minimizer(k, w, *r, o))
-                } else {
-                    Box::new(ModSampling::mod_minimizer(k, w, *r, al))
-                }
-            }
-            MinimizerType::RotMinimizer => Box::new(RotMinimizer::new(k, w, o)),
-            MinimizerType::AltRotMinimizer => Box::new(AltRotMinimizer::new(k, w, o)),
-            MinimizerType::DecyclingMinimizer => Box::new(Decycling::new(k, w, o, false)),
-            MinimizerType::DoubleDecyclingMinimizer { ao } => {
-                if !ao {
-                    Box::new(Decycling::new(k, w, o, true))
-                } else {
-                    Box::new(Decycling::new(k, w, al, true))
-                }
-            }
-            MinimizerType::Bruteforce => {
-                let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;
-                Box::new(m)
-            }
-            MinimizerType::OpenSyncmerMinimizer { t } => {
-                Box::new(OpenSyncmer::new(k, w, *t, true, false))
-            }
-            MinimizerType::ClosedSyncmerMinimizer { t, loose, open, h } => {
-                Box::new(ClosedSyncmer::new(k, w, *t, *loose, *open, *h))
-            }
-            MinimizerType::OpenClosedSyncmerMinimizer { t } => {
-                Box::new(OpenSyncmer::new(k, w, *t, true, true))
-            }
-            MinimizerType::FracMin { f } => Box::new(FracMin::new(k, w, *f)),
-            MinimizerType::OcModMinimizer {
-                t,
-                offset,
-                use_closed,
-                prefer_prefix,
-                open_tmer,
-                closed_tmer,
-                other_tmer,
-                ao,
-                aot,
-            } => {
-                if !ao {
-                    if !aot {
-                        Box::new(OcModMinimizer::new(
-                            k,
-                            w,
-                            *t,
-                            *offset,
-                            *use_closed,
-                            *prefer_prefix,
-                            *open_tmer,
-                            *closed_tmer,
-                            *other_tmer,
-                            o,
-                            o,
-                        ))
-                    } else {
-                        Box::new(OcModMinimizer::new(
-                            k,
-                            w,
-                            *t,
-                            *offset,
-                            *use_closed,
-                            *prefer_prefix,
-                            *open_tmer,
-                            *closed_tmer,
-                            *other_tmer,
-                            o,
-                            al,
-                        ))
-                    }
-                } else {
-                    if !aot {
-                        Box::new(OcModMinimizer::new(
-                            k,
-                            w,
-                            *t,
-                            *offset,
-                            *use_closed,
-                            *prefer_prefix,
-                            *open_tmer,
-                            *closed_tmer,
-                            *other_tmer,
-                            al,
-                            o,
-                        ))
-                    } else {
-                        Box::new(OcModMinimizer::new(
-                            k,
-                            w,
-                            *t,
-                            *offset,
-                            *use_closed,
-                            *prefer_prefix,
-                            *open_tmer,
-                            *closed_tmer,
-                            *other_tmer,
-                            al,
-                            al,
-                        ))
-                    }
-                }
+        } else {
+            if !self.aot {
+                Box::new(OcModMinimizer::new(
+                    k,
+                    w,
+                    self.t,
+                    self.offset,
+                    self.use_closed,
+                    self.prefer_prefix,
+                    self.open_tmer,
+                    self.closed_tmer,
+                    self.other_tmer,
+                    AntiLex,
+                    RandomOrder,
+                ))
+            } else {
+                Box::new(OcModMinimizer::new(
+                    k,
+                    w,
+                    self.t,
+                    self.offset,
+                    self.use_closed,
+                    self.prefer_prefix,
+                    self.open_tmer,
+                    self.closed_tmer,
+                    self.other_tmer,
+                    AntiLex,
+                    AntiLex,
+                ))
             }
         }
     }

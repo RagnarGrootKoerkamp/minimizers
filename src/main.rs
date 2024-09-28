@@ -11,13 +11,13 @@ use minimizers::{de_bruijn_seq::de_bruijn_sequence, *};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::Serialize;
 
-#[derive(Clone, Debug, Serialize)]
-struct Result {
+#[derive(Debug, Serialize)]
+struct Result<'tp> {
     sigma: usize,
     k: usize,
     w: usize,
     l: usize,
-    tp: MinimizerType,
+    tp: &'tp dyn Params,
     density: f64,
     positions: Vec<f64>,
     dists: Vec<f64>,
@@ -26,14 +26,14 @@ struct Result {
 
 #[derive(clap::Subcommand)]
 enum Command {
-    Run {
-        #[clap(short, default_value_t = 40)]
-        w: usize,
-        #[arg(short, default_value_t = 10)]
-        k: usize,
-        #[clap(subcommand)]
-        tp: MinimizerType,
-    },
+    // Run {
+    //     #[clap(short, default_value_t = 40)]
+    //     w: usize,
+    //     #[arg(short, default_value_t = 10)]
+    //     k: usize,
+    //     #[clap(subcommand)]
+    //     tp: MinimizerType,
+    // },
     Eval {
         /// Write to file.
         #[clap(short, long)]
@@ -74,18 +74,6 @@ fn main() {
     let text = &generate_random_string(args.n, args.sigma);
 
     match args.command {
-        Command::Run { tp, w, k } => {
-            eprintln!("Running {tp:?}:");
-            let (d, _ps, _ds, _transfer) = collect_stats(w, text, &*tp.build(w, k, args.sigma));
-            eprintln!("  Density : {d:.3}");
-            // eprintln!("  Poss    : {ps:.5?}");
-            // eprintln!("  Dists<0 : {:.5?}", &ds[0..w]);
-            // eprintln!("  Dists>0 : {:.5?}", &ds[w + 1..]);
-            // for row in &transfer {
-            // eprintln!("    {row:.5?}");
-            // }
-        }
-
         Command::Eval {
             output,
             stats,
@@ -94,30 +82,30 @@ fn main() {
             input,
         } => {
             let mut base_types = vec![
-                // MinimizerType::Minimizer,
-                // MinimizerType::BdAnchor { r: 0 },
-                MinimizerType::Miniception {
+                // &MinimizerP,
+                // &BdAnchorP { r: 0 },
+                &MiniceptionP {
                     k0: 0,
                     ao: false,
                     aot: false,
-                },
-                // MinimizerType::MiniceptionNew { k0: 0 },
-                // MinimizerType::ModSampling { k0: 0 },
-                MinimizerType::LrMinimizer,
-                // MinimizerType::ModMinimizer,
+                } as &dyn Params,
+                // &MiniceptionNewP { k0: 0 },
+                // &ModSamplingP{ k0: 0 },
+                &LrMinimizerP,
+                // &ModMinimizerP
                 // NOTE: These Rotmini/AltRotmini assume alphabet size 4.
-                // MinimizerType::RotMinimizer,
-                // MinimizerType::AltRotMinimizer,
-                // MinimizerType::DecyclingMinimizer,
-                // MinimizerType::DoubleDecyclingMinimizer,
-                // MinimizerType::OpenSyncmerMinimizer {
+                // &RotMinimizerP
+                // &AltRotMinimizerP
+                // &DecyclingMinimizerP
+                // &DoubleDecyclingMinimizerP
+                // &OpenSyncmerMinimizerP{
                 //     t: 0,
                 // },
-                MinimizerType::OpenClosedSyncmerMinimizer { t: 0 },
-                // MinimizerType::FracMin { f: 0 },
+                &OpenClosedSyncmerMinimizerP { t: 0 },
+                // &FracMinP{ f: 0 },
             ];
             if small {
-                base_types.push(MinimizerType::Bruteforce);
+                base_types.push(&BruteforceP);
             }
 
             let ks = if small {
@@ -147,7 +135,7 @@ fn main() {
                 .cartesian_product(ws)
                 .cartesian_product(base_types)
                 .collect_vec();
-            let results = Mutex::new(vec![None; k_w_tp.len()]);
+            let results = Mutex::new(vec![]);
             let done = AtomicUsize::new(0);
             let total = k_w_tp.len();
             let text = if small {
@@ -165,7 +153,7 @@ fn main() {
                     return;
                 }
                 let l = w + k - 1;
-                let tps = tp.try_params(w, k);
+                let tps = vec![tp];
                 for tp in tps {
                     let (density, positions, dists, transfer) =
                         collect_stats(w, text, &*tp.build(w, k, args.sigma));
