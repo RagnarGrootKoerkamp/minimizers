@@ -2,7 +2,6 @@
 // TODO: Make the 'linearized' `minimizers_simd_it` and `nthash32_simd_it` iterators faster.
 //       Currently they are 4x slower than the `*_par_it` versions.
 
-pub mod cycle_partition_lp;
 pub mod de_bruijn_seq;
 pub mod monotone_queue;
 pub mod order;
