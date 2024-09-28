@@ -380,68 +380,6 @@ impl MinimizerType {
             }
         }
     }
-
-    pub fn try_params(&self, w: usize, k: usize) -> Vec<Self> {
-        let l = w + k - 1;
-        match self {
-            MinimizerType::BdAnchor { .. } => {
-                let r_max = k;
-                (0.min(r_max)..=10.min(r_max))
-                    .map(|r| MinimizerType::BdAnchor { r })
-                    .collect()
-            }
-            MinimizerType::Miniception { ao, aot, .. } => {
-                let k0 = max(k as isize - w as isize, 4) as usize;
-                return vec![MinimizerType::Miniception {
-                    k0,
-                    ao: *ao,
-                    aot: *aot,
-                }];
-            }
-            MinimizerType::MiniceptionNew { .. } => {
-                let k0 = max(k as isize - w as isize, 4) as usize;
-                return vec![MinimizerType::MiniceptionNew { k0 }];
-            }
-            MinimizerType::ModSampling { .. } => {
-                let k0_min = 1;
-                let k0_max = l;
-                (k0_min..=k0_max)
-                    .map(|k0| MinimizerType::ModSampling { k0 })
-                    .collect()
-            }
-            MinimizerType::LrMinimizer => {
-                if k > w + 4 {
-                    vec![*self]
-                } else {
-                    vec![]
-                }
-            }
-            MinimizerType::RotMinimizer => {
-                if k % w == 0 {
-                    vec![*self]
-                } else {
-                    vec![]
-                }
-            }
-            MinimizerType::AltRotMinimizer => {
-                if k > w {
-                    vec![*self]
-                } else {
-                    vec![]
-                }
-            }
-            MinimizerType::OpenSyncmerMinimizer { .. } => {
-                vec![MinimizerType::OpenSyncmerMinimizer { t: 4 }]
-            }
-            MinimizerType::OpenClosedSyncmerMinimizer { .. } => {
-                vec![MinimizerType::OpenClosedSyncmerMinimizer { t: 4 }]
-            }
-            MinimizerType::FracMin { .. } => (1..w).map(|f| MinimizerType::FracMin { f }).collect(),
-            _ => {
-                vec![*self]
-            }
-        }
-    }
 }
 
 /// Classic minimizers with respect to some order on kmers `O`.
