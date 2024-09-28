@@ -42,7 +42,6 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "BdAnchor" => Box::new(schemes::BdAnchorP { r: get(args, "r")? }),
         "SusAnchor" => Box::new(schemes::SusAnchorP {
             ao: get_bool(args, "ao"),
-            modulo: get_bool(args, "modulo"),
         }),
         "Miniception" => Box::new(schemes::MiniceptionP {
             k0: get(args, "k0")?,
