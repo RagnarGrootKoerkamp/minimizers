@@ -25,7 +25,7 @@ use std::fmt::Debug;
 pub trait MinimizerIt: Iterator<Item = usize> {}
 impl<I: Iterator<Item = usize>> MinimizerIt for I {}
 
-#[typetag::serde(tag = "minimizer_type")]
+#[typetag::serialize(tag = "minimizer_type")]
 pub trait Params: Debug + Sync {
     fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme>;
 }

@@ -8,6 +8,7 @@ use std::{
 use clap::Parser;
 use itertools::Itertools;
 use minimizers::{de_bruijn_seq::de_bruijn_sequence, *};
+use order::RandomO;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::Serialize;
 
@@ -86,7 +87,7 @@ fn main() {
                 r: 1,
                 t: 0,
                 lr: true,
-                params: Box::new(RandomM),
+                params: Box::new(M(RandomO)),
             };
             let mut base_types = vec![
                 // &MinimizerP,
@@ -202,14 +203,14 @@ fn main() {
 #[cfg(test)]
 mod test {
     use super::{schemes::*, *};
-    use order::RandomOrder;
+    use order::RandomO;
 
     #[test]
     fn minimizers() {
         let text = generate_random_string(1000, 4);
         for k in 1..=20 {
             for w in 1..=20 {
-                let m = RandomMinimizer::new(k, w, RandomOrder);
+                let m = RandomMinimizer::new(k, w, RandomO);
                 let stream = m.stream(&text);
                 let stream_naive = m.stream_naive(&text);
                 assert_eq!(stream, stream_naive);
@@ -224,7 +225,7 @@ mod test {
             for w in 1..=20 {
                 let l = k + w - 1;
                 for t in 1..=l {
-                    let m = Mod::new_with_t(w, k, 4, t, &RandomM);
+                    let m = Mod::new_with_t(w, k, 4, t, &M(RandomO));
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
@@ -239,7 +240,7 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let m = Miniception::new(w, k, k0, RandomOrder, RandomOrder);
+                    let m = Miniception::new(w, k, k0, RandomO, RandomO);
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
@@ -254,7 +255,7 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let m = MiniceptionNew::new(w, k, k0, RandomOrder);
+                    let m = MiniceptionNew::new(w, k, k0, RandomO);
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);

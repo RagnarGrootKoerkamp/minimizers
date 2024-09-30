@@ -10,7 +10,8 @@ pub struct ThresholdMinimizerP {
     pub loose: bool,
     pub open: bool,
 }
-#[typetag::serde]
+
+#[typetag::serialize]
 impl Params for ThresholdMinimizerP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         Box::new(ThresholdMinimizer::new(
@@ -26,7 +27,7 @@ pub struct ThresholdMinimizer {
     h: usize,
     loose: bool,
     open: bool,
-    o: RandomOrder,
+    o: RandomO,
     rand_mini: RandomMinimizer,
     threshold: usize,
     threshold2: usize,
@@ -48,9 +49,9 @@ impl ThresholdMinimizer {
             h,
             loose,
             open,
-            o: RandomOrder,
+            o: RandomO,
             // rand_mini: Minimizer::new(t, k - t + 1, RandomOrder),
-            rand_mini: RandomMinimizer::new(1, k, RandomOrder),
+            rand_mini: RandomMinimizer::new(1, k, RandomO),
             threshold,
             threshold2,
             count: Cell::new(0),

@@ -8,17 +8,17 @@ pub struct RotMinimizerP;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AltRotMinimizerP;
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for RotMinimizerP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(RotMinimizer::new(k, w, RandomOrder))
+        Box::new(RotMinimizer::new(k, w, RandomO))
     }
 }
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for AltRotMinimizerP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(AltRotMinimizer::new(k, w, RandomOrder))
+        Box::new(AltRotMinimizer::new(k, w, RandomO))
     }
 }
 

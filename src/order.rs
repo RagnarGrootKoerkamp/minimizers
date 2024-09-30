@@ -1,3 +1,8 @@
+#![allow(refining_impl_trait)]
+
+use serde::Serialize;
+use std::fmt::Debug;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Ord)]
 pub enum Direction {
     Leftmost,
@@ -22,34 +27,50 @@ impl PartialOrd for Direction {
 /// A directed order: each kmer is mapped to its priority value.
 /// Additionally, each kmer is mapped to a direction, determining whether the
 /// leftmost or rightmost kmer of this priority is taken in case of ties.
-pub trait DirectedOrder {
-    fn key(&self, kmer: &[u8]) -> (impl Ord + Copy, Direction);
-    fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = (impl Ord + Copy, Direction)> {
+pub trait DirectedOrder: Clone + Sync + Debug {
+    type T: Ord + Copy;
+    fn key(&self, kmer: &[u8]) -> (Self::T, Direction);
+    fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = (Self::T, Direction)> {
         text.windows(k).map(|kmer| self.key(kmer))
     }
 }
 
 /// Maps a kmer to its priority value. Lower is higher priority.
-pub trait Order {
-    fn key(&self, kmer: &[u8]) -> usize;
-    fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = impl Ord + Copy> {
+pub trait Order: Clone + Sync + Debug {
+    type T: Ord + Copy;
+    fn key(&self, kmer: &[u8]) -> Self::T;
+    fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = Self::T> {
         text.windows(k).map(|kmer| self.key(kmer))
     }
 }
 
 /// Every order implies a basic directed order.
-impl<T: Order> DirectedOrder for T {
+impl<O: Order> DirectedOrder for O {
+    type T = O::T;
     #[inline(always)]
-    fn key(&self, kmer: &[u8]) -> (impl Ord + Copy, Direction) {
+    fn key(&self, kmer: &[u8]) -> (Self::T, Direction) {
         (self.key(kmer), Direction::Leftmost)
     }
 }
 
-/// A random order than hashes each kmer using `wyhash64`.
-#[derive(Clone, Copy)]
-pub struct RandomOrder;
+pub trait ToOrder: Clone + Sync + Debug {
+    type O: Order;
+    fn to_order(&self, k: usize) -> Self::O;
+}
 
-impl Order for RandomOrder {
+impl<O: Order> ToOrder for O {
+    type O = Self;
+    fn to_order(&self, _: usize) -> Self {
+        self.clone()
+    }
+}
+
+/// A random order than hashes each kmer using `wyhash64`.
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct RandomO;
+
+impl Order for RandomO {
+    type T = usize;
     #[inline(always)]
     fn key(&self, kmer: &[u8]) -> usize {
         wyhash::wyhash(kmer, 3141592) as usize
@@ -57,7 +78,7 @@ impl Order for RandomOrder {
 }
 
 /// An order given by explicit enumeration of all kmers.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExplicitOrder {
     /// The kmer length of this order.
     pub k: usize,
@@ -90,6 +111,7 @@ pub fn pack(kmer: &[u8], sigma: usize) -> usize {
 }
 
 impl Order for ExplicitOrder {
+    type T = usize;
     #[inline(always)]
     fn key(&self, kmer: &[u8]) -> usize {
         assert_eq!(kmer.len(), self.k);
@@ -99,6 +121,7 @@ impl Order for ExplicitOrder {
 }
 
 /// A directed order given by explicit enumeration of all kmers.
+#[derive(Clone, Debug)]
 pub struct ExplicitDirectedOrder {
     /// The kmer length of this order.
     pub k: usize,
@@ -109,18 +132,20 @@ pub struct ExplicitDirectedOrder {
 }
 
 impl DirectedOrder for ExplicitDirectedOrder {
+    type T = usize;
     #[inline(always)]
-    fn key(&self, kmer: &[u8]) -> (impl Ord + Copy, Direction) {
+    fn key(&self, kmer: &[u8]) -> (usize, Direction) {
         assert_eq!(kmer.len(), self.k);
         // Find index of kmer.
         self.idx[pack(kmer, self.sigma)]
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Lex;
 
 impl Order for Lex {
+    type T = usize;
     fn key(&self, kmer: &[u8]) -> usize {
         let s = 8usize.saturating_sub(kmer.len());
         let mut prefix = [0xff; 8];
@@ -131,10 +156,11 @@ impl Order for Lex {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct AntiLex;
 
 impl Order for AntiLex {
+    type T = usize;
     fn key(&self, kmer: &[u8]) -> usize {
         let s = 8usize.saturating_sub(kmer.len());
         let mut prefix = [0xff; 8];
@@ -143,5 +169,19 @@ impl Order for AntiLex {
         }
         prefix[7] ^= 0xff;
         usize::from_ne_bytes(prefix)
+    }
+}
+
+impl<O1: Order, O2: Order> Order for (O1, O2) {
+    type T = (O1::T, O2::T);
+    fn key(&self, kmer: &[u8]) -> Self::T {
+        let (o1, o2) = self;
+        (o1.key(kmer), o2.key(kmer))
+    }
+
+    fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = Self::T> {
+        let keys0 = self.0.keys(text, k);
+        let keys1 = self.1.keys(text, k);
+        keys0.zip(keys1)
     }
 }

@@ -16,7 +16,7 @@ use std::iter::zip;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BruteforceP;
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for BruteforceP {
     fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
         let m = bruteforce::bruteforce_minimizer(k, w, sigma).1;

@@ -12,18 +12,18 @@ pub struct MiniceptionNewP {
     pub k0: usize,
 }
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for MiniceptionP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         if !self.ao {
             if !self.aot {
-                Box::new(Miniception::new(w, k, self.k0, RandomOrder, RandomOrder))
+                Box::new(Miniception::new(w, k, self.k0, RandomO, RandomO))
             } else {
-                Box::new(Miniception::new(w, k, self.k0, RandomOrder, AntiLex))
+                Box::new(Miniception::new(w, k, self.k0, RandomO, AntiLex))
             }
         } else {
             if !self.aot {
-                Box::new(Miniception::new(w, k, self.k0, AntiLex, RandomOrder))
+                Box::new(Miniception::new(w, k, self.k0, AntiLex, RandomO))
             } else {
                 Box::new(Miniception::new(w, k, self.k0, AntiLex, AntiLex))
             }
@@ -31,10 +31,10 @@ impl Params for MiniceptionP {
     }
 }
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for MiniceptionNewP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(MiniceptionNew::new(w, k, self.k0, RandomOrder))
+        Box::new(MiniceptionNew::new(w, k, self.k0, RandomO))
     }
 }
 
@@ -157,7 +157,7 @@ impl<O: Order> MiniceptionNew<O> {
             k0,
             w0,
             o,
-            rand_mini: RandomMinimizer::new(k0, k - k0 + 1, RandomOrder),
+            rand_mini: RandomMinimizer::new(k0, k - k0 + 1, RandomO),
         }
     }
 }

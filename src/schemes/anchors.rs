@@ -10,14 +10,14 @@ pub struct SusAnchorP {
     pub ao: bool,
 }
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for BdAnchorP {
     fn build(&self, w: usize, _k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         Box::new(BdAnchor::new(w, self.r))
     }
 }
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for SusAnchorP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         if !self.ao {

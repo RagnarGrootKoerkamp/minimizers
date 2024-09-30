@@ -5,7 +5,7 @@ pub struct FracMinP {
     pub f: usize,
 }
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for FracMinP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         Box::new(FracMin::new(k, w, self.f))
@@ -17,7 +17,7 @@ pub struct FracMin {
     k: usize,
     w: usize,
     bound: usize,
-    o: RandomOrder,
+    o: RandomO,
     seed: usize,
 }
 
@@ -28,7 +28,7 @@ impl FracMin {
             k,
             w,
             bound,
-            o: RandomOrder,
+            o: RandomO,
             seed: rand::random(),
         }
     }

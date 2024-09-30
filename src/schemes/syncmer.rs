@@ -23,21 +23,21 @@ pub struct OcModMinimizerP {
     pub aot: bool,
 }
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for OpenSyncmerMinimizerP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         Box::new(OpenSyncmer::new(k, w, self.t, true, false))
     }
 }
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for OpenClosedSyncmerMinimizerP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         Box::new(OpenSyncmer::new(k, w, self.t, true, true))
     }
 }
 
-#[typetag::serde]
+#[typetag::serialize]
 impl Params for OcModMinimizerP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         if !self.ao {
@@ -52,8 +52,8 @@ impl Params for OcModMinimizerP {
                     self.open_tmer,
                     self.closed_tmer,
                     self.other_tmer,
-                    RandomOrder,
-                    RandomOrder,
+                    RandomO,
+                    RandomO,
                 ))
             } else {
                 Box::new(OcModMinimizer::new(
@@ -66,7 +66,7 @@ impl Params for OcModMinimizerP {
                     self.open_tmer,
                     self.closed_tmer,
                     self.other_tmer,
-                    RandomOrder,
+                    RandomO,
                     AntiLex,
                 ))
             }
@@ -83,7 +83,7 @@ impl Params for OcModMinimizerP {
                     self.closed_tmer,
                     self.other_tmer,
                     AntiLex,
-                    RandomOrder,
+                    RandomO,
                 ))
             } else {
                 Box::new(OcModMinimizer::new(
@@ -111,7 +111,7 @@ pub struct OpenSyncmer {
     w: usize,
     /// Length of tmers to consider inside each kmer.
     t: usize,
-    o: RandomOrder,
+    o: RandomO,
     rand_mini: RandomMinimizer,
     tiebreak: bool,
     closed: bool,
@@ -123,8 +123,8 @@ impl OpenSyncmer {
             k,
             w,
             t,
-            o: RandomOrder,
-            rand_mini: RandomMinimizer::new(t, k - t + 1, RandomOrder),
+            o: RandomO,
+            rand_mini: RandomMinimizer::new(t, k - t + 1, RandomO),
             tiebreak,
             closed,
         }
@@ -230,7 +230,7 @@ pub struct OcModMinimizer<O: Order, OT: Order> {
     ot: Minimizer<OT>,
 }
 
-impl<O: Order, OT: Order> OcModMinimizer<O, OT> {
+impl<O: Order<T = usize>, OT: Order<T = usize>> OcModMinimizer<O, OT> {
     pub fn new(
         k: usize,
         w: usize,
@@ -292,7 +292,7 @@ impl<O: Order, OT: Order> OcModMinimizer<O, OT> {
     }
 }
 
-impl<O: Order, OT: Order> SamplingScheme for OcModMinimizer<O, OT> {
+impl<O: Order<T = usize>, OT: Order<T = usize>> SamplingScheme for OcModMinimizer<O, OT> {
     fn l(&self) -> usize {
         self.k + self.w - 1
     }
