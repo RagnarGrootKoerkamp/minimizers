@@ -200,3 +200,6 @@ pub fn cycle_stats(l: usize, text: &[u8], scheme: &dyn SamplingScheme) -> (f64, 
 // -   -*---
 // 2    *----
 // 3     *----
+
+pub trait Captures<U> {}
+impl<T: ?Sized, U> Captures<U> for T {}

@@ -1,36 +1,48 @@
 // TODO: The linearized functions are quite slow.
 
+use std::marker::PhantomData;
+
 use packed_seq::Seq;
 use packed_seq::{L, S};
 
-/// Take a sequence and a function to parallel iterate over it, and return a buffered linear iterator.
-pub fn linearize<BI: Seq, I1: ExactSizeIterator<Item = S>, I2: ExactSizeIterator<Item = u32>>(
-    seq: BI,
-    context: usize,
-    par_it: impl Fn(BI) -> (I1, I2),
-) -> impl ExactSizeIterator<Item = u32> {
-    Linear::<false, _, _, _, _>::new(seq, context, par_it)
-}
+use crate::Captures;
 
-pub fn linearize_with_offset<
-    BI: Seq,
+/// Take a sequence and a function to parallel iterate over it, and return a buffered linear iterator.
+pub fn linearize<
+    's,
+    BI: Seq<'s>,
     I1: ExactSizeIterator<Item = S>,
     I2: ExactSizeIterator<Item = u32>,
 >(
     seq: BI,
     context: usize,
     par_it: impl Fn(BI) -> (I1, I2),
-) -> impl ExactSizeIterator<Item = u32> {
-    Linear::<true, _, _, _, _>::new(seq, context, par_it)
+) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
+    Linear::<'s, false, _, _, _, _>::new(seq, context, par_it)
+}
+
+pub fn linearize_with_offset<
+    's,
+    BI: Seq<'s>,
+    I1: ExactSizeIterator<Item = S>,
+    I2: ExactSizeIterator<Item = u32>,
+>(
+    seq: BI,
+    context: usize,
+    par_it: impl Fn(BI) -> (I1, I2),
+) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
+    Linear::<'s, true, _, _, _, _>::new(seq, context, par_it)
 }
 
 struct Linear<
+    's,
     const OFFSET: bool,
-    BI: Seq,
+    BI: Seq<'s>,
     I1: ExactSizeIterator<Item = S>,
     I2: ExactSizeIterator<Item = u32>,
     ParIt: Fn(BI) -> (I1, I2),
 > {
+    _s: PhantomData<&'s ()>,
     seq: BI,
     par_it: ParIt,
     context: usize,
@@ -56,14 +68,15 @@ struct Linear<
 }
 
 impl<
+        's,
         const OFFSET: bool,
-        BI: Seq,
+        BI: Seq<'s>,
         I1: ExactSizeIterator<Item = S>,
         I2: ExactSizeIterator<Item = u32>,
         ParIt: Fn(BI) -> (I1, I2),
-    > Linear<OFFSET, BI, I1, I2, ParIt>
+    > Linear<'s, OFFSET, BI, I1, I2, ParIt>
 {
-    fn new(seq: BI, context: usize, par_it: ParIt) -> Linear<OFFSET, BI, I1, I2, ParIt> {
+    fn new(seq: BI, context: usize, par_it: ParIt) -> Linear<'s, OFFSET, BI, I1, I2, ParIt> {
         if OFFSET {
             assert!(
                 seq.len() < u32::MAX as usize,
@@ -83,6 +96,7 @@ impl<
         let tail_cache = vec![];
 
         let mut this = Self {
+            _s: PhantomData,
             seq,
             par_it,
             context,
@@ -177,12 +191,13 @@ impl<
 }
 
 impl<
+        's,
         const OFFSET: bool,
-        BI: Seq,
+        BI: Seq<'s>,
         I1: ExactSizeIterator<Item = S>,
         I2: ExactSizeIterator<Item = u32>,
         ParIt: Fn(BI) -> (I1, I2),
-    > Iterator for Linear<OFFSET, BI, I1, I2, ParIt>
+    > Iterator for Linear<'s, OFFSET, BI, I1, I2, ParIt>
 {
     type Item = u32;
 
@@ -220,11 +235,12 @@ impl<
 }
 
 impl<
+        's,
         const OFFSET: bool,
-        BI: Seq,
+        BI: Seq<'s>,
         I1: ExactSizeIterator<Item = S>,
         I2: ExactSizeIterator<Item = u32>,
         ParIt: Fn(BI) -> (I1, I2),
-    > ExactSizeIterator for Linear<OFFSET, BI, I1, I2, ParIt>
+    > ExactSizeIterator for Linear<'s, OFFSET, BI, I1, I2, ParIt>
 {
 }

@@ -9,6 +9,8 @@
 
 // TODO: Write about 2bit encoded packed represenatation.
 
+use crate::Captures;
+
 use super::intrinsics;
 use super::linearize;
 use packed_seq::{Seq, S};
@@ -34,7 +36,7 @@ const HASHES_C: [u32; 4] = [
 /// Naively compute the 32-bit NT hash of a single k-mer.
 /// When `RC` is false, compute a forward hash.
 /// When `RC` is true, compute a canonical hash.
-pub fn nthash32_kmer_naive<const RC: bool>(seq: impl Seq) -> u32 {
+pub fn nthash32_kmer_naive<'s, const RC: bool>(seq: impl Seq<'s>) -> u32 {
     let k = seq.len();
     let mut hfw: u32 = 0;
     let mut hrc: u32 = 0;
@@ -51,10 +53,10 @@ pub fn nthash32_kmer_naive<const RC: bool>(seq: impl Seq) -> u32 {
 /// Set `RC` to true for canonical hashes.
 ///
 /// Prefer `nthash32_simd_it` which fills an internal buffer using the parallel SIMD version.
-pub fn nthash32_scalar_it<const RC: bool>(
-    seq: impl Seq,
+pub fn nthash32_scalar_it<'s, const RC: bool>(
+    seq: impl Seq<'s>,
     k: usize,
-) -> impl ExactSizeIterator<Item = u32> {
+) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
     assert!(k > 0);
     let mut hfw: u32 = 0;
     let mut hrc: u32 = 0;
@@ -86,10 +88,10 @@ pub fn nthash32_scalar_it<const RC: bool>(
 /// Hashes for each chunk are eagerly computed using 8 parallel streams using SIMD using `nthash32_par_it`.
 /// Then returns a linear iterator over the buffer.
 /// Once the buffer runs out, the next chunk is computed.
-pub fn nthash32_simd_it<const RC: bool>(
-    seq: impl Seq,
+pub fn nthash32_simd_it<'s, const RC: bool>(
+    seq: impl Seq<'s>,
     k: usize,
-) -> impl ExactSizeIterator<Item = u32> {
+) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
     linearize::linearize(seq, k, move |seq| nthash32_par_it::<RC>(seq, k, 1))
 }
 
@@ -98,13 +100,13 @@ pub fn nthash32_simd_it<const RC: bool>(
 /// and return the remaining few using the second iterator.
 /// The tail end has up to 31*8 = 248 elements.
 // TODO: SMALL_K + reusing gathers?
-pub fn nthash32_par_it<const RC: bool>(
-    seq: impl Seq,
+pub fn nthash32_par_it<'s, const RC: bool>(
+    seq: impl Seq<'s>,
     k: usize,
     w: usize,
 ) -> (
-    impl ExactSizeIterator<Item = S>,
-    impl ExactSizeIterator<Item = u32>,
+    impl ExactSizeIterator<Item = S> + Captures<&'s ()>,
+    impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
 ) {
     assert!(k > 0);
     assert!(w > 0);
@@ -157,26 +159,24 @@ pub fn nthash32_par_it<const RC: bool>(
 mod test {
     use super::*;
     use itertools::Itertools;
-    use packed_seq::{OwnedPackedSeq, OwnedSeq, L};
-    use rand::random;
+    use packed_seq::{AsciiSeq, AsciiSeqVec, PackedSeqVec, SeqVec, L};
     use std::{cell::LazyCell, iter::once};
 
-    const BYTE_SEQ: LazyCell<Vec<u8>> =
-        LazyCell::new(|| (0..1024).map(|_| random::<u8>() % 4).collect());
-
-    const PACKED_SEQ: LazyCell<OwnedPackedSeq> = LazyCell::new(|| OwnedPackedSeq::random(1024, 4));
+    const ASCII_SEQ: LazyCell<AsciiSeqVec> = LazyCell::new(|| AsciiSeqVec::random(1024));
+    const PACKED_SEQ: LazyCell<PackedSeqVec> = LazyCell::new(|| PackedSeqVec::random(1024));
 
     #[test]
     fn scalar_byte() {
-        let seq = &**BYTE_SEQ;
+        let seq = &*ASCII_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.slice(0..len);
                 let single = seq
+                    .0
                     .windows(k)
-                    .map(|seq| nthash32_kmer_naive::<false>(seq))
+                    .map(|seq| nthash32_kmer_naive::<false>(AsciiSeq::new(seq, k)))
                     .collect::<Vec<_>>();
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
                 assert_eq!(single, scalar, "k={}, len={}", k, len);
@@ -186,7 +186,7 @@ mod test {
 
     #[test]
     fn parallel_byte() {
-        let seq = &**BYTE_SEQ;
+        let seq = &*ASCII_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
@@ -216,7 +216,7 @@ mod test {
 
     #[test]
     fn parallel_iter_byte() {
-        let seq = &**BYTE_SEQ;
+        let seq = &*ASCII_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
@@ -257,18 +257,20 @@ mod test {
 
     #[test]
     fn canonical_is_revcomp() {
-        let seq = &**BYTE_SEQ;
-        let seq_rc = seq
-            .iter()
-            .rev()
-            .map(|c| cmpl(*c as u32) as u8)
-            .collect_vec();
+        let seq = &*ASCII_SEQ;
+        let seq_rc = AsciiSeqVec::from_vec(
+            seq.seq
+                .iter()
+                .rev()
+                .map(|c| cmpl(*c as u32) as u8)
+                .collect_vec(),
+        );
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.slice(0..len);
-                let seq_rc = &seq_rc[seq_rc.len() - len..];
+                let seq_rc = seq_rc.slice(seq_rc.len() - len..seq_rc.len());
                 let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
                 let scalar_rc = nthash32_scalar_it::<true>(seq_rc, k).collect::<Vec<_>>();
                 let scalar_rc_rc = scalar_rc.iter().rev().copied().collect_vec();
@@ -287,15 +289,16 @@ mod test {
 
     #[test]
     fn scalar_byte_canonical() {
-        let seq = &**BYTE_SEQ;
+        let seq = &*ASCII_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.slice(0..len);
                 let single = seq
+                    .0
                     .windows(k)
-                    .map(|seq| nthash32_kmer_naive::<true>(seq))
+                    .map(|seq| nthash32_kmer_naive::<true>(AsciiSeq::new(seq, k)))
                     .collect::<Vec<_>>();
                 let scalar = nthash32_scalar_it::<true>(seq, k).collect::<Vec<_>>();
                 assert_eq!(single, scalar, "k={}, len={}", k, len);

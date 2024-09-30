@@ -7,7 +7,7 @@ use minimizers::simd::{
     minimizer::{minimizer_par_it, minimizer_scalar_it, minimizer_simd_it},
     nthash::{nthash32_par_it, nthash32_simd_it},
 };
-use packed_seq::{OwnedPackedSeq, OwnedSeq, PackedSeq, S};
+use packed_seq::{PackedSeq, PackedSeqVec, SeqVec, S};
 use std::{cell::LazyCell, simd::Simd, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -286,7 +286,7 @@ fn local_nthash(c: &mut Criterion) {
 
 fn simd_minimizer(c: &mut Criterion) {
     // Create a random string of length 1Mbp.
-    let owned_packed_seq = OwnedPackedSeq::random(1000000, 4);
+    let owned_packed_seq = PackedSeqVec::random(1000000);
     let raw_packed_seq = &owned_packed_seq.seq;
     let packed_seq = owned_packed_seq.as_slice();
 
@@ -352,10 +352,10 @@ fn human_genome(c: &mut Criterion) {
     let packed_text = LazyCell::new(|| {
         eprintln!("Reading..");
         let start = std::time::Instant::now();
-        let mut packed_text = OwnedPackedSeq::default();
+        let mut packed_text = PackedSeqVec::default();
         let Ok(mut reader) = needletail::parse_fastx_file("human-genome.fa") else {
             eprintln!("Did not find human-genome.fa. Add/symlink it to test runtime on it.");
-            return OwnedPackedSeq::default();
+            return PackedSeqVec::default();
         };
         while let Some(r) = reader.next() {
             let r = r.unwrap();

@@ -1,4 +1,4 @@
-use crate::simd::linearize;
+use crate::{simd::linearize, Captures};
 
 use super::nthash::{nthash32_par_it, nthash32_scalar_it};
 use core::array::from_fn;
@@ -163,7 +163,7 @@ fn sliding_min_par_it(
 
 /// Returns the minimizer of a window using a naive linear scan.
 /// Uses NT hash with canonical hashes when `RC` is true.
-pub fn minimizer_window_naive<const RC: bool>(seq: impl Seq, k: usize) -> usize {
+pub fn minimizer_window_naive<'s, const RC: bool>(seq: impl Seq<'s> + 's, k: usize) -> usize {
     nthash32_scalar_it::<RC>(seq, k)
         .map(|x| x & 0xffff_0000)
         .position_min()
@@ -175,11 +175,11 @@ pub fn minimizer_window_naive<const RC: bool>(seq: impl Seq, k: usize) -> usize 
 /// `Itertools::dedup()` to obtain the distinct positions of the minimizers.
 ///
 /// Prefer `minimizer_simd_it` that internally used SIMD, or `minimizer_par_it` if it works for you.
-pub fn minimizer_scalar_it<const RC: bool>(
-    seq: impl Seq,
+pub fn minimizer_scalar_it<'s, const RC: bool>(
+    seq: impl Seq<'s> + 's,
     k: usize,
     w: usize,
-) -> impl ExactSizeIterator<Item = u32> {
+) -> impl ExactSizeIterator<Item = u32> + 's {
     let it = nthash32_scalar_it::<RC>(seq, k);
     sliding_min_scalar_it(it, w)
 }
@@ -196,11 +196,11 @@ pub fn minimizer_scalar_it<const RC: bool>(
 /// NOTE: This method is ~4x slower than the minimizer computation itself, and
 ///       only ~2x faster than the scalar version. Mostly because shuffling memory is slow.
 /// TODO: Fix this.
-pub fn minimizer_simd_it<const RC: bool>(
-    seq: impl Seq,
+pub fn minimizer_simd_it<'s, const RC: bool>(
+    seq: impl Seq<'s>,
     k: usize,
     w: usize,
-) -> impl ExactSizeIterator<Item = u32> {
+) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
     linearize::linearize_with_offset(seq, k + w - 1, move |seq| minimizer_par_it::<RC>(seq, k, w))
 }
 
@@ -208,13 +208,13 @@ pub fn minimizer_simd_it<const RC: bool>(
 /// Then return the positions of the minimizers of each of them in parallel using SIMD,
 /// and return the remaining few using the second iterator.
 // TODO: Take a hash function as argument.
-pub fn minimizer_par_it<const RC: bool>(
-    seq: impl Seq,
+pub fn minimizer_par_it<'s, const RC: bool>(
+    seq: impl Seq<'s>,
     k: usize,
     w: usize,
 ) -> (
-    impl ExactSizeIterator<Item = S>,
-    impl ExactSizeIterator<Item = u32>,
+    impl ExactSizeIterator<Item = S> + Captures<&'s ()>,
+    impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
 ) {
     let (par_head, tail) = nthash32_par_it::<RC>(seq, k, w);
     let par_head = sliding_min_par_it(par_head, w);
@@ -225,28 +225,27 @@ pub fn minimizer_par_it<const RC: bool>(
 
 #[cfg(test)]
 mod test {
-    use packed_seq::PackedSeq;
+    use packed_seq::{AsciiSeq, AsciiSeqVec, PackedSeqVec, SeqVec};
 
     use super::*;
-    use rand::random;
     use std::{cell::LazyCell, iter::once};
-    const BYTE_SEQ: LazyCell<Vec<u8>> =
-        LazyCell::new(|| (0..1024 * 1024).map(|_| random::<u8>() % 4).collect());
 
-    const PACKED_SEQ: LazyCell<Vec<u8>> =
-        LazyCell::new(|| (0..1024 * 1024 / 4).map(|_| random::<u8>()).collect());
+    const ASCII_SEQ: LazyCell<AsciiSeqVec> = LazyCell::new(|| AsciiSeqVec::random(1024 * 1024));
+    const PACKED_SEQ: LazyCell<PackedSeqVec> = LazyCell::new(|| PackedSeqVec::random(1024 * 1024));
 
     #[test]
     fn scalar_byte() {
-        let seq = &**BYTE_SEQ;
+        let seq = &*ASCII_SEQ;
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 32)) {
                     let seq = seq.slice(0..len);
-                    let single = seq[0..len]
+                    let single = seq.0[0..len]
                         .windows(w + k - 1)
                         .enumerate()
-                        .map(|(pos, seq)| (pos + minimizer_window_naive::<false>(seq, k)) as u32)
+                        .map(|(pos, seq)| {
+                            (pos + minimizer_window_naive::<false>(AsciiSeq::new(seq, k), k)) as u32
+                        })
                         .collect::<Vec<_>>();
                     let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
                     assert_eq!(single, scalar, "k={k}, w={w}, len={len}");
@@ -257,7 +256,7 @@ mod test {
 
     #[test]
     fn parallel_iter_byte() {
-        let seq = &**BYTE_SEQ;
+        let seq = &*ASCII_SEQ;
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128)) {
@@ -278,11 +277,7 @@ mod test {
 
     #[test]
     fn parallel_iter_packed() {
-        let seq = PackedSeq {
-            seq: &*PACKED_SEQ,
-            offset: 0,
-            len: 1024 * 1024,
-        };
+        let seq = &*PACKED_SEQ;
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128)) {
@@ -302,11 +297,7 @@ mod test {
 
     #[test]
     fn linearized() {
-        let seq = PackedSeq {
-            seq: &*PACKED_SEQ,
-            offset: 0,
-            len: 1024 * 1024,
-        };
+        let seq = &*PACKED_SEQ;
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128 + 765)) {
