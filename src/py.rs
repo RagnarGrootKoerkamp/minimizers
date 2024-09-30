@@ -54,7 +54,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "OpenClosedSyncmerMinimizer" => {
             Box::new(schemes::OpenClosedSyncmerMinimizerP { t: get(args, "t")? })
         }
-        "FracMin" => Box::new(schemes::FracMinP { f: get(args, "f")? }),
+        "FracMin" => Box::new(schemes::M(schemes::FracMin { f: get(args, "f")? })),
         "OcModMinimizer" => Box::new(schemes::OcModMinimizerP {
             t: get(args, "t")?,
             offset: get(args, "offset")?,

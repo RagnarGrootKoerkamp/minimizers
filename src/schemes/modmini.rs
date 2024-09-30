@@ -1,13 +1,5 @@
 use super::*;
 
-#[derive(Debug, Serialize)]
-pub struct ModP {
-    pub r: usize,
-    pub lr: bool,
-    pub t: usize,
-    pub params: Box<dyn Params>,
-}
-
 #[typetag::serialize]
 impl Params for ModP {
     fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {

@@ -1,57 +1,26 @@
 use super::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FracMinP {
-    pub f: usize,
-}
-
-#[typetag::serialize]
-impl Params for FracMinP {
-    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(FracMin::new(k, w, self.f))
-    }
-}
-
-/// Sample 1/f of the kmers at random, then minimizer to get to 1/w.
-pub struct FracMin {
-    k: usize,
-    w: usize,
+#[derive(Debug, Clone, Serialize)]
+pub struct FracMinO {
     bound: usize,
     o: RandomO,
-    seed: usize,
 }
 
-impl FracMin {
-    pub fn new(k: usize, w: usize, f: usize) -> Self {
-        let bound = usize::MAX / f;
-        Self {
-            k,
-            w,
-            bound,
-            o: RandomO,
-            seed: rand::random(),
+impl ToOrder for FracMin {
+    type O = FracMinO;
+    fn to_order(&self, _k: usize) -> FracMinO {
+        let bound = usize::MAX / self.f;
+        FracMinO { bound, o: RandomO }
+    }
+}
+
+impl Order for FracMinO {
+    type T = u8;
+    fn key(&self, kmer: &[u8]) -> u8 {
+        if Order::key(&self.o, kmer) <= self.bound {
+            0
+        } else {
+            1
         }
-    }
-}
-
-impl SamplingScheme for FracMin {
-    fn l(&self) -> usize {
-        self.k + self.w - 1
-    }
-
-    fn sample(&self, lmer: &[u8]) -> usize {
-        lmer.windows(self.k)
-            .enumerate()
-            .min_by_key(|(_, kmer)| {
-                let pref = if Order::key(&self.o, kmer) <= self.bound {
-                    0
-                } else {
-                    1
-                };
-                let kmer_hash = wyhash::wyhash(kmer, self.seed as u64);
-                (pref, kmer_hash)
-            })
-            .unwrap()
-            .0
     }
 }
