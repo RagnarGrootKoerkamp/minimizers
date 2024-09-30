@@ -28,6 +28,13 @@ pub struct Mod {
 impl Mod {
     pub fn new(w: usize, k: usize, sigma: usize, r: usize, params: &dyn Params) -> Self {
         let t = if k < r { k } else { (k - r) % w + r };
+        Self::new_with_t(w, k, sigma, t, params)
+    }
+    pub fn new_lr(w: usize, k: usize, sigma: usize, r: usize, params: &dyn Params) -> Self {
+        let t = if k < w + r { k } else { k - w };
+        Self::new_with_t(w, k, sigma, t, params)
+    }
+    pub fn new_with_t(w: usize, k: usize, sigma: usize, t: usize, params: &dyn Params) -> Self {
         let scheme = params.build(w + k - t, t, sigma);
         Self {
             scheme,

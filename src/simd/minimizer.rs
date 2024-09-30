@@ -163,7 +163,7 @@ fn sliding_min_par_it(
 
 /// Returns the minimizer of a window using a naive linear scan.
 /// Uses NT hash with canonical hashes when `RC` is true.
-pub fn minimizer_window_naive<'s, const RC: bool>(seq: impl Seq<'s> + 's, k: usize) -> usize {
+pub fn minimizer_window_naive<'s, const RC: bool>(seq: impl Seq<'s>, k: usize) -> usize {
     nthash32_scalar_it::<RC>(seq, k)
         .map(|x| x & 0xffff_0000)
         .position_min()
@@ -176,10 +176,10 @@ pub fn minimizer_window_naive<'s, const RC: bool>(seq: impl Seq<'s> + 's, k: usi
 ///
 /// Prefer `minimizer_simd_it` that internally used SIMD, or `minimizer_par_it` if it works for you.
 pub fn minimizer_scalar_it<'s, const RC: bool>(
-    seq: impl Seq<'s> + 's,
+    seq: impl Seq<'s>,
     k: usize,
     w: usize,
-) -> impl ExactSizeIterator<Item = u32> + 's {
+) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
     let it = nthash32_scalar_it::<RC>(seq, k);
     sliding_min_scalar_it(it, w)
 }
