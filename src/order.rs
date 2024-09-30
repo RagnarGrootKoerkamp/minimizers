@@ -27,7 +27,7 @@ impl PartialOrd for Direction {
 /// A directed order: each kmer is mapped to its priority value.
 /// Additionally, each kmer is mapped to a direction, determining whether the
 /// leftmost or rightmost kmer of this priority is taken in case of ties.
-pub trait DirectedOrder: Clone + Sync + Debug {
+pub trait DirectedOrder: Sync {
     type T: Ord + Copy;
     fn key(&self, kmer: &[u8]) -> (Self::T, Direction);
     fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = (Self::T, Direction)> {
@@ -36,7 +36,7 @@ pub trait DirectedOrder: Clone + Sync + Debug {
 }
 
 /// Maps a kmer to its priority value. Lower is higher priority.
-pub trait Order: Clone + Sync + Debug {
+pub trait Order: Sync {
     type T: Ord + Copy;
     fn key(&self, kmer: &[u8]) -> Self::T;
     fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = Self::T> {
@@ -176,34 +176,34 @@ impl<O1: Order, O2: Order> Order for (O1, O2) {
 
 pub trait ToOrder: Clone + Sync + Debug {
     type O: Order;
-    fn to_order(&self, k: usize) -> Self::O;
+    fn to_order(&self, w: usize, k: usize, sigma: usize) -> Self::O;
 }
 
 impl<O1: ToOrder, O2: ToOrder> ToOrder for (O1, O2) {
     type O = (O1::O, O2::O);
-    fn to_order(&self, k: usize) -> Self::O {
+    fn to_order(&self, w: usize, k: usize, sigma: usize) -> Self::O {
         let (o1, o2) = self;
-        (o1.to_order(k), o2.to_order(k))
+        (o1.to_order(w, k, sigma), o2.to_order(w, k, sigma))
     }
 }
 
 impl ToOrder for RandomO {
     type O = RandomO;
-    fn to_order(&self, _k: usize) -> Self::O {
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
         RandomO
     }
 }
 
 impl ToOrder for Lex {
     type O = Lex;
-    fn to_order(&self, _k: usize) -> Self::O {
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
         Lex
     }
 }
 
 impl ToOrder for AntiLex {
     type O = AntiLex;
-    fn to_order(&self, _k: usize) -> Self::O {
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
         AntiLex
     }
 }

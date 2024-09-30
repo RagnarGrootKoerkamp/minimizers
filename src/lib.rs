@@ -30,7 +30,7 @@ pub trait Params: Debug + Sync {
     fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme>;
 }
 
-pub trait SamplingScheme {
+pub trait SamplingScheme: Sync {
     fn w(&self) -> usize {
         panic!();
     }

@@ -8,7 +8,7 @@ pub struct FracMinO {
 
 impl ToOrder for FracMin {
     type O = FracMinO;
-    fn to_order(&self, _k: usize) -> FracMinO {
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> FracMinO {
         let bound = usize::MAX / self.f;
         FracMinO { bound, o: RandomO }
     }

@@ -37,8 +37,8 @@ pub struct M<O: ToOrder>(pub O);
 
 #[typetag::serialize]
 impl<O: ToOrder + Serialize + 'static> Params for M<O> {
-    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(Minimizer::new(k, w, self.0.to_order(k)))
+    fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(Minimizer::new(k, w, self.0.to_order(w, k, sigma)))
     }
 }
 

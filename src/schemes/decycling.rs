@@ -5,7 +5,7 @@ use num::{complex::Complex64, Zero};
 
 impl ToOrder for Decycling {
     type O = DecyclingO;
-    fn to_order(&self, k: usize) -> DecyclingO {
+    fn to_order(&self, _w: usize, k: usize, _sigma: usize) -> DecyclingO {
         let roots = (0..k)
             .map(|j| Complex64::exp(2. * PI * Complex64::i() / k as f64 * j as f64))
             .collect();
