@@ -86,7 +86,7 @@ fn main() {
                 r: 1,
                 t: 0,
                 lr: true,
-                params: Box::new(MinimizerP { ao: false }),
+                params: Box::new(RandomM),
             };
             let mut base_types = vec![
                 // &MinimizerP,
@@ -224,7 +224,7 @@ mod test {
             for w in 1..=20 {
                 let l = k + w - 1;
                 for t in 1..=l {
-                    let m = Mod::new_with_t(w, k, 4, t, &MinimizerP { ao: false });
+                    let m = Mod::new_with_t(w, k, 4, t, &RandomM);
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);

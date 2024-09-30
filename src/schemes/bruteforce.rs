@@ -9,7 +9,7 @@ use crate::SamplingScheme;
 
 use itertools::repeat_n;
 use itertools::Itertools;
-use random::Minimizer;
+use minimizer::Minimizer;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::iter::zip;
 

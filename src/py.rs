@@ -29,9 +29,8 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         | "Bruteforce" => {
             serde_json::from_str(&format!("{{\"minimizer_type\": \"{tp}\"}}")).unwrap()
         }
-        "Minimizer" => Box::new(schemes::MinimizerP {
-            ao: get_bool(args, "ao"),
-        }),
+        "Random" => Box::new(schemes::RandomM),
+        "AntiLex" => Box::new(schemes::AntiLexM),
         "DoubleDecyclingMinimizer" => Box::new(schemes::DoubleDecyclingP {
             ao: get_bool(args, "ao"),
         }),

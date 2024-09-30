@@ -23,18 +23,24 @@ impl PartialOrd for Direction {
 /// Additionally, each kmer is mapped to a direction, determining whether the
 /// leftmost or rightmost kmer of this priority is taken in case of ties.
 pub trait DirectedOrder {
-    fn key(&self, kmer: &[u8]) -> (usize, Direction);
+    fn key(&self, kmer: &[u8]) -> (impl Ord + Copy, Direction);
+    fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = (impl Ord + Copy, Direction)> {
+        text.windows(k).map(|kmer| self.key(kmer))
+    }
 }
 
 /// Maps a kmer to its priority value. Lower is higher priority.
 pub trait Order {
     fn key(&self, kmer: &[u8]) -> usize;
+    fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = impl Ord + Copy> {
+        text.windows(k).map(|kmer| self.key(kmer))
+    }
 }
 
 /// Every order implies a basic directed order.
 impl<T: Order> DirectedOrder for T {
     #[inline(always)]
-    fn key(&self, kmer: &[u8]) -> (usize, Direction) {
+    fn key(&self, kmer: &[u8]) -> (impl Ord + Copy, Direction) {
         (self.key(kmer), Direction::Leftmost)
     }
 }
@@ -104,7 +110,7 @@ pub struct ExplicitDirectedOrder {
 
 impl DirectedOrder for ExplicitDirectedOrder {
     #[inline(always)]
-    fn key(&self, kmer: &[u8]) -> (usize, Direction) {
+    fn key(&self, kmer: &[u8]) -> (impl Ord + Copy, Direction) {
         assert_eq!(kmer.len(), self.k);
         // Find index of kmer.
         self.idx[pack(kmer, self.sigma)]
