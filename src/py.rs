@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 
-use crate::collect_stats;
+use crate::{collect_stats, schemes::Decycling, AntiLex, RandomO};
 
 fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
     Ok(dict
@@ -25,15 +25,13 @@ fn get_bool(dict: Option<&Bound<'_, PyDict>>, key: &str) -> bool {
 fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn super::Params>> {
     use super::schemes;
     let mut params: Box<dyn super::Params> = match tp {
-        "LrMinimizer" | "RotMinimizer" | "AltRotMinimizer" | "DecyclingMinimizer"
-        | "Bruteforce" => {
-            serde_json::from_str(&format!("{{\"minimizer_type\": \"{tp}\"}}")).unwrap()
-        }
-        "Random" => Box::new(schemes::RandomM),
-        "AntiLex" => Box::new(schemes::AntiLexM),
-        "DoubleDecyclingMinimizer" => Box::new(schemes::DoubleDecyclingP {
-            ao: get_bool(args, "ao"),
-        }),
+        "RotMinimizer" => Box::new(schemes::RotMinimizerP),
+        "AltRotMinimizer" => Box::new(schemes::AltRotMinimizerP),
+        "Bruteforce" => Box::new(schemes::BruteforceP),
+        "Random" => Box::new(schemes::M(RandomO)),
+        "AntiLex" => Box::new(schemes::M(AntiLex)),
+        "DecyclingMinimizer" => Box::new(schemes::M((Decycling { double: false }, RandomO))),
+        "DoubleDecyclingMinimizer" => Box::new(schemes::M((Decycling { double: true }, RandomO))),
         "BdAnchor" => Box::new(schemes::BdAnchorP { r: get(args, "r")? }),
         "SusAnchor" => Box::new(schemes::SusAnchorP {
             ao: get_bool(args, "ao"),

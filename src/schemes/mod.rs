@@ -1,3 +1,5 @@
+#![allow(refining_impl_trait)]
+
 mod anchors;
 mod bruteforce;
 mod decycling;
@@ -26,24 +28,19 @@ use super::{order::*, MonotoneQueue, Params, SamplingScheme};
 use serde::{Deserialize, Serialize};
 
 /// Classic random minimizers.
-pub type RandomMinimizer = minimizer::Minimizer<RandomOrder>;
+pub type RandomMinimizer = minimizer::Minimizer<RandomO>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RandomM;
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct M<O: ToOrder>(pub O);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AntiLexM;
-
-#[typetag::serde]
-impl Params for RandomM {
-    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(Minimizer::new(k, w, RandomOrder))
-    }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Decycling {
+    pub double: bool,
 }
 
-#[typetag::serde]
-impl Params for AntiLexM {
+#[typetag::serialize]
+impl<O: ToOrder + Serialize + 'static> Params for M<O> {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(Minimizer::new(k, w, AntiLex))
+        Box::new(Minimizer::new(k, w, self.0.to_order(k)))
     }
 }

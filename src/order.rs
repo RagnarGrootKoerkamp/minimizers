@@ -53,18 +53,6 @@ impl<O: Order> DirectedOrder for O {
     }
 }
 
-pub trait ToOrder: Clone + Sync + Debug {
-    type O: Order;
-    fn to_order(&self, k: usize) -> Self::O;
-}
-
-impl<O: Order> ToOrder for O {
-    type O = Self;
-    fn to_order(&self, _: usize) -> Self {
-        self.clone()
-    }
-}
-
 /// A random order than hashes each kmer using `wyhash64`.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct RandomO;
@@ -183,5 +171,39 @@ impl<O1: Order, O2: Order> Order for (O1, O2) {
         let keys0 = self.0.keys(text, k);
         let keys1 = self.1.keys(text, k);
         keys0.zip(keys1)
+    }
+}
+
+pub trait ToOrder: Clone + Sync + Debug {
+    type O: Order;
+    fn to_order(&self, k: usize) -> Self::O;
+}
+
+impl<O1: ToOrder, O2: ToOrder> ToOrder for (O1, O2) {
+    type O = (O1::O, O2::O);
+    fn to_order(&self, k: usize) -> Self::O {
+        let (o1, o2) = self;
+        (o1.to_order(k), o2.to_order(k))
+    }
+}
+
+impl ToOrder for RandomO {
+    type O = RandomO;
+    fn to_order(&self, _k: usize) -> Self::O {
+        RandomO
+    }
+}
+
+impl ToOrder for Lex {
+    type O = Lex;
+    fn to_order(&self, _k: usize) -> Self::O {
+        Lex
+    }
+}
+
+impl ToOrder for AntiLex {
+    type O = AntiLex;
+    fn to_order(&self, _k: usize) -> Self::O {
+        AntiLex
     }
 }
