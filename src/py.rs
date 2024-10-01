@@ -26,40 +26,37 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
     use super::schemes;
     use super::schemes::*;
     let mut params: Box<dyn super::Params> = match tp {
-        "Rot" => Box::new(M((RotMinimizer, RandomO))),
-        "AltRot" => Box::new(M((AltRotMinimizer, RandomO))),
+        "Rot" => Box::new(RM(RotMinimizer)),
+        "AltRot" => Box::new(RM(AltRotMinimizer)),
         "Bruteforce" => Box::new(schemes::BruteforceP),
-        "Random" => Box::new(schemes::M(RandomO)),
+        "Random" => Box::new(schemes::RM(())),
         "AntiLex" => Box::new(schemes::M(AntiLex)),
-        "Decycling" => Box::new(schemes::M((Decycling { double: false }, RandomO))),
-        "DoubleDecycling" => Box::new(schemes::M((Decycling { double: true }, RandomO))),
+        "Decycling" => Box::new(schemes::RM(Decycling { double: false })),
+        "DoubleDecycling" => Box::new(schemes::RM(Decycling { double: true })),
         "BdAnchor" => Box::new(schemes::BdAnchorP { r: get(args, "r")? }),
         "SusAnchor" => Box::new(schemes::SusAnchorP {
             ao: get_bool(args, "ao"),
         }),
         // TODO: Variants for lex order
-        "OpenClosed" => Box::new(M((
-            OpenClosed {
-                r: get(args, "r")?,
-                open: get_bool(args, "open"),
-                closed: get_bool(args, "closed"),
-                open_by_tmer: get_bool(args, "open_tmer"),
-                closed_by_tmer: get_bool(args, "closed_tmer"),
-                other_by_tmer: get_bool(args, "other_tmer"),
-                offset: get(args, "offset").ok(),
-                modulo: get_bool(args, "modulo"),
-                anti_tmer: get_bool(args, "anti_tmer"),
-                o: RandomO,
-            },
-            RandomO,
-        ))),
+        "OpenClosed" => Box::new(RM(OpenClosed {
+            r: get(args, "r")?,
+            open: get_bool(args, "open"),
+            closed: get_bool(args, "closed"),
+            open_by_tmer: get_bool(args, "open_tmer"),
+            closed_by_tmer: get_bool(args, "closed_tmer"),
+            other_by_tmer: get_bool(args, "other_tmer"),
+            offset: get(args, "offset").ok(),
+            modulo: get_bool(args, "modulo"),
+            anti_tmer: get_bool(args, "anti_tmer"),
+            o: RandomO,
+        })),
         "Threshold" => Box::new(schemes::ThresholdMinimizerP {
             t: get(args, "t")?,
             h: get(args, "h")?,
             loose: get_bool(args, "loose"),
             open: get_bool(args, "open"),
         }),
-        "FracMin" => Box::new(schemes::M(schemes::FracMin { f: get(args, "f")? })),
+        "FracMin" => Box::new(schemes::RM(schemes::FracMin { f: get(args, "f")? })),
         _ => PyResult::Err(PyValueError::new_err("Invalid minimizer type"))?,
     };
     if get_bool(args, "mod") {

@@ -156,8 +156,27 @@ impl ThresholdMinimizer {
         //     pref = 1;
         // }
         //
+        let mut v = kmer[0];
         // Classic max-in-middle open variant.
+        if self.open && pref as usize >= 100 {
+            let p = kmer.iter().position_max().unwrap();
+
+            if p == self.k / 2 {
+                pref = 200;
+                v = kmer[self.k / 2];
+            } else {
+                if p == 0 || p == self.k - 1 {
+                    if p == self.k - 1 {
+                        v = kmer[self.k - 1];
+                    }
+                    pref = 300;
+                } else {
+                    pref = 400;
+                }
+            }
+        }
         //
+        // Threshold open syncmer
         // if self.open && pref as usize >= 100 {
         //     let m = self.k / 2;
         //     for (i, &tmer) in kmer.iter().enumerate() {
@@ -168,8 +187,7 @@ impl ThresholdMinimizer {
         // }
         (
             pref,
-            0,
-            // -v,
+            -(v as isize),
             // (255 - kmer[0]) as isize,
             // kmer[0] as isize - m as isize,
             Order::key(&self.o, kmer),

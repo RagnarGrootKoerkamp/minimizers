@@ -28,7 +28,7 @@ impl PartialOrd for Direction {
 /// Additionally, each kmer is mapped to a direction, determining whether the
 /// leftmost or rightmost kmer of this priority is taken in case of ties.
 pub trait DirectedOrder: Sync {
-    type T: Ord + Copy;
+    type T: Ord + Copy + Default;
     fn key(&self, kmer: &[u8]) -> (Self::T, Direction);
     fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = (Self::T, Direction)> {
         text.windows(k).map(|kmer| self.key(kmer))
@@ -50,6 +50,13 @@ impl<O: Order> DirectedOrder for O {
     #[inline(always)]
     fn key(&self, kmer: &[u8]) -> (Self::T, Direction) {
         (self.key(kmer), Direction::Leftmost)
+    }
+}
+
+impl Order for () {
+    type T = ();
+    fn key(&self, _kmer: &[u8]) -> Self::T {
+        ()
     }
 }
 
@@ -184,6 +191,13 @@ impl<O1: ToOrder, O2: ToOrder> ToOrder for (O1, O2) {
     fn to_order(&self, w: usize, k: usize, sigma: usize) -> Self::O {
         let (o1, o2) = self;
         (o1.to_order(w, k, sigma), o2.to_order(w, k, sigma))
+    }
+}
+
+impl ToOrder for () {
+    type O = ();
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
+        ()
     }
 }
 

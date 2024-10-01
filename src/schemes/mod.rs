@@ -30,8 +30,12 @@ pub type RandomMinimizer = minimizer::Minimizer<RandomO>;
 
 // GENERIC MINIMIZER SCHEME.
 
+/// Generic minimizer scheme.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct M<O: ToOrder>(pub O);
+/// Wrapper that does tiebreaking by kmer hash as last step.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RM<O: ToOrder>(pub O);
 
 #[typetag::serialize]
 impl<O: ToOrder> Params for M<O> {
@@ -42,6 +46,12 @@ impl<O: ToOrder> Params for M<O> {
 impl<O: ToOrder> M<O> {
     fn build_from_order(o: &O, w: usize, k: usize, sigma: usize) -> Minimizer<O::O> {
         Minimizer::new(k, w, o.to_order(w, k, sigma))
+    }
+}
+#[typetag::serialize]
+impl<O: ToOrder> Params for RM<O> {
+    fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
+        M((self.0.clone(), RandomO)).build(w, k, sigma)
     }
 }
 
