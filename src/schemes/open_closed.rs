@@ -1,23 +1,5 @@
 use super::*;
 
-#[derive(Debug, Clone, Serialize)]
-pub struct OpenClosed<O: ToOrder> {
-    pub r: usize,
-    /// Do open syncmers first?
-    pub open: bool,
-    /// Do closed syncmers second?
-    pub closed: bool,
-    /// When true, open syncmers must have this offset instead of in the middle by default.
-    pub offset: Option<usize>,
-    /// When true, any position offset%w makes a kmer an open syncmer.
-    pub modulo: bool,
-    pub open_by_tmer: bool,
-    pub closed_by_tmer: bool,
-    pub other_by_tmer: bool,
-    pub anti_tmer: bool,
-    pub o: O,
-}
-
 impl OpenClosed<RandomO> {
     pub fn default(r: usize) -> Self {
         Self {

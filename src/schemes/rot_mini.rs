@@ -1,26 +1,5 @@
 use super::*;
 
-/// Asymptotic (in k) optimal minimizers:
-/// - Assume k=x*w; sum all i mod w positions.
-/// - Take minimizer if first coordinate is max or at most sigma-1 away from max.
-/// - If multiple, take random.
-///
-/// Assumes alphabet size sigma=4.
-/// Also requires the input to be encoded as values 0..sigma, not as arbitrary ascii codepoints.
-///
-/// On the overshoot:
-/// Instead of the original sigma, we can use sigma-1, since the max difference
-/// between two characters is sigma-1.  In fact, I conjecture that
-/// floor((sigma+1)/2) overshoot is sufficient. I have a sketch of a proof for
-/// this.
-#[derive(Clone, Serialize, Debug)]
-pub struct RotMinimizer;
-
-pub struct RotMinimizerO {
-    w: usize,
-    sigma: usize,
-}
-
 impl ToOrder for RotMinimizer {
     type O = RotMinimizerO;
 

@@ -69,6 +69,57 @@ pub struct FracMin {
     pub f: usize,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct OpenClosed<O: ToOrder> {
+    pub r: usize,
+    /// Do open syncmers first?
+    pub open: bool,
+    /// Do closed syncmers second?
+    pub closed: bool,
+    /// When true, open syncmers must have this offset instead of in the middle by default.
+    pub offset: Option<usize>,
+    /// When true, any position offset%w makes a kmer an open syncmer.
+    pub modulo: bool,
+    pub open_by_tmer: bool,
+    pub closed_by_tmer: bool,
+    pub other_by_tmer: bool,
+    pub anti_tmer: bool,
+    pub o: O,
+}
+
+/// Asymptotic (in k) optimal minimizers:
+/// - Assume k=x*w; sum all i mod w positions.
+/// - Take minimizer if first coordinate is max or at most sigma-1 away from max.
+/// - If multiple, take random.
+///
+/// Assumes alphabet size sigma=4.
+/// Also requires the input to be encoded as values 0..sigma, not as arbitrary ascii codepoints.
+///
+/// On the overshoot:
+/// Instead of the original sigma, we can use sigma-1, since the max difference
+/// between two characters is sigma-1.  In fact, I conjecture that
+/// floor((sigma+1)/2) overshoot is sufficient. I have a sketch of a proof for
+/// this.
+#[derive(Clone, Serialize, Debug)]
+pub struct RotMinimizer;
+
+pub struct RotMinimizerO {
+    w: usize,
+    sigma: usize,
+}
+
+// ANCHORS.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BdAnchorP {
+    pub r: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SusAnchorP {
+    pub ao: bool,
+}
+
 // MINIMIZER WRAPPERS.
 
 #[derive(Debug, Serialize)]

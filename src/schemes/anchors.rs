@@ -1,15 +1,5 @@
 use super::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BdAnchorP {
-    pub r: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SusAnchorP {
-    pub ao: bool,
-}
-
 #[typetag::serialize]
 impl Params for BdAnchorP {
     fn build(&self, w: usize, _k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
