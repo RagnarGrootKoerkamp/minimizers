@@ -1,5 +1,7 @@
 use std::cell::Cell;
 
+use itertools::Itertools;
+
 use super::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,9 +33,9 @@ pub struct ThresholdMinimizer {
     rand_mini: RandomMinimizer,
     threshold: usize,
     threshold2: usize,
-    count: Cell<usize>,
-    count2: Cell<usize>,
-    count3: Cell<usize>,
+    // count: Cell<usize>,
+    // count2: Cell<usize>,
+    // count3: Cell<usize>,
 }
 
 impl ThresholdMinimizer {
@@ -54,9 +56,9 @@ impl ThresholdMinimizer {
             rand_mini: RandomMinimizer::new(1, k, RandomO),
             threshold,
             threshold2,
-            count: Cell::new(0),
-            count2: Cell::new(0),
-            count3: Cell::new(0),
+            // count: Cell::new(0),
+            // count2: Cell::new(0),
+            // count3: Cell::new(0),
         }
     }
 
@@ -185,7 +187,7 @@ impl SamplingScheme for ThresholdMinimizer {
 
         let h = self.hash_kmer(&lmer[0..self.k]);
         if h.0 < 100 {
-            self.count3.set(self.count3.get() + 1);
+            // self.count3.set(self.count3.get() + 1);
         }
 
         // Do not allow kmers that are followed by only 0s, since they are likely to overlap a 10000.
@@ -198,7 +200,7 @@ impl SamplingScheme for ThresholdMinimizer {
             .map(|(i, kmer)| {
                 let h = self.hash_kmer(kmer);
                 if h.0 < 100 {
-                    self.count.set(self.count.get() + 1);
+                    // self.count.set(self.count.get() + 1);
                     good = true;
                 }
                 (h, i, kmer)
@@ -217,7 +219,7 @@ impl SamplingScheme for ThresholdMinimizer {
         // }
 
         if good {
-            self.count2.set(self.count2.get() + 1);
+            // self.count2.set(self.count2.get() + 1);
         }
         p
     }
@@ -225,8 +227,8 @@ impl SamplingScheme for ThresholdMinimizer {
 
 impl Drop for ThresholdMinimizer {
     fn drop(&mut self) {
-        eprintln!("k {} => count : {}", self.k, self.count.get());
-        eprintln!("k {} => count2: {}", self.k, self.count2.get());
-        eprintln!("k {} => count3: {}", self.k, self.count3.get());
+        // eprintln!("k {} => count : {}", self.k, self.count.get());
+        // eprintln!("k {} => count2: {}", self.k, self.count2.get());
+        // eprintln!("k {} => count3: {}", self.k, self.count3.get());
     }
 }

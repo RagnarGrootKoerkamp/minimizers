@@ -36,7 +36,7 @@ pub type RandomMinimizer = minimizer::Minimizer<RandomO>;
 pub struct M<O: ToOrder>(pub O);
 
 #[typetag::serialize]
-impl<O: ToOrder + Serialize + 'static> Params for M<O> {
+impl<O: ToOrder> Params for M<O> {
     fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
         Box::new(Minimizer::new(k, w, self.0.to_order(w, k, sigma)))
     }
