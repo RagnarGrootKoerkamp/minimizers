@@ -1,15 +1,5 @@
 use super::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RotMinimizerP;
-
-#[typetag::serialize]
-impl Params for RotMinimizerP {
-    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(RotMinimizer::new(k, w, RandomO))
-    }
-}
-
 /// Asymptotic (in k) optimal minimizers:
 /// - Assume k=x*w; sum all i mod w positions.
 /// - Take minimizer if first coordinate is max or at most sigma-1 away from max.
@@ -23,45 +13,40 @@ impl Params for RotMinimizerP {
 /// between two characters is sigma-1.  In fact, I conjecture that
 /// floor((sigma+1)/2) overshoot is sufficient. I have a sketch of a proof for
 /// this.
-pub struct RotMinimizer<O: Order> {
-    k: usize,
-    w: usize,
-    o: O,
-}
-impl<O: Order> RotMinimizer<O> {
-    pub fn new(k: usize, w: usize, o: O) -> Self {
-        assert!(k % w == 0);
-        Self { k, w, o }
-    }
-}
-impl<O: Order> SamplingScheme for RotMinimizer<O> {
-    fn l(&self) -> usize {
-        self.k + self.w - 1
-    }
+#[derive(Clone, Serialize, Debug)]
+pub struct RotMinimizer;
 
-    fn sample(&self, lmer: &[u8]) -> usize {
-        let sigma = 4;
-        assert!(lmer.iter().all(|c| *c <= sigma));
-        lmer.windows(self.k)
-            .enumerate()
-            .filter(|(_, kmer)| {
-                let psi0 = kmer.iter().step_by(self.w).map(|&x| x as u64).sum::<u64>();
-                for j in 1..self.w {
-                    let psij = kmer
-                        .iter()
-                        .skip(j)
-                        .step_by(self.w)
-                        .map(|&x| x as u64)
-                        .sum::<u64>();
-                    if !(psij <= psi0 + sigma as u64) {
-                        return false;
-                    }
-                }
-                true
-            })
-            .min_by_key(|&(_i, kmer)| self.o.key(kmer))
-            .unwrap()
-            .0
+pub struct RotMinimizerO {
+    w: usize,
+    sigma: usize,
+}
+
+impl ToOrder for RotMinimizer {
+    type O = RotMinimizerO;
+
+    fn to_order(&self, w: usize, k: usize, sigma: usize) -> Self::O {
+        assert!(k % w == 0);
+        RotMinimizerO { w, sigma }
+    }
+}
+
+impl Order for RotMinimizerO {
+    type T = u8;
+
+    fn key(&self, kmer: &[u8]) -> Self::T {
+        let psi0 = kmer.iter().step_by(self.w).map(|&x| x as u64).sum::<u64>();
+        for j in 1..self.w {
+            let psij = kmer
+                .iter()
+                .skip(j)
+                .step_by(self.w)
+                .map(|&x| x as u64)
+                .sum::<u64>();
+            if !(psij <= psi0 + self.sigma as u64) {
+                return 1;
+            }
+        }
+        0
     }
 }
 
