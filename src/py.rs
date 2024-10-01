@@ -27,7 +27,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
     use super::schemes::*;
     let mut params: Box<dyn super::Params> = match tp {
         "RotMinimizer" => Box::new(schemes::RotMinimizerP),
-        "AltRotMinimizer" => Box::new(schemes::AltRotMinimizerP),
+        "AltRotMinimizer" => Box::new(M((AltRotMinimizer, RandomO))),
         "Bruteforce" => Box::new(schemes::BruteforceP),
         "Random" => Box::new(schemes::M(RandomO)),
         "AntiLex" => Box::new(schemes::M(AntiLex)),

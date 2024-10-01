@@ -1,24 +1,12 @@
-use std::cmp::Reverse;
-
 use super::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RotMinimizerP;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AltRotMinimizerP;
-
 #[typetag::serialize]
 impl Params for RotMinimizerP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         Box::new(RotMinimizer::new(k, w, RandomO))
-    }
-}
-
-#[typetag::serialize]
-impl Params for AltRotMinimizerP {
-    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(AltRotMinimizer::new(k, w, RandomO))
     }
 }
 
@@ -88,29 +76,25 @@ impl<O: Order> SamplingScheme for RotMinimizer<O> {
 /// Simplified:
 /// - For all k-mers compute the rotational sum of k/w w-strided values.
 /// - Take k-mer that maximizes the first coordinate.
-pub struct AltRotMinimizer<O: Order> {
-    k: usize,
-    w: usize,
-    o: O,
-}
-impl<O: Order> AltRotMinimizer<O> {
-    pub fn new(k: usize, w: usize, o: O) -> Self {
-        Self { k, w, o }
-    }
-}
-impl<O: Order> SamplingScheme for AltRotMinimizer<O> {
-    fn l(&self) -> usize {
-        self.k + self.w - 1
-    }
+#[derive(Clone, Serialize, Debug)]
+pub struct AltRotMinimizer;
 
-    fn sample(&self, lmer: &[u8]) -> usize {
-        lmer.windows(self.k)
-            .enumerate()
-            .min_by_key(|&(_i, kmer)| {
-                let psi = kmer.iter().step_by(self.w).map(|&x| x as u64).sum::<u64>();
-                (Reverse(psi), self.o.key(kmer))
-            })
-            .unwrap()
-            .0
+pub struct AltRotMinimizerO {
+    w: usize,
+}
+
+impl ToOrder for AltRotMinimizer {
+    type O = AltRotMinimizerO;
+
+    fn to_order(&self, w: usize, _k: usize, _sigma: usize) -> Self::O {
+        AltRotMinimizerO { w }
+    }
+}
+
+impl Order for AltRotMinimizerO {
+    type T = u64;
+
+    fn key(&self, kmer: &[u8]) -> Self::T {
+        kmer.iter().step_by(self.w).map(|&x| x as u64).sum::<u64>()
     }
 }
