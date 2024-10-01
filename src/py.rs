@@ -33,10 +33,10 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "AntiLex" => Box::new(schemes::M(AntiLex)),
         "Decycling" => Box::new(schemes::RM(Decycling { double: false })),
         "DoubleDecycling" => Box::new(schemes::RM(Decycling { double: true })),
-        "BdAnchor" => Box::new(schemes::BdAnchorP { r: get(args, "r")? }),
-        "SusAnchor" => Box::new(schemes::SusAnchorP {
-            ao: get_bool(args, "ao"),
-        }),
+        "BdAnchor" => Box::new(schemes::BdAnchor { r: get(args, "r")? }),
+        "SusAnchorLex" => Box::new(schemes::SusAnchorLex),
+        "SusAnchorALex" => Box::new(schemes::SusAnchorALex),
+        "FracMin" => Box::new(schemes::RM(schemes::FracMin { f: get(args, "f")? })),
         "OpenClosed" => {
             if get_bool(args, "anti_lex") {
                 Box::new(RM(OpenClosed {
@@ -72,7 +72,6 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
             loose: get_bool(args, "loose"),
             open: get_bool(args, "open"),
         }),
-        "FracMin" => Box::new(schemes::RM(schemes::FracMin { f: get(args, "f")? })),
         _ => PyResult::Err(PyValueError::new_err("Invalid minimizer type"))?,
     };
     if get_bool(args, "mod") {

@@ -1,35 +1,38 @@
 use super::*;
 
 #[typetag::serialize]
-impl Params for BdAnchorP {
+impl Params for BdAnchor {
     fn build(&self, w: usize, _k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(BdAnchor::new(w, self.r))
+        Box::new(BdAnchorS::new(w, self.r))
     }
 }
 
 #[typetag::serialize]
-impl Params for SusAnchorP {
+impl Params for SusAnchorLex {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        if !self.ao {
-            Box::new(SusAnchor::new(w, k, Lex))
-        } else {
-            Box::new(SusAnchor::new(w, k, AntiLex))
-        }
+        Box::new(SusAnchorS::new(w, k, Lex))
     }
 }
 
-pub struct BdAnchor {
+#[typetag::serialize]
+impl Params for SusAnchorALex {
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(SusAnchorS::new(w, k, AntiLex))
+    }
+}
+
+pub struct BdAnchorS {
     w: usize,
     r: usize,
 }
 
-impl BdAnchor {
+impl BdAnchorS {
     pub fn new(w: usize, r: usize) -> Self {
         Self { w, r }
     }
 }
 
-impl SamplingScheme for BdAnchor {
+impl SamplingScheme for BdAnchorS {
     fn l(&self) -> usize {
         self.w
     }
@@ -53,19 +56,19 @@ impl SamplingScheme for BdAnchor {
 }
 
 /// NOTE: O should be Lex or AntiLex order. Random order will not be good.
-pub struct SusAnchor<O: Order> {
+pub struct SusAnchorS<O: Order> {
     w: usize,
     k: usize,
     o: O,
 }
 
-impl<O: Order> SusAnchor<O> {
+impl<O: Order> SusAnchorS<O> {
     pub fn new(w: usize, k: usize, o: O) -> Self {
         Self { w, k, o }
     }
 }
 
-impl<O: Order> SamplingScheme for SusAnchor<O> {
+impl<O: Order> SamplingScheme for SusAnchorS<O> {
     fn l(&self) -> usize {
         self.w + self.k - 1
     }

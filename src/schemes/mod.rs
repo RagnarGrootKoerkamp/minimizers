@@ -111,14 +111,15 @@ pub struct RotMinimizerO {
 // ANCHORS.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BdAnchorP {
+pub struct BdAnchor {
     pub r: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SusAnchorP {
-    pub ao: bool,
-}
+pub struct SusAnchorLex;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SusAnchorALex;
 
 // MINIMIZER WRAPPERS.
 

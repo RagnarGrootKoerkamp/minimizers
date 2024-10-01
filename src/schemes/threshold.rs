@@ -43,7 +43,6 @@ impl ThresholdMinimizer {
         // let k2 = k - t + 1;
         let threshold = t * h;
         let threshold2 = (2 * t - 256) * h;
-        eprintln!("Thresholds: {} {}", threshold, threshold2);
         Self {
             k,
             w,
