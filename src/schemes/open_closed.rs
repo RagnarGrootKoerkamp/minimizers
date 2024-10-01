@@ -11,7 +11,6 @@ pub struct OpenClosed<O: ToOrder> {
     pub offset: Option<usize>,
     /// When true, any position offset%w makes a kmer an open syncmer.
     pub modulo: bool,
-    // FIXME: tiebreak by reverse tmer.
     pub open_by_tmer: bool,
     pub closed_by_tmer: bool,
     pub other_by_tmer: bool,
@@ -58,7 +57,6 @@ impl<OO: Order<T = usize>, O: ToOrder<O = OO>> ToOrder for OpenClosed<O> {
         };
         OpenClosedO {
             r,
-            w,
             k,
             open,
             closed,
@@ -69,13 +67,13 @@ impl<OO: Order<T = usize>, O: ToOrder<O = OO>> ToOrder for OpenClosed<O> {
             modulo,
             anti_tmer,
             m: M::build_from_order(&self.o, k - r + 1, r, sigma),
+            fastmod_w: FM32::new(w),
         }
     }
 }
 
 pub struct OpenClosedO<O: Order> {
     r: usize,
-    w: usize,
     k: usize,
     open: bool,
     closed: bool,
@@ -86,6 +84,7 @@ pub struct OpenClosedO<O: Order> {
     modulo: bool,
     anti_tmer: bool,
     m: Minimizer<O>,
+    fastmod_w: FM32,
 }
 
 impl<O: Order<T = usize>> OpenClosedO<O> {
@@ -95,8 +94,11 @@ impl<O: Order<T = usize>> OpenClosedO<O> {
         assert!(x <= w0);
         let p;
         let by_tmer;
-        // FIXME: Re-use fastreduce.
-        let is_open = if self.modulo { x % self.w } else { x } == self.offset;
+        let is_open = if self.modulo {
+            self.fastmod_w.reduce(x)
+        } else {
+            x
+        } == self.offset;
         let is_closed = x == 0 || x == w0;
         if self.open && is_open {
             p = 0;

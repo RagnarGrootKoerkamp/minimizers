@@ -57,19 +57,19 @@ impl SamplingScheme for Mod {
 /// Fast %d operations.
 /// Taken from https://github.com/lemire/fastmod/blob/master/include/fastmod.h
 #[derive(Copy, Clone, Debug)]
-struct FM32 {
+pub struct FM32 {
     modulus: u64,
     inv: u64,
 }
 impl FM32 {
-    fn new(modulus: usize) -> Self {
+    pub fn new(modulus: usize) -> Self {
         assert!(modulus <= u32::MAX as usize);
         Self {
             modulus: modulus as u64,
             inv: (u64::MAX / modulus as u64).wrapping_add(1),
         }
     }
-    fn reduce(self, h: usize) -> usize {
+    pub fn reduce(self, h: usize) -> usize {
         // 64-bit multiplication always gives a 128-bit result.
         // All this casting is just needed to extract the high word; it's not slower in practice.
         let lowbits = self.inv.wrapping_mul(h as u64);
