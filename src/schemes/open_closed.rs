@@ -32,6 +32,7 @@ impl<OO: Order<T = usize>, O: ToOrder<O = OO>> ToOrder for OpenClosed<O> {
             anti_tmer,
             ..
         }: OpenClosed<O> = *self;
+        let r = r.min(k);
         let offset = if modulo {
             offset.unwrap_or((k - r) % w / 2) % w
         } else {
