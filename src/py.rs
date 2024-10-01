@@ -41,13 +41,12 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "Miniception" => Box::new(M((
             Miniception {
                 r: get(args, "k0")?,
+                // TODO: True variant
+                by_tmer: false,
                 o: RandomO,
             },
             RandomO,
         ))),
-        "MiniceptionNew" => Box::new(schemes::MiniceptionNewP {
-            k0: get(args, "k0")?,
-        }),
         "OpenSyncmerMinimizer" => Box::new(schemes::OpenSyncmerMinimizerP { t: get(args, "t")? }),
         "ClosedSyncmerMinimizer" => Box::new(schemes::ThresholdMinimizerP {
             t: get(args, "t")?,

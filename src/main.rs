@@ -236,7 +236,15 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let m = M((Miniception { r: k0, o: RandomO }, RandomO)).build(w, k, 4);
+                    let m = M((
+                        Miniception {
+                            r: k0,
+                            o: RandomO,
+                            by_tmer: false,
+                        },
+                        RandomO,
+                    ))
+                    .build(w, k, 4);
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
@@ -251,7 +259,15 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let m = MiniceptionNew::new(w, k, k0, RandomO);
+                    let m = M((
+                        Miniception {
+                            r: k0,
+                            o: RandomO,
+                            by_tmer: true,
+                        },
+                        RandomO,
+                    ))
+                    .build(w, k, 4);
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);

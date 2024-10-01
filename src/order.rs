@@ -37,7 +37,7 @@ pub trait DirectedOrder: Sync {
 
 /// Maps a kmer to its priority value. Lower is higher priority.
 pub trait Order: Sync {
-    type T: Ord + Copy;
+    type T: Ord + Copy + Default;
     fn key(&self, kmer: &[u8]) -> Self::T;
     fn keys(&self, text: &[u8], k: usize) -> impl Iterator<Item = Self::T> {
         text.windows(k).map(|kmer| self.key(kmer))
