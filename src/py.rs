@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 
-use crate::{collect_stats, schemes::Decycling, AntiLex, RandomO};
+use crate::{collect_stats, AntiLex, RandomO};
 
 fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
     Ok(dict
@@ -24,6 +24,7 @@ fn get_bool(dict: Option<&Bound<'_, PyDict>>, key: &str) -> bool {
 
 fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn super::Params>> {
     use super::schemes;
+    use super::schemes::*;
     let mut params: Box<dyn super::Params> = match tp {
         "RotMinimizer" => Box::new(schemes::RotMinimizerP),
         "AltRotMinimizer" => Box::new(schemes::AltRotMinimizerP),
@@ -36,11 +37,14 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "SusAnchor" => Box::new(schemes::SusAnchorP {
             ao: get_bool(args, "ao"),
         }),
-        "Miniception" => Box::new(schemes::MiniceptionP {
-            k0: get(args, "k0")?,
-            ao: get_bool(args, "ao"),
-            aot: get_bool(args, "aot"),
-        }),
+        // TODO: variants for the two order arguments.
+        "Miniception" => Box::new(M((
+            Miniception {
+                r: get(args, "k0")?,
+                o: RandomO,
+            },
+            RandomO,
+        ))),
         "MiniceptionNew" => Box::new(schemes::MiniceptionNewP {
             k0: get(args, "k0")?,
         }),

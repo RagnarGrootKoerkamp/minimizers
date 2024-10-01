@@ -1,131 +1,14 @@
 use super::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MiniceptionP {
-    pub k0: usize,
-    pub ao: bool,
-    pub aot: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MiniceptionNewP {
     pub k0: usize,
-}
-
-#[typetag::serialize]
-impl Params for MiniceptionP {
-    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        if !self.ao {
-            if !self.aot {
-                Box::new(Miniception::new(w, k, self.k0, RandomO, RandomO))
-            } else {
-                Box::new(Miniception::new(w, k, self.k0, RandomO, AntiLex))
-            }
-        } else {
-            if !self.aot {
-                Box::new(Miniception::new(w, k, self.k0, AntiLex, RandomO))
-            } else {
-                Box::new(Miniception::new(w, k, self.k0, AntiLex, AntiLex))
-            }
-        }
-    }
 }
 
 #[typetag::serialize]
 impl Params for MiniceptionNewP {
     fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
         Box::new(MiniceptionNew::new(w, k, self.k0, RandomO))
-    }
-}
-
-pub struct Miniception<O: Order, OT: DirectedOrder> {
-    w: usize,
-    k: usize,
-    l: usize,
-    k0: usize,
-    w0: usize,
-    /// The order used for k-mers.
-    o: O,
-    /// The order used for k0-mers.
-    ot: Minimizer<OT>,
-}
-
-impl<O: Order, OT: DirectedOrder> Miniception<O, OT> {
-    pub fn new(w: usize, k: usize, k0: usize, o: O, ot: OT) -> Self {
-        assert!(k0 >= k.saturating_sub(w));
-        assert!(k0 <= k);
-        let w0 = k - k0;
-        Self {
-            w,
-            k,
-            l: k + w - 1,
-            k0,
-            w0,
-            o,
-            ot: Minimizer::new(k0, k - k0 + 1, ot),
-        }
-    }
-}
-
-impl<O: Order, OT: Order> SamplingScheme for Miniception<O, OT> {
-    fn l(&self) -> usize {
-        self.l
-    }
-
-    fn sample(&self, lmer: &[u8]) -> usize {
-        lmer.windows(self.k)
-            .enumerate()
-            .filter(|(_, kmer)| {
-                let j = self.ot.sample(kmer);
-                j == 0 || j == self.k - self.k0
-            })
-            .min_by_key(|&(_i, kmer)| self.o.key(kmer))
-            .unwrap()
-            .0
-    }
-
-    #[inline(always)]
-    fn stream(&self, text: &[u8]) -> Vec<usize> {
-        // Queue of all k0-mers.
-        let mut q0 = MonotoneQueue::new();
-        // Queue of filtered k-mers.
-        let mut q = MonotoneQueue::new();
-
-        // i: position of lmer
-        // j: position of kmer
-        // j0: position of k0mer
-
-        let o0 = self.ot.ord();
-
-        // 1: init k0-mers.
-        let mut k0mers = text.windows(self.k0).enumerate();
-        for (j0, k0mer) in k0mers.by_ref().take(self.w0) {
-            q0.push(j0, Order::key(o0, k0mer));
-        }
-
-        // 2: init k-mers.
-        let mut kmers = text.windows(self.k).enumerate().zip(k0mers);
-        for ((j, kmer), (j0, k0mer)) in kmers.by_ref().take(self.w - 1) {
-            q0.push(j0, Order::key(o0, k0mer));
-            let min_pos = q0.pop(j).unwrap().0;
-            if min_pos == j || min_pos == j + self.w0 {
-                q.push(j, self.o.key(kmer));
-            }
-        }
-
-        // 3: Iterate l-mers.
-        kmers
-            .enumerate()
-            .map(move |(i, ((j, kmer), (j0, k0mer)))| {
-                q0.push(j0, Order::key(o0, k0mer));
-                let min_pos = q0.pop(j).unwrap().0;
-                if min_pos == j || min_pos == j + self.w0 {
-                    q.push(j, self.o.key(kmer));
-                }
-
-                q.pop(i).unwrap().0
-            })
-            .collect()
     }
 }
 
@@ -240,5 +123,49 @@ impl<O: Order> SamplingScheme for MiniceptionNew<O> {
                 q.pop(i).unwrap().0
             })
             .collect()
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Miniception<O: ToOrder> {
+    pub r: usize,
+    pub o: O,
+}
+
+impl<O: ToOrder> ToOrder for Miniception<O> {
+    type O = MiniceptionO;
+    fn to_order(&self, _w: usize, k: usize, sigma: usize) -> Self::O {
+        let r = self.r;
+        MiniceptionO {
+            r,
+            k,
+            m: M::build_from_order(&self.o, k - r + 1, r, sigma),
+        }
+    }
+}
+
+pub struct MiniceptionO {
+    k: usize,
+    r: usize,
+    m: Box<dyn SamplingScheme>,
+}
+
+impl Order for MiniceptionO {
+    type T = u8;
+
+    fn key(&self, kmer: &[u8]) -> Self::T {
+        let x = self.m.sample(kmer);
+        if x == 0 || x == self.k - self.r {
+            0
+        } else {
+            1
+        }
+    }
+
+    fn keys(&self, text: &[u8], _k: usize) -> impl Iterator<Item = Self::T> {
+        self.m
+            .stream(text)
+            .into_iter()
+            .map(move |x| if x == 0 || x == self.k - self.r { 0 } else { 1 })
     }
 }

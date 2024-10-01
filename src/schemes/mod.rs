@@ -41,6 +41,11 @@ impl<O: ToOrder> Params for M<O> {
         Box::new(Minimizer::new(k, w, self.0.to_order(w, k, sigma)))
     }
 }
+impl<O: ToOrder> M<O> {
+    fn build_from_order(o: &O, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(Minimizer::new(k, w, o.to_order(w, k, sigma)))
+    }
+}
 
 // ORDERS.
 

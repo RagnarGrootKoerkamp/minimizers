@@ -92,14 +92,10 @@ fn main() {
             let mut base_types = vec![
                 // &MinimizerP,
                 // &BdAnchorP { r: 0 },
-                &MiniceptionP {
-                    k0: 0,
-                    ao: false,
-                    aot: false,
-                } as &dyn Params,
+                // &M(Miniception { r: 0, o: RandomO }) as &dyn Params,
                 // &MiniceptionNewP { k0: 0 },
                 // &ModSamplingP{ k0: 0 },
-                &modmini,
+                &modmini as &dyn Params,
                 // &ModMinimizerP
                 // NOTE: These Rotmini/AltRotmini assume alphabet size 4.
                 // &RotMinimizerP
@@ -240,7 +236,7 @@ mod test {
         for k in 1..=20usize {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
-                    let m = Miniception::new(w, k, k0, RandomO, RandomO);
+                    let m = M((Miniception { r: k0, o: RandomO }, RandomO)).build(w, k, 4);
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
