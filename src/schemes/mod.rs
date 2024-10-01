@@ -5,11 +5,10 @@ mod bruteforce;
 mod decycling;
 mod explicit;
 mod fracmin;
-mod miniception;
 mod minimizer;
 mod modmini;
+mod open_closed;
 mod rot_mini;
-mod syncmer;
 mod threshold;
 
 pub use anchors::*;
@@ -17,11 +16,10 @@ pub use bruteforce::*;
 pub use decycling::*;
 pub use explicit::*;
 pub use fracmin::*;
-pub use miniception::*;
 pub use minimizer::*;
 pub use modmini::*;
+pub use open_closed::*;
 pub use rot_mini::*;
-pub use syncmer::*;
 pub use threshold::*;
 
 use super::{order::*, MonotoneQueue, Params, SamplingScheme};

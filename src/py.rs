@@ -37,7 +37,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "SusAnchor" => Box::new(schemes::SusAnchorP {
             ao: get_bool(args, "ao"),
         }),
-        // TODO: variants for the two order arguments.
+        // TODO: Variants for lex order
         "OpenClosed" => Box::new(M((
             OpenClosed {
                 r: get(args, "k0")?,
@@ -46,6 +46,8 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
                 open_by_tmer: get_bool(args, "open_tmer"),
                 closed_by_tmer: get_bool(args, "closed_tmer"),
                 other_by_tmer: get_bool(args, "other_tmer"),
+                offset: get(args, "offset").ok(),
+                modulo: get_bool(args, "modulo"),
                 o: RandomO,
             },
             RandomO,
@@ -57,17 +59,6 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
             open: get_bool(args, "open"),
         }),
         "FracMin" => Box::new(schemes::M(schemes::FracMin { f: get(args, "f")? })),
-        "OcModMinimizer" => Box::new(schemes::OcModMinimizerP {
-            t: get(args, "t")?,
-            offset: get(args, "offset")?,
-            use_closed: get_bool(args, "use_closed"),
-            prefer_prefix: get_bool(args, "prefer_prefix"),
-            open_tmer: get_bool(args, "open_tmer"),
-            closed_tmer: get_bool(args, "closed_tmer"),
-            other_tmer: get_bool(args, "other_tmer"),
-            ao: get_bool(args, "ao"),
-            aot: get_bool(args, "aot"),
-        }),
         _ => PyResult::Err(PyValueError::new_err("Invalid minimizer type"))?,
     };
     if get_bool(args, "mod") {

@@ -3,8 +3,14 @@ use super::*;
 #[derive(Debug, Clone, Serialize)]
 pub struct OpenClosed<O: ToOrder> {
     pub r: usize,
+    /// Do open syncmers first?
     pub open: bool,
+    /// Do closed syncmers second?
     pub closed: bool,
+    /// When true, open syncmers must have this offset instead of in the middle by default.
+    pub offset: Option<usize>,
+    /// When true, any position offset%w makes a kmer an open syncmer.
+    pub modulo: bool,
     // TODO: By reverse tmer.
     pub open_by_tmer: bool,
     pub closed_by_tmer: bool,
@@ -21,6 +27,8 @@ impl OpenClosed<RandomO> {
             open_by_tmer: false,
             closed_by_tmer: false,
             other_by_tmer: false,
+            offset: None,
+            modulo: false,
             o: RandomO,
         }
     }
@@ -28,7 +36,7 @@ impl OpenClosed<RandomO> {
 
 impl<O: ToOrder> ToOrder for OpenClosed<O> {
     type O = OpenClosedO<O::O>;
-    fn to_order(&self, _w: usize, k: usize, sigma: usize) -> Self::O {
+    fn to_order(&self, w: usize, k: usize, sigma: usize) -> Self::O {
         let Self {
             r,
             open,
@@ -36,42 +44,56 @@ impl<O: ToOrder> ToOrder for OpenClosed<O> {
             open_by_tmer,
             closed_by_tmer,
             other_by_tmer,
+            offset,
+            modulo,
             ..
-        } = *self;
+        }: OpenClosed<O> = *self;
         OpenClosedO {
             r,
+            w,
             k,
             open,
             closed,
             open_by_tmer,
             closed_by_tmer,
             other_by_tmer,
+            offset,
+            modulo,
             m: M::build_from_order(&self.o, k - r + 1, r, sigma),
         }
     }
 }
 
 pub struct OpenClosedO<O: Order> {
-    k: usize,
     r: usize,
+    w: usize,
+    k: usize,
     open: bool,
     closed: bool,
     open_by_tmer: bool,
     closed_by_tmer: bool,
     other_by_tmer: bool,
+    offset: Option<usize>,
+    modulo: bool,
     m: Minimizer<O>,
 }
 
 impl<O: Order> OpenClosedO<O> {
     fn inner_key(&self, kmer: &[u8], x: usize) -> (u8, O::T) {
         let w0 = self.k - self.r;
-        let half = w0 / 2;
+        let offset = self.offset.unwrap_or(w0 / 2);
         let p;
         let by_tmer;
-        if self.open && x == half {
+        let is_open = if self.modulo {
+            (x - offset) % self.w == 0
+        } else {
+            x == offset
+        };
+        let is_closed = x == 0 || x == w0;
+        if self.open && is_open {
             p = 0;
             by_tmer = self.open_by_tmer;
-        } else if self.closed && (x == 0 || x == w0) {
+        } else if self.closed && is_closed {
             p = 1;
             by_tmer = self.closed_by_tmer;
         } else {
