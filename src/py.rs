@@ -48,6 +48,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
                 other_by_tmer: get_bool(args, "other_tmer"),
                 offset: get(args, "offset").ok(),
                 modulo: get_bool(args, "modulo"),
+                anti_tmer: get_bool(args, "anti_tmer"),
                 o: RandomO,
             },
             RandomO,
