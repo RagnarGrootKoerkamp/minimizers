@@ -105,7 +105,7 @@ fn main() {
                 // &OpenSyncmerMinimizerP{
                 //     t: 0,
                 // },
-                &OpenClosedSyncmerMinimizerP { t: 0 },
+                // &OpenClosedSyncmerMinimizerP { t: 0 },
                 // &FracMinP{ f: 0 },
             ];
             if small {
@@ -237,10 +237,9 @@ mod test {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
                     let m = M((
-                        Miniception {
-                            r: k0,
-                            o: RandomO,
-                            by_tmer: false,
+                        OpenClosed {
+                            closed: true,
+                            ..OpenClosed::default(k0)
                         },
                         RandomO,
                     ))
@@ -260,10 +259,10 @@ mod test {
             for w in 1..=20 {
                 for k0 in k.saturating_sub(w).max(1)..=k {
                     let m = M((
-                        Miniception {
-                            r: k0,
-                            o: RandomO,
-                            by_tmer: true,
+                        OpenClosed {
+                            closed: true,
+                            closed_by_tmer: true,
+                            ..OpenClosed::default(k0)
                         },
                         RandomO,
                     ))
@@ -283,7 +282,17 @@ mod test {
             for w in 1..=20 {
                 for t in 1..k {
                     eprintln!("k {k} w {w} t {t}");
-                    let m = OpenSyncmer::new(k, w, t, true, false);
+                    let m = M((
+                        OpenClosed {
+                            open: true,
+                            closed: true,
+                            open_by_tmer: true,
+                            closed_by_tmer: false,
+                            ..OpenClosed::default(t)
+                        },
+                        RandomO,
+                    ))
+                    .build(w, k, 4);
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);

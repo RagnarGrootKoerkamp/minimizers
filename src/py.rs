@@ -38,25 +38,24 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
             ao: get_bool(args, "ao"),
         }),
         // TODO: variants for the two order arguments.
-        "Miniception" => Box::new(M((
-            Miniception {
+        "OpenClosed" => Box::new(M((
+            OpenClosed {
                 r: get(args, "k0")?,
-                // TODO: True variant
-                by_tmer: false,
+                open: get_bool(args, "open"),
+                closed: get_bool(args, "closed"),
+                open_by_tmer: get_bool(args, "open_tmer"),
+                closed_by_tmer: get_bool(args, "closed_tmer"),
+                other_by_tmer: get_bool(args, "other_tmer"),
                 o: RandomO,
             },
             RandomO,
         ))),
-        "OpenSyncmerMinimizer" => Box::new(schemes::OpenSyncmerMinimizerP { t: get(args, "t")? }),
         "ClosedSyncmerMinimizer" => Box::new(schemes::ThresholdMinimizerP {
             t: get(args, "t")?,
             h: get(args, "h")?,
             loose: get_bool(args, "loose"),
             open: get_bool(args, "open"),
         }),
-        "OpenClosedSyncmerMinimizer" => {
-            Box::new(schemes::OpenClosedSyncmerMinimizerP { t: get(args, "t")? })
-        }
         "FracMin" => Box::new(schemes::M(schemes::FracMin { f: get(args, "f")? })),
         "OcModMinimizer" => Box::new(schemes::OcModMinimizerP {
             t: get(args, "t")?,
