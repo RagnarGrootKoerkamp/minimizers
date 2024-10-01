@@ -26,13 +26,13 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
     use super::schemes;
     use super::schemes::*;
     let mut params: Box<dyn super::Params> = match tp {
-        "RotMinimizer" => Box::new(M((RotMinimizer, RandomO))),
-        "AltRotMinimizer" => Box::new(M((AltRotMinimizer, RandomO))),
+        "Rot" => Box::new(M((RotMinimizer, RandomO))),
+        "AltRot" => Box::new(M((AltRotMinimizer, RandomO))),
         "Bruteforce" => Box::new(schemes::BruteforceP),
         "Random" => Box::new(schemes::M(RandomO)),
         "AntiLex" => Box::new(schemes::M(AntiLex)),
-        "DecyclingMinimizer" => Box::new(schemes::M((Decycling { double: false }, RandomO))),
-        "DoubleDecyclingMinimizer" => Box::new(schemes::M((Decycling { double: true }, RandomO))),
+        "Decycling" => Box::new(schemes::M((Decycling { double: false }, RandomO))),
+        "DoubleDecycling" => Box::new(schemes::M((Decycling { double: true }, RandomO))),
         "BdAnchor" => Box::new(schemes::BdAnchorP { r: get(args, "r")? }),
         "SusAnchor" => Box::new(schemes::SusAnchorP {
             ao: get_bool(args, "ao"),
@@ -40,7 +40,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         // TODO: Variants for lex order
         "OpenClosed" => Box::new(M((
             OpenClosed {
-                r: get(args, "k0")?,
+                r: get(args, "r")?,
                 open: get_bool(args, "open"),
                 closed: get_bool(args, "closed"),
                 open_by_tmer: get_bool(args, "open_tmer"),
@@ -52,7 +52,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
             },
             RandomO,
         ))),
-        "ClosedSyncmerMinimizer" => Box::new(schemes::ThresholdMinimizerP {
+        "Threshold" => Box::new(schemes::ThresholdMinimizerP {
             t: get(args, "t")?,
             h: get(args, "h")?,
             loose: get_bool(args, "loose"),
