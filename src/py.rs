@@ -37,19 +37,35 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "SusAnchor" => Box::new(schemes::SusAnchorP {
             ao: get_bool(args, "ao"),
         }),
-        // TODO: Variants for lex order
-        "OpenClosed" => Box::new(RM(OpenClosed {
-            r: get(args, "r")?,
-            open: get_bool(args, "open"),
-            closed: get_bool(args, "closed"),
-            open_by_tmer: get_bool(args, "open_tmer"),
-            closed_by_tmer: get_bool(args, "closed_tmer"),
-            other_by_tmer: get_bool(args, "other_tmer"),
-            offset: get(args, "offset").ok(),
-            modulo: get_bool(args, "modulo"),
-            anti_tmer: get_bool(args, "anti_tmer"),
-            o: RandomO,
-        })),
+        "OpenClosed" => {
+            if get_bool(args, "anti_lex") {
+                Box::new(RM(OpenClosed {
+                    r: get(args, "r")?,
+                    open: get_bool(args, "open"),
+                    closed: get_bool(args, "closed"),
+                    open_by_tmer: get_bool(args, "open_tmer"),
+                    closed_by_tmer: get_bool(args, "closed_tmer"),
+                    other_by_tmer: get_bool(args, "other_tmer"),
+                    offset: get(args, "offset").ok(),
+                    modulo: get_bool(args, "modulo"),
+                    anti_tmer: get_bool(args, "anti_tmer"),
+                    o: AntiLex,
+                }))
+            } else {
+                Box::new(RM(OpenClosed {
+                    r: get(args, "r")?,
+                    open: get_bool(args, "open"),
+                    closed: get_bool(args, "closed"),
+                    open_by_tmer: get_bool(args, "open_tmer"),
+                    closed_by_tmer: get_bool(args, "closed_tmer"),
+                    other_by_tmer: get_bool(args, "other_tmer"),
+                    offset: get(args, "offset").ok(),
+                    modulo: get_bool(args, "modulo"),
+                    anti_tmer: get_bool(args, "anti_tmer"),
+                    o: RandomO,
+                }))
+            }
+        }
         "Threshold" => Box::new(schemes::ThresholdMinimizerP {
             t: get(args, "t")?,
             h: get(args, "h")?,
