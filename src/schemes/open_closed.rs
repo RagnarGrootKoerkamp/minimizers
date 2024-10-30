@@ -73,8 +73,8 @@ pub struct OpenClosedO<O: Order> {
 impl<O: Order<T = usize>> OpenClosedO<O> {
     #[inline(always)]
     fn inner_key(&self, kmer: &[u8], x: usize) -> (u8, O::T) {
-        let w0 = self.k - self.r;
-        assert!(x <= w0);
+        let w0 = self.k - self.r + 1;
+        assert!(x < w0);
         let p;
         let by_tmer;
         let is_open = if self.modulo {
@@ -82,7 +82,7 @@ impl<O: Order<T = usize>> OpenClosedO<O> {
         } else {
             x
         } == self.offset;
-        let is_closed = x == 0 || x == w0;
+        let is_closed = x == 0 || x == w0 - 1;
         if self.open && is_open {
             p = 0;
             by_tmer = self.open_by_tmer;
