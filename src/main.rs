@@ -19,6 +19,7 @@ struct Result<'tp> {
     w: usize,
     l: usize,
     tp: &'tp dyn Params,
+    minimizer_name: &'static str,
     density: f64,
     positions: Vec<f64>,
     dists: Vec<f64>,
@@ -72,7 +73,8 @@ fn init_color_backtrace() {
 
 fn main() {
     let args = Args::parse();
-    let text = &generate_random_string(args.n, args.sigma);
+    let sigma = args.sigma;
+    let text = &generate_random_string(args.n, sigma);
 
     match args.command {
         Command::Eval {
@@ -83,25 +85,38 @@ fn main() {
             input,
         } => {
             use schemes::*;
+            let r = if sigma <= 4 { 4 } else { 1 };
             let modmini = ModP {
-                r: 1,
+                r,
                 t: 0,
-                lr: true,
+                lr: false,
                 params: Box::new(M(RandomO)),
             };
+            let miniception = schemes::RM(OpenClosed {
+                r: r,
+                open: false,
+                closed: true,
+                open_by_tmer: false,
+                closed_by_tmer: false,
+                other_by_tmer: false,
+                offset: None,
+                modulo: false,
+                anti_tmer: false,
+                o: RandomO,
+            });
             let mut base_types = vec![
-                // &MinimizerP,
+                (&schemes::RM(()) as &dyn Params, "RandomMinimizer"),
                 // &BdAnchorP { r: 0 },
-                // &M(Miniception { r: 0, o: RandomO }) as &dyn Params,
+                (&miniception as &dyn Params, "Miniception"),
                 // &MiniceptionNewP { k0: 0 },
                 // &ModSamplingP{ k0: 0 },
-                &modmini as &dyn Params,
+                (&modmini as &dyn Params, "ModMinimizer"),
                 // &ModMinimizerP
                 // NOTE: These Rotmini/AltRotmini assume alphabet size 4.
                 // &RotMinimizerP
                 // &AltRotMinimizerP
                 // &DecyclingMinimizerP
-                // &DoubleDecyclingMinimizerP
+                (&schemes::RM(Decycling { double: true }), "DoubleDecycling"),
                 // &OpenSyncmerMinimizerP{
                 //     t: 0,
                 // },
@@ -109,7 +124,7 @@ fn main() {
                 // &FracMinP{ f: 0 },
             ];
             if small {
-                base_types.push(&BruteforceP);
+                base_types.push((&BruteforceP as &dyn Params, "Bruteforce"));
             }
 
             let ks = if small {
@@ -117,7 +132,7 @@ fn main() {
             } else if stats {
                 &[4, 8, 16, 32]
             } else if practical {
-                &(6..64).collect::<Vec<usize>>()
+                &(4..=64).collect::<Vec<usize>>()
             } else {
                 &[
                     5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26,
@@ -130,7 +145,7 @@ fn main() {
             } else if stats {
                 &[8, 16, 32, 64]
             } else if practical {
-                &[2, 5, 10, 12, 19, 50]
+                &[2, 5, 12, 19, 50]
             } else {
                 &[8, 24][..]
             };
@@ -143,7 +158,7 @@ fn main() {
             let done = AtomicUsize::new(0);
             let total = k_w_tp.len();
             let text = if small {
-                &de_bruijn_sequence(args.sigma, 8)
+                &de_bruijn_sequence(sigma, 8)
             } else {
                 text
             };
@@ -153,21 +168,22 @@ fn main() {
                 text
             };
             k_w_tp.par_iter().for_each(|&((&k, &w), tp)| {
-                if small && k == 3 && args.sigma == 3 {
+                if small && k == 3 && sigma == 3 {
                     return;
                 }
                 let l = w + k - 1;
                 let tps = vec![tp];
-                for tp in tps {
+                for (tp, name) in tps {
                     let (density, positions, dists, transfer) =
-                        collect_stats(w, text, &*tp.build(w, k, args.sigma));
+                        collect_stats(w, text, &*tp.build(w, k, sigma));
                     let mut results = results.lock().unwrap();
                     results.push(Some(Result {
-                        sigma: args.sigma,
+                        sigma,
                         k,
                         w,
                         l,
                         tp,
+                        minimizer_name: name,
                         density,
                         positions: if stats { positions } else { vec![] },
                         dists: if stats { dists } else { vec![] },
@@ -175,7 +191,7 @@ fn main() {
                     }));
                 }
                 let done = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                eprint!("{done:>3}/{total:>3}: k={k} w={w} l={l} tp={tp:?}\r");
+                eprint!("{done:>3}/{total:>3}: sigma={sigma} k={k} w={w} l={l} tp={tp:?}\r");
             });
             eprintln!();
 
