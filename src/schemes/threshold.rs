@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::cell::Cell;
 
 use itertools::Itertools;
