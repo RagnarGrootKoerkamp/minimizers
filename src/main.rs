@@ -85,7 +85,12 @@ fn main() {
             input,
         } => {
             use schemes::*;
-            let r = if sigma <= 4 { 4 } else { 1 };
+            let r = match sigma {
+                2 => 6,
+                4 => 4,
+                256 => 1,
+                _ => panic!("Unsupported alphabet size"),
+            };
             let modmini = ModP {
                 r,
                 t: 0,
@@ -93,7 +98,7 @@ fn main() {
                 params: Box::new(M(RandomO)),
             };
             let miniception = schemes::RM(OpenClosed {
-                r: r,
+                r,
                 open: false,
                 closed: true,
                 open_by_tmer: false,
@@ -103,6 +108,7 @@ fn main() {
                 modulo: false,
                 anti_tmer: false,
                 o: RandomO,
+                miniception_r: true,
             });
             let mut base_types = vec![
                 (&schemes::RM(()) as &dyn Params, "RandomMinimizer"),

@@ -13,6 +13,7 @@ impl OpenClosed<RandomO> {
             modulo: false,
             anti_tmer: false,
             o: RandomO,
+            miniception_r: false,
         }
     }
 }
@@ -30,9 +31,13 @@ impl<OO: Order<T = usize>, O: ToOrder<O = OO>> ToOrder for OpenClosed<O> {
             offset,
             modulo,
             anti_tmer,
+            miniception_r,
             ..
         }: OpenClosed<O> = *self;
-        let r = r.min(k);
+        let mut r = r.min(k);
+        if miniception_r {
+            r = r.max(k.saturating_sub(w));
+        }
         let offset = if modulo {
             offset.unwrap_or((k - r) % w / 2) % w
         } else {

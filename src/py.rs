@@ -50,6 +50,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
                     modulo: get_bool(args, "modulo"),
                     anti_tmer: get_bool(args, "anti_tmer"),
                     o: AntiLex,
+                    miniception_r: false,
                 }))
             } else {
                 Box::new(RM(OpenClosed {
@@ -63,6 +64,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
                     modulo: get_bool(args, "modulo"),
                     anti_tmer: get_bool(args, "anti_tmer"),
                     o: RandomO,
+                    miniception_r: false,
                 }))
             }
         }
