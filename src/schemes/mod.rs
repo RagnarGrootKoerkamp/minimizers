@@ -85,6 +85,8 @@ pub struct OpenClosed<O: ToOrder> {
     pub other_by_tmer: bool,
     pub anti_tmer: bool,
     pub o: O,
+    /// r = max(r, k-w) if true.
+    pub miniception_r: bool,
 }
 
 /// Asymptotic (in k) optimal minimizers:

@@ -47,6 +47,8 @@ enum Command {
         small: bool,
         #[clap(short, long)]
         practical: bool,
+        #[clap(short, long)]
+        practicaly: bool,
         /// Read sequence from file.
         #[clap(short, long)]
         input: Option<PathBuf>,
@@ -82,6 +84,7 @@ fn main() {
             stats,
             small,
             practical,
+            practicaly,
             input,
         } => {
             use schemes::*;
@@ -138,7 +141,9 @@ fn main() {
             } else if stats {
                 &[4, 8, 16, 32]
             } else if practical {
-                &(4..=64).collect::<Vec<usize>>()
+                &(6..=64).collect::<Vec<usize>>()
+            } else if practicaly {
+                &(6..=32).collect::<Vec<usize>>()
             } else {
                 &[
                     5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26,
@@ -152,6 +157,8 @@ fn main() {
                 &[8, 16, 32, 64]
             } else if practical {
                 &[2, 5, 12, 19, 50]
+            } else if practicaly {
+                &[5, 12, 19]
             } else {
                 &[8, 24][..]
             };
