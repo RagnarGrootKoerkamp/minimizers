@@ -12,7 +12,10 @@
     )
 )]
 
+mod dedup;
 mod intrinsics;
 mod linearize;
 pub mod minimizer;
 pub mod nthash;
+
+pub use dedup::dedup;
