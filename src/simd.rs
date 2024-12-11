@@ -12,6 +12,7 @@
     )
 )]
 
+pub mod collect;
 mod dedup;
 mod intrinsics;
 mod linearize;
