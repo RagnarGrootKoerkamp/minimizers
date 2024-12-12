@@ -19,5 +19,6 @@ mod intrinsics;
 mod linearize;
 pub mod minimizer;
 pub mod nthash;
+mod sliding_min;
 
 pub use dedup::dedup;
