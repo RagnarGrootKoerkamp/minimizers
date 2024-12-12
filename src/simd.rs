@@ -12,6 +12,7 @@
     )
 )]
 
+mod alex;
 pub mod collect;
 mod dedup;
 mod intrinsics;
