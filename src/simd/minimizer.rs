@@ -1,4 +1,9 @@
-use crate::{simd::linearize, Captures};
+use std::iter::zip;
+
+use crate::{
+    simd::{canonical, linearize},
+    Captures,
+};
 
 use super::{
     collect::{collect, collect_and_dedup},
@@ -76,6 +81,8 @@ pub fn minimizers_collect<'s, const RC: bool>(seq: impl Seq<'s>, k: usize, w: us
     collect(par_head, tail)
 }
 
+/// Prefer `minimizers_collect_and_dedup`
+#[doc(hidden)]
 pub fn minimizers_dedup<'s, const RC: bool>(seq: impl Seq<'s>, k: usize, w: usize) -> Vec<u32> {
     let (par_head, tail) = minimizer_par_it::<RC>(seq, k, w);
     let mut positions = collect(par_head, tail);
@@ -89,6 +96,78 @@ pub fn minimizers_collect_and_dedup<'s, const RC: bool>(
     w: usize,
 ) -> Vec<u32> {
     let (par_head, tail) = minimizer_par_it::<RC>(seq, k, w);
+    collect_and_dedup(par_head, tail)
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// TRULY CANONICAL MINIMIZERS BELOW HERE
+// The minimizers above can take a canonical hash, but do not correctly break ties.
+// Below we fix that.
+
+pub fn canonical_minimizer_scalar_it<'s>(
+    seq: impl Seq<'s>,
+    k: usize,
+    w: usize,
+) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
+    // true: canonical
+    let kmer_hashes = nthash32_scalar_it::<true>(seq, k);
+    // true: leftmost
+    let left = sliding_min_scalar_it::<true>(kmer_hashes.clone(), w);
+    // false: rightmost
+    let right = sliding_min_scalar_it::<false>(kmer_hashes, w);
+    // indicators whether each window is canonical
+    let canonical = canonical::canonical_scalar_it(seq, k, w);
+    zip(canonical, zip(left, right)).map(|(canonical, (left, right))| {
+        // Select left or right based on canonical mask.
+        if canonical {
+            left
+        } else {
+            right
+        }
+    })
+}
+
+/// Use canonical NtHash, and keep both leftmost and rightmost minima.
+pub fn canonical_minimizer_par_it<'s>(
+    seq: impl Seq<'s>,
+    k: usize,
+    w: usize,
+) -> (
+    impl ExactSizeIterator<Item = S> + Captures<&'s ()>,
+    impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
+) {
+    let (kmer_hashes, kmer_hashes_tail) = nthash32_par_it::<true>(seq, k, w);
+    let left = sliding_min_par_it::<true>(kmer_hashes.clone(), w);
+    let right = sliding_min_par_it::<false>(kmer_hashes, w);
+    let (canonical, canonical_tail) = canonical::canonical_par_it(seq, k, w);
+    let head = zip(canonical, zip(left, right)).map(|(canonical, (left, right))| {
+        // Select left or right based on canonical mask.
+        unsafe { std::mem::transmute::<_, S>(canonical).blend(left, right) }
+    });
+
+    let left_tail = sliding_min_scalar_it::<true>(kmer_hashes_tail.clone(), w);
+    let right_tail = sliding_min_scalar_it::<false>(kmer_hashes_tail, w);
+    let tail = zip(canonical_tail, zip(left_tail, right_tail)).map(
+        #[inline(always)]
+        |(canonical, (left, right))| {
+            // Select left or right based on canonical mask.
+            if canonical {
+                left
+            } else {
+                right
+            }
+        },
+    );
+
+    (head, tail)
+}
+
+pub fn canonical_minimizer_collect_and_dedup<'s>(
+    seq: impl Seq<'s>,
+    k: usize,
+    w: usize,
+) -> Vec<u32> {
+    let (par_head, tail) = canonical_minimizer_par_it(seq, k, w);
     collect_and_dedup(par_head, tail)
 }
 
