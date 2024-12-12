@@ -26,7 +26,7 @@ pub fn dedup(v: &mut Vec<u32>) {
             let nextprev =
                 _mm256_loadu_si256(v.as_ptr().add(read_idx - 1 + WIDTH) as *const __m256i);
             let new = _mm256_loadu_si256(v.as_ptr().add(read_idx) as *const __m256i);
-            write_unique(prev, new, v, &mut write_idx);
+            write_unique_with_prev(prev, new, v, &mut write_idx);
             prev = nextprev;
             read_idx += WIDTH;
         }
@@ -44,14 +44,34 @@ pub fn dedup(v: &mut Vec<u32>) {
     }
 }
 
-unsafe fn write_unique(old: __m256i, new: __m256i, v: &mut [u32], write_idx: &mut usize) {
-    use std::arch::x86_64::*;
-    let m = _mm256_movemask_ps(transmute(_mm256_cmpeq_epi32(old, new))) as usize;
-    let numberofnewvalues = WIDTH - m.count_ones() as usize;
-    let key = UNIQSHUF[m];
-    let val = _mm256_permutevar8x32_epi32(new, key);
-    _mm256_storeu_si256(v.as_mut_ptr().add(*write_idx) as *mut __m256i, val);
-    *write_idx += numberofnewvalues;
+fn write_unique_with_prev(prev: __m256i, new: __m256i, v: &mut [u32], write_idx: &mut usize) {
+    unsafe {
+        use std::arch::x86_64::*;
+        let m = _mm256_movemask_ps(transmute(_mm256_cmpeq_epi32(prev, new))) as usize;
+        let numberofnewvalues = WIDTH - m.count_ones() as usize;
+        let key = UNIQSHUF[m];
+        let val = _mm256_permutevar8x32_epi32(new, key);
+        _mm256_storeu_si256(v.as_mut_ptr().add(*write_idx) as *mut __m256i, val);
+        *write_idx += numberofnewvalues;
+    }
+}
+
+#[inline(always)]
+pub fn write_unique_with_old(old: __m256i, new: __m256i, v: &mut [u32], write_idx: &mut usize) {
+    unsafe {
+        use std::arch::x86_64::*;
+
+        let recon = _mm256_blend_epi32(old, new, 0b01111111);
+        let movebyone_mask = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 7); // rotate shuffle
+        let vec_tmp = _mm256_permutevar8x32_epi32(recon, movebyone_mask);
+
+        let m = _mm256_movemask_ps(transmute(_mm256_cmpeq_epi32(vec_tmp, new))) as usize;
+        let numberofnewvalues = WIDTH - m.count_ones() as usize;
+        let key = UNIQSHUF[m];
+        let val = _mm256_permutevar8x32_epi32(new, key);
+        _mm256_storeu_si256(v.as_mut_ptr().add(*write_idx) as *mut __m256i, val);
+        *write_idx += numberofnewvalues;
+    }
 }
 
 #[cfg(test)]

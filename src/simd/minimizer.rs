@@ -239,6 +239,15 @@ pub fn minimizers_dedup<'s, const RC: bool>(seq: impl Seq<'s>, k: usize, w: usiz
     positions
 }
 
+pub fn minimizers_collect_and_dedup<'s, const RC: bool>(
+    seq: impl Seq<'s>,
+    k: usize,
+    w: usize,
+) -> Vec<u32> {
+    let (par_head, tail) = minimizer_par_it::<RC>(seq, k, w);
+    collect_and_dedup(par_head, tail)
+}
+
 #[cfg(test)]
 mod test {
     use packed_seq::{AsciiSeq, AsciiSeqVec, PackedSeqVec, SeqVec};
