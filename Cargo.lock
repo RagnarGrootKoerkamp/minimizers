@@ -934,7 +934,7 @@ checksum = "b410bbe7e14ab526a0e86877eb47c6996a2bd7746f027ba551028c925390e4e9"
 [[package]]
 name = "packed-seq"
 version = "0.1.0"
-source = "git+https://github.com/rust-seq/packed-seq#450df351593d71e737adae44e5b16af95ab87396"
+source = "git+https://github.com/rust-seq/packed-seq#348ce45b1811b5f990aa5276c6271dffb3fc8037"
 dependencies = [
  "epserde",
  "mem_dbg",

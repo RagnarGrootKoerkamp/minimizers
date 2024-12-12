@@ -56,7 +56,7 @@ pub fn nthash32_kmer_naive<'s, const RC: bool>(seq: impl Seq<'s>) -> u32 {
 pub fn nthash32_scalar_it<'s, const RC: bool>(
     seq: impl Seq<'s>,
     k: usize,
-) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
+) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> + Clone {
     assert!(k > 0);
     let mut hfw: u32 = 0;
     let mut hrc: u32 = 0;
@@ -105,8 +105,8 @@ pub fn nthash32_par_it<'s, const RC: bool>(
     k: usize,
     w: usize,
 ) -> (
-    impl ExactSizeIterator<Item = S> + Captures<&'s ()>,
-    impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
+    impl ExactSizeIterator<Item = S> + Captures<&'s ()> + Clone,
+    impl ExactSizeIterator<Item = u32> + Captures<&'s ()> + Clone,
 ) {
     assert!(k > 0);
     assert!(w > 0);
