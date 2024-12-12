@@ -364,17 +364,17 @@ fn simd_minimizer(c: &mut Criterion) {
                 });
             },
         );
-        g.bench_function(
-            BenchmarkId::new("minimizer_simd_it_vec_dedup_vec", len),
-            |b| {
-                let mut vec = Vec::new();
-                b.iter(|| {
-                    vec.extend(minimizer_simd_it::<false>(packed_seq, k, w));
-                    vec.dedup();
-                    black_box(&mut vec).clear();
-                });
-            },
-        );
+        // g.bench_function(
+        //     BenchmarkId::new("minimizer_simd_it_vec_dedup_vec", len),
+        //     |b| {
+        //         let mut vec = Vec::new();
+        //         b.iter(|| {
+        //             vec.extend(minimizer_simd_it::<false>(packed_seq, k, w));
+        //             vec.dedup();
+        //             black_box(&mut vec).clear();
+        //         });
+        //     },
+        // );
 
         g.bench_function(BenchmarkId::new("minimizer_par_it_vec", len), |b| {
             let mut vec = Vec::new();
@@ -382,6 +382,9 @@ fn simd_minimizer(c: &mut Criterion) {
                 vec.extend(minimizer_par_it::<false>(packed_seq, k, w).0);
                 black_box(&mut vec).clear();
             });
+        });
+        g.bench_function(BenchmarkId::new("minimizer_par_it_vec_sum", len), |b| {
+            b.iter(|| black_box(minimizer_par_it::<false>(packed_seq, k, w).0.sum::<S>()));
         });
         g.bench_function(BenchmarkId::new("minimizer_collect", len), |b| {
             b.iter(|| black_box(minimizers_collect::<false>(packed_seq, k, w)));
@@ -392,8 +395,15 @@ fn simd_minimizer(c: &mut Criterion) {
         g.bench_function(BenchmarkId::new("minimizer_collect_and_dedup", len), |b| {
             b.iter(|| minimizers_collect_and_dedup::<false>(packed_seq, k, w));
         });
-        g.bench_function(BenchmarkId::new("minimizer_par_it_vec_sum", len), |b| {
-            b.iter(|| black_box(minimizer_par_it::<false>(packed_seq, k, w).0.sum::<S>()));
+        g.bench_function(BenchmarkId::new("minimizer_canonical", len), |b| {
+            let mut vec = Vec::new();
+            b.iter(|| {
+                vec.extend(canonical_minimizer_par_it(packed_seq, k, w).0);
+                black_box(&mut vec).clear();
+            });
+        });
+        g.bench_function(BenchmarkId::new("minimizer_canonical_dedup", len), |b| {
+            b.iter(|| canonical_minimizer_collect_and_dedup(packed_seq, k, w));
         });
     }
 }
