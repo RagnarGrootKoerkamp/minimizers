@@ -1,29 +1,49 @@
-use std::mem::transmute;
+use std::{array, mem::transmute};
 
 use packed_seq::S;
+use wide::u32x8;
+
+use super::dedup::write_unique_with_old;
 
 /// Collect a parallel stream into a single vector.
 /// Works by taking 8 elements from each stream, and then transposing the SIMD-matrix before writing out the results.
+#[inline(always)]
 pub fn collect(
     par_head: impl ExactSizeIterator<Item = S>,
     tail: impl ExactSizeIterator<Item = u32>,
 ) -> Vec<u32> {
     let len = par_head.len();
-    let mut v = vec![0; 8 * len + tail.len()];
+    let mut v = vec![0; len * 8 + tail.len()];
 
-    let mut m = [S::splat(0); 8];
-    for (i, head) in par_head.enumerate() {
-        m[i % 8] = head;
+    let mut m = [unsafe { transmute([0; 8]) }; 8];
+    let mut i = 0;
+    par_head.for_each(|x| {
+        m[i % 8] = x;
         if i % 8 == 7 {
-            let offset = i / 8 * 8;
             let t = transpose(m);
             for j in 0..8 {
-                let src: [u32; 8] = unsafe { transmute(m[j]) };
-                let target = v[j * len + offset..].split_first_chunk_mut().unwrap().0;
-                *target = src;
+                unsafe {
+                    *v.get_unchecked_mut(j * len + 8 * (i / 8)..j * len + 8 * (i / 8) + 8)
+                        .split_first_chunk_mut::<8>()
+                        .unwrap()
+                        .0 = transmute(t[j]);
+                }
             }
         }
+        i += 1;
+    });
+
+    // Manually write the unfinished parts of length k=i%8.
+    let t = transpose(m);
+    let k = i % 8;
+    for j in 0..8 {
+        unsafe {
+            v[j * len + 8 * (i / 8)..j * len + 8 * (i / 8) + k]
+                .copy_from_slice(&transmute::<_, [u32; 8]>(t[j])[..k]);
+        }
     }
+
+    // Manually write the explicit tail.
     for (i, x) in tail.enumerate() {
         v[8 * len + i] = x;
     }

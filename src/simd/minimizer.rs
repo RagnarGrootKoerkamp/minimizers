@@ -1,6 +1,10 @@
 use crate::{simd::linearize, Captures};
 
-use super::nthash::{nthash32_par_it, nthash32_scalar_it};
+use super::{
+    collect::{collect, collect_and_dedup},
+    dedup,
+    nthash::{nthash32_par_it, nthash32_scalar_it},
+};
 use core::array::from_fn;
 use itertools::Itertools;
 use packed_seq::{Seq, S};
@@ -221,6 +225,18 @@ pub fn minimizer_par_it<'s, const RC: bool>(
     let offset = 8 * par_head.size_hint().0 as u32;
     let tail = sliding_min_scalar_it(tail, w).map(move |pos| offset + pos);
     (par_head, tail)
+}
+
+pub fn minimizers_collect<'s, const RC: bool>(seq: impl Seq<'s>, k: usize, w: usize) -> Vec<u32> {
+    let (par_head, tail) = minimizer_par_it::<RC>(seq, k, w);
+    collect(par_head, tail)
+}
+
+pub fn minimizers_dedup<'s, const RC: bool>(seq: impl Seq<'s>, k: usize, w: usize) -> Vec<u32> {
+    let (par_head, tail) = minimizer_par_it::<RC>(seq, k, w);
+    let mut positions = collect(par_head, tail);
+    dedup(&mut positions);
+    positions
 }
 
 #[cfg(test)]
