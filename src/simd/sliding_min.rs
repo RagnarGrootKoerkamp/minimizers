@@ -51,8 +51,13 @@ impl<V> std::ops::DerefMut for RingBuf<V> {
     }
 }
 
+/// Return the sliding window minimum of windows of size `w` of the input.
+/// When LEFT is true, break ties by the leftmost position.
+/// When false, return the rightmost position.
+///
+/// In the implementation, when searching the rightmost position, we invert the input hashes and use max instead of min.
 #[inline(always)]
-pub fn sliding_min_scalar_it(
+pub fn sliding_min_scalar_it<const LEFT: bool>(
     it: impl ExactSizeIterator<Item = u32>,
     w: usize,
 ) -> impl ExactSizeIterator<Item = u32> {
@@ -75,6 +80,14 @@ pub fn sliding_min_scalar_it(
     let max_pos = (1 << 16) - 1;
     let mut pos_offset = 0;
 
+    fn min<const LEFT: bool>(a: u32, b: u32) -> u32 {
+        if LEFT {
+            a.min(b)
+        } else {
+            a.max(b)
+        }
+    }
+
     let mut it = it.map(
         #[inline(always)]
         move |val| {
@@ -88,21 +101,21 @@ pub fn sliding_min_scalar_it(
                     *x -= delta;
                 }
             }
-            let elem = (val & val_mask) | pos;
+            let elem = (if LEFT { val } else { !val } & val_mask) | pos;
             pos += 1;
             ring_buf.push(elem);
-            prefix_min = prefix_min.min(elem);
+            prefix_min = min::<LEFT>(prefix_min, elem);
             // After a chunk has been filled, compute suffix minima.
             if ring_buf.idx() == 0 {
                 let mut suffix_min = ring_buf[w - 1];
                 for i in (0..w - 1).rev() {
-                    suffix_min = suffix_min.min(ring_buf[i]);
+                    suffix_min = min::<LEFT>(suffix_min, ring_buf[i]);
                     ring_buf[i] = suffix_min;
                 }
                 prefix_min = elem; // slightly faster than assigning S::splat(u32::MAX)
             }
             let suffix_min = unsafe { *ring_buf.get_unchecked(ring_buf.idx()) };
-            (prefix_min.min(suffix_min) & pos_mask) + pos_offset
+            (min::<LEFT>(prefix_min, suffix_min) & pos_mask) + pos_offset
         },
     );
     // This optimizes better than it.skip(w-1).
@@ -110,8 +123,16 @@ pub fn sliding_min_scalar_it(
     it
 }
 
+fn simd_min<const LEFT: bool>(a: S, b: S) -> S {
+    if LEFT {
+        a.min(b)
+    } else {
+        a.max(b)
+    }
+}
+
 #[inline(always)]
-pub fn sliding_min_par_it(
+pub fn sliding_min_par_it<const LEFT: bool>(
     it: impl ExactSizeIterator<Item = S>,
     w: usize,
 ) -> impl ExactSizeIterator<Item = S> {
@@ -144,17 +165,18 @@ pub fn sliding_min_par_it(
                 );
             }
             // slightly faster than assigning S::splat(u32::MAX)
-            let elem = (val & val_mask) | pos;
+            let elem = (if LEFT { val } else { !val } & val_mask) | pos;
             pos += S::splat(1);
             ring_buf.push(elem);
-            prefix_min = prefix_min.min(elem);
+            prefix_min = simd_min::<LEFT>(prefix_min, elem);
             // After a chunk has been filled, compute suffix minima.
             if ring_buf.idx() == 0 {
                 // Slow case extracted to a function to have better inlining here.
-                suffix_minima(&mut ring_buf, w, &mut prefix_min, elem);
+                suffix_minima::<LEFT>(&mut ring_buf, w, &mut prefix_min, elem);
             }
+
             let suffix_min = unsafe { *ring_buf.get_unchecked(ring_buf.idx()) };
-            (prefix_min.min(suffix_min) & pos_mask) + pos_offset
+            (simd_min::<LEFT>(prefix_min, suffix_min) & pos_mask) + pos_offset
         },
     );
     // This optimizes better than it.skip(w-1).
@@ -162,13 +184,18 @@ pub fn sliding_min_par_it(
     it
 }
 
-fn suffix_minima(ring_buf: &mut RingBuf<S>, w: usize, prefix_min: &mut S, elem: S) {
+fn suffix_minima<const LEFT: bool>(
+    ring_buf: &mut RingBuf<S>,
+    w: usize,
+    prefix_min: &mut S,
+    elem: S,
+) {
     // Avoid some bounds checks when this function is not inlined.
     unsafe { assert_unchecked(ring_buf.len() == w) };
     unsafe { assert_unchecked(w > 0) };
     let mut suffix_min = ring_buf[w - 1];
     for i in (0..w - 1).rev() {
-        suffix_min = suffix_min.min(ring_buf[i]);
+        suffix_min = simd_min::<LEFT>(suffix_min, ring_buf[i]);
         ring_buf[i] = suffix_min;
     }
     *prefix_min = elem;

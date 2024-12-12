@@ -29,7 +29,7 @@ pub fn minimizer_scalar_it<'s, const RC: bool>(
     w: usize,
 ) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
     let it = nthash32_scalar_it::<RC>(seq, k);
-    sliding_min_scalar_it(it, w)
+    sliding_min_scalar_it::<true>(it, w)
 }
 
 /// Returns an iterator over the absolute positions of the minimizers of a sequence.
@@ -65,9 +65,9 @@ pub fn minimizer_par_it<'s, const RC: bool>(
     impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
 ) {
     let (par_head, tail) = nthash32_par_it::<RC>(seq, k, w);
-    let par_head = sliding_min_par_it(par_head, w);
+    let par_head = sliding_min_par_it::<true>(par_head, w);
     let offset = 8 * par_head.size_hint().0 as u32;
-    let tail = sliding_min_scalar_it(tail, w).map(move |pos| offset + pos);
+    let tail = sliding_min_scalar_it::<true>(tail, w).map(move |pos| offset + pos);
     (par_head, tail)
 }
 
