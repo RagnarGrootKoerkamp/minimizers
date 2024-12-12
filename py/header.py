@@ -9,7 +9,7 @@ from functools import cache
 ## PLOT STYLING
 
 
-def style(ax, w, ks, title=None, plot_w=False):
+def style(ax, w, ks, title=None, plot_w=False, df=False):
 
     ax.grid(False)
     ax.grid(True, axis="x", color="#ccc", linewidth=0.5)
@@ -21,14 +21,17 @@ def style(ax, w, ks, title=None, plot_w=False):
     ax.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
 
     ax.spines["bottom"].set_visible(False)
+
+    df = w + 1 if df else 1
+
     if not plot_w:
         ylim_pad_factor = 0.02
 
         ax.yaxis.set_major_locator(MaxNLocator(nbins=2))
-        ax.set_ylim(
-            ymin=1 / w * (1 - ylim_pad_factor), ymax=(1 + ylim_pad_factor) * 2 / (w + 1)
-        )
-        ax.set_yticks([1 / w, 1.5 / (w + 0.5), 2 / (w + 1)])
+        ymin = 1 / w * (1 - ylim_pad_factor) * df
+        ymax = (1 + ylim_pad_factor) * 2 / (w + 1) * df
+        ax.set_ylim(ymin=ymin, ymax=ymax)
+        ax.set_yticks([1 / w * df, 1.5 / (w + 0.5) * df, 2 / (w + 1) * df])
         ax.set_xlim(xmin=ks[0] / 2, xmax=ks[-1] + ks[0] / 2)
     if plot_w:
         ax.set_xlabel("w")
@@ -39,11 +42,12 @@ def style(ax, w, ks, title=None, plot_w=False):
         ax.set_title(title)
 
 
-def plot_lower_bounds(sigma, xs, wks, loose=True, tight=False, ctd=False):
+def plot_lower_bounds(sigma, xs, wks, loose=True, tight=False, ctd=False, df=False):
+    f = lambda w: w + 1 if df else 1
     if tight:
         plt.plot(
             xs,
-            [gp(sigma, w, k) for (w, k) in wks],
+            [gp(sigma, w, k) * f(w) for (w, k) in wks],
             color="red",
             linewidth=1.5,
             label="g'",
@@ -51,7 +55,7 @@ def plot_lower_bounds(sigma, xs, wks, loose=True, tight=False, ctd=False):
     if loose:
         plt.plot(
             xs,
-            [lbp(w, k) for (w, k) in wks],
+            [lbp(w, k) * f(w) for (w, k) in wks],
             color="red",
             linewidth=1.5,
             label="⌈(w+k)/w⌉/(w+k)",
@@ -59,12 +63,14 @@ def plot_lower_bounds(sigma, xs, wks, loose=True, tight=False, ctd=False):
     if ctd:
         plt.plot(
             xs,
-            [lb_continuation(w, k) for (w, k) in wks],
+            [lb_continuation(w, k) * f(w) for (w, k) in wks],
             color="black",
             linewidth=1,
             label="continuation",
         )
-    plt.plot(xs, [1 / w for (w, k) in wks], color="black", linewidth=1.5, label="1/w")
+    plt.plot(
+        xs, [1 / w * f(w) for (w, k) in wks], color="black", linewidth=1.5, label="1/w"
+    )
 
 
 ## LOWER BOUNDS
