@@ -216,3 +216,102 @@ fn reset_positions_offsets(
         *x -= delta;
     }
 }
+
+#[inline(always)]
+pub fn sliding_lr_min_par_it<const LEFT: bool>(
+    it: impl ExactSizeIterator<Item = S>,
+    w: usize,
+) -> impl ExactSizeIterator<Item = (S, S)> {
+    assert!(w > 0);
+    assert!(w < (1 << 15), "This method is not tested for large w.");
+    assert!(it.size_hint().0 * 8 < (1 << 32));
+    let mut prefix_lr_min = (S::splat(u32::MAX), S::splat(u32::MAX));
+    let mut ring_buf = RingBuf::new(w, prefix_lr_min);
+    // We only compare the upper 16 bits of each hash.
+    // Ties are broken automatically in favour of lower pos.
+    let val_mask = S::splat(0xffff_0000);
+    let pos_mask = S::splat(0x0000_ffff);
+    let max_pos = S::splat((1 << 16) - 1);
+    let mut pos = S::splat(0);
+    let mut pos_offset: S =
+        from_fn(|l| (l * (it.size_hint().0.saturating_sub(w - 1))) as u32).into();
+
+    let mut it = it.map(
+        #[inline(always)]
+        move |val| {
+            // Make sure the position does not interfere with the hash value.
+            if pos == max_pos {
+                // Slow case extracted to a function to have better inlining here.
+                reset_positions_offsets_lr(
+                    w,
+                    &mut pos,
+                    &mut prefix_lr_min,
+                    &mut pos_offset,
+                    &mut ring_buf,
+                );
+            }
+            // slightly faster than assigning S::splat(u32::MAX)
+            let lelem = (val & val_mask) | pos;
+            let relem = (!val & val_mask) | pos;
+            let elem = (lelem, relem);
+            pos += S::splat(1);
+            ring_buf.push(elem);
+            prefix_lr_min = simd_lr_min(prefix_lr_min, elem);
+            // After a chunk has been filled, compute suffix minima.
+            if ring_buf.idx() == 0 {
+                // Slow case extracted to a function to have better inlining here.
+                suffix_lr_minima(&mut ring_buf, w, &mut prefix_lr_min, elem);
+            }
+
+            let suffix_lr_min = unsafe { *ring_buf.get_unchecked(ring_buf.idx()) };
+            let (lmin, rmin) = simd_lr_min(prefix_lr_min, suffix_lr_min);
+            (
+                (lmin & pos_mask) + pos_offset,
+                (rmin & pos_mask) + pos_offset,
+            )
+        },
+    );
+    // This optimizes better than it.skip(w-1).
+    it.by_ref().take(w - 1).for_each(drop);
+    it
+}
+
+#[inline(always)]
+fn simd_lr_min((al, ar): (S, S), (bl, br): (S, S)) -> (S, S) {
+    (al.min(bl), ar.max(br))
+}
+
+fn suffix_lr_minima(
+    ring_buf: &mut RingBuf<(S, S)>,
+    w: usize,
+    prefix_min: &mut (S, S),
+    elem: (S, S),
+) {
+    // Avoid some bounds checks when this function is not inlined.
+    unsafe { assert_unchecked(ring_buf.len() == w) };
+    unsafe { assert_unchecked(w > 0) };
+    let mut suffix_min = ring_buf[w - 1];
+    for i in (0..w - 1).rev() {
+        suffix_min = simd_lr_min(suffix_min, ring_buf[i]);
+        ring_buf[i] = suffix_min;
+    }
+    *prefix_min = elem;
+}
+
+fn reset_positions_offsets_lr(
+    w: usize,
+    pos: &mut S,
+    prefix_min: &mut (S, S),
+    pos_offset: &mut S,
+    ring_buf: &mut RingBuf<(S, S)>,
+) {
+    let delta = S::splat((1 << 16) - 2 - w as u32);
+    *pos -= delta;
+    *pos_offset += delta;
+    prefix_min.0 -= delta;
+    prefix_min.1 -= delta;
+    for x in &mut **ring_buf {
+        x.0 -= delta;
+        x.1 -= delta;
+    }
+}

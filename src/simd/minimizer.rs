@@ -9,7 +9,7 @@ use super::{
     collect::{collect, collect_and_dedup},
     dedup,
     nthash::{nthash32_par_it, nthash32_scalar_it},
-    sliding_min::{sliding_min_par_it, sliding_min_scalar_it},
+    sliding_min::{sliding_lr_min_par_it, sliding_min_par_it, sliding_min_scalar_it},
 };
 use itertools::Itertools;
 use packed_seq::{Seq, S};
@@ -137,13 +137,15 @@ pub fn canonical_minimizer_par_it<'s>(
     impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
 ) {
     let (kmer_hashes, kmer_hashes_tail) = nthash32_par_it::<true>(seq, k, w);
-    let left = sliding_min_par_it::<true>(kmer_hashes.clone(), w);
-    let right = sliding_min_par_it::<false>(kmer_hashes, w);
+    let lr = sliding_lr_min_par_it::<true>(kmer_hashes, w);
     let (canonical, canonical_tail) = canonical::canonical_par_it(seq, k, w);
-    let head = zip(canonical, zip(left, right)).map(|(canonical, (left, right))| {
-        // Select left or right based on canonical mask.
-        unsafe { std::mem::transmute::<_, S>(canonical).blend(left, right) }
-    });
+    let head = zip(canonical, lr).map(
+        #[inline(always)]
+        |(canonical, (left, right))| {
+            // Select left or right based on canonical mask.
+            unsafe { std::mem::transmute::<_, S>(canonical).blend(left, right) }
+        },
+    );
 
     let left_tail = sliding_min_scalar_it::<true>(kmer_hashes_tail.clone(), w);
     let right_tail = sliding_min_scalar_it::<false>(kmer_hashes_tail, w);
