@@ -16,7 +16,7 @@ pub fn collect(
         m[i % 8] = head;
         if i % 8 == 7 {
             let offset = i / 8 * 8;
-            transpose(&mut m);
+            let t = transpose(m);
             for j in 0..8 {
                 let src: [u32; 8] = unsafe { transmute(m[j]) };
                 let target = v[j * len + offset..].split_first_chunk_mut().unwrap().0;
@@ -43,10 +43,11 @@ const fn _mm_shuffle(z: u32, y: u32, x: u32, w: u32) -> i32 {
 /// https://stackoverflow.com/questions/25622745/transpose-an-8x8-float-using-avx-avx2
 ///
 /// TODO: Investigate other transpose functions mentioned there?
-fn transpose(m: &mut [S; 8]) {
+#[inline(always)]
+fn transpose(m: [S; 8]) -> [S; 8] {
     unsafe {
         use std::arch::x86_64::*;
-        let m: &mut [__m256; 8] = transmute(m);
+        let m: [__m256; 8] = transmute(m);
         let t0 = _mm256_unpacklo_ps(m[0], m[1]);
         let t1 = _mm256_unpackhi_ps(m[0], m[1]);
         let t2 = _mm256_unpacklo_ps(m[2], m[3]);
@@ -63,6 +64,7 @@ fn transpose(m: &mut [S; 8]) {
         let tt5 = _mm256_shuffle_ps(t4, t6, _mm_shuffle(3, 2, 3, 2));
         let tt6 = _mm256_shuffle_ps(t5, t7, _mm_shuffle(1, 0, 1, 0));
         let tt7 = _mm256_shuffle_ps(t5, t7, _mm_shuffle(3, 2, 3, 2));
+        let mut m: [__m256; 8] = [transmute([0; 8]); 8];
         m[0] = _mm256_permute2f128_ps(tt0, tt4, 0x20);
         m[1] = _mm256_permute2f128_ps(tt1, tt5, 0x20);
         m[2] = _mm256_permute2f128_ps(tt2, tt6, 0x20);
@@ -71,5 +73,6 @@ fn transpose(m: &mut [S; 8]) {
         m[5] = _mm256_permute2f128_ps(tt1, tt5, 0x31);
         m[6] = _mm256_permute2f128_ps(tt2, tt6, 0x31);
         m[7] = _mm256_permute2f128_ps(tt3, tt7, 0x31);
+        transmute(m)
     }
 }
