@@ -4,7 +4,7 @@ mod blog;
 use blog::*;
 use itertools::Itertools;
 use minimizers::simd::{
-    minimizer::{minimizer_par_it, minimizer_scalar_it, minimizer_simd_it},
+    minimizer::*,
     nthash::{nthash32_par_it, nthash32_simd_it},
 };
 use packed_seq::{PackedSeq, PackedSeqVec, SeqVec, S};
@@ -337,11 +337,34 @@ fn simd_minimizer(c: &mut Criterion) {
     g.bench_function("minimizer_scalar_it_vec", |b| {
         b.iter(|| minimizer_scalar_it::<false>(packed_seq, k, w).collect_vec());
     });
-    g.bench_function("minimizer_par_it_vec", |b| {
-        b.iter(|| minimizer_par_it::<false>(packed_seq, k, w).0.collect_vec());
-    });
     g.bench_function("minimizer_simd_it_vec", |b| {
         b.iter(|| minimizer_simd_it::<false>(packed_seq, k, w).collect_vec());
+    });
+    g.bench_function("minimizer_simd_it_vec_dedup_it", |b| {
+        b.iter(|| {
+            minimizer_simd_it::<false>(packed_seq, k, w)
+                .dedup()
+                .collect_vec()
+        });
+    });
+    g.bench_function("minimizer_simd_it_vec_dedup_vec", |b| {
+        b.iter(|| {
+            minimizer_simd_it::<false>(packed_seq, k, w)
+                .collect_vec()
+                .dedup()
+        });
+    });
+    g.bench_function("minimizer_par_it_vec", |b| {
+        b.iter(|| black_box(minimizer_par_it::<false>(packed_seq, k, w).0.collect_vec()));
+    });
+    g.bench_function("minimizer_collect", |b| {
+        b.iter(|| black_box(minimizers_collect::<false>(packed_seq, k, w)));
+    });
+    g.bench_function("minimizer_dedup", |b| {
+        b.iter(|| minimizers_dedup::<false>(packed_seq, k, w));
+    });
+    g.bench_function("minimizer_collect_and_dedup", |b| {
+        b.iter(|| minimizers_collect_and_dedup::<false>(packed_seq, k, w));
     });
 }
 
