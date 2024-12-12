@@ -10,7 +10,7 @@ use minimizers::simd::{
 use packed_seq::{PackedSeq, PackedSeqVec, SeqVec, S};
 use std::{cell::LazyCell, simd::Simd, time::Duration};
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 criterion_group!(
     name = group;
@@ -285,87 +285,117 @@ fn local_nthash(c: &mut Criterion) {
 }
 
 fn simd_minimizer(c: &mut Criterion) {
-    // Create a random string of length 1Mbp.
-    let owned_packed_seq = PackedSeqVec::random(1000000);
-    let raw_packed_seq = &owned_packed_seq.seq;
-    let packed_seq = owned_packed_seq.as_slice();
+    // // Create a random string of length 1Mbp.
+    // let owned_packed_seq = PackedSeqVec::random(10000000);
+    // let raw_packed_seq = &owned_packed_seq.seq;
+    // let packed_seq = owned_packed_seq.as_slice();
 
     let w = 11;
     let k = 21;
 
     let mut g = c.benchmark_group("g");
-    let mut hasher = NtHashSimd::<true>;
-    g.bench_function("split_simd_sum", |b| {
-        b.iter(|| {
-            SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
-                .map(|x| Simd::<u32, 8>::from(x))
-                .sum::<Simd<u32, 8>>()
-        });
-    });
+    // let mut hasher = NtHashSimd::<true>;
+    // g.bench_function("split_simd_sum", |b| {
+    //     b.iter(|| {
+    //         SplitSimd
+    //             .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
+    //             .map(|x| Simd::<u32, 8>::from(x))
+    //             .sum::<Simd<u32, 8>>()
+    //     });
+    // });
 
-    let hasher = NtHashSimd::<true>;
-    let mut hasher = BufferParCached::new(hasher);
-    g.bench_function("split_simd_buf_sum", |b| {
-        b.iter(|| {
-            SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
-                .map(|x| Simd::<u32, 8>::from(x))
-                .sum::<Simd<u32, 8>>()
-        });
-    });
+    // let hasher = NtHashSimd::<true>;
+    // let mut hasher = BufferParCached::new(hasher);
+    // g.bench_function("split_simd_buf_sum", |b| {
+    //     b.iter(|| {
+    //         SplitSimd
+    //             .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
+    //             .map(|x| Simd::<u32, 8>::from(x))
+    //             .sum::<Simd<u32, 8>>()
+    //     });
+    // });
 
-    let mut hasher = NtHashSimd::<true>;
-    g.bench_function("split_simd_collect", |b| {
-        b.iter(|| {
-            SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
-                .collect_vec()
-        });
-    });
+    // let mut hasher = NtHashSimd::<true>;
+    // g.bench_function("split_simd_collect", |b| {
+    //     b.iter(|| {
+    //         SplitSimd
+    //             .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
+    //             .collect_vec()
+    //     });
+    // });
 
-    let hasher = NtHashSimd::<true>;
-    let mut hasher = BufferParCached::new(hasher);
-    g.bench_function("split_simd_buf_collect", |b| {
-        b.iter(|| {
-            SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
-                .collect_vec()
-        });
-    });
+    // let hasher = NtHashSimd::<true>;
+    // let mut hasher = BufferParCached::new(hasher);
+    // g.bench_function("split_simd_buf_collect", |b| {
+    //     b.iter(|| {
+    //         SplitSimd
+    //             .sliding_min(w, hasher.hash_kmers(k, raw_packed_seq))
+    //             .collect_vec()
+    //     });
+    // });
 
-    g.bench_function("minimizer_scalar_it_vec", |b| {
-        b.iter(|| minimizer_scalar_it::<false>(packed_seq, k, w).collect_vec());
-    });
-    g.bench_function("minimizer_simd_it_vec", |b| {
-        b.iter(|| minimizer_simd_it::<false>(packed_seq, k, w).collect_vec());
-    });
-    g.bench_function("minimizer_simd_it_vec_dedup_it", |b| {
-        b.iter(|| {
-            minimizer_simd_it::<false>(packed_seq, k, w)
-                .dedup()
-                .collect_vec()
+    let lens = [1000000, 100000000];
+    for len in lens {
+        eprintln!("\nLEN {len}\n");
+        let owned_packed_seq = PackedSeqVec::random(len);
+        let packed_seq = owned_packed_seq.as_slice();
+
+        g.bench_function(BenchmarkId::new("minimizer_scalar_it_vec", len), |b| {
+            let mut vec = Vec::new();
+            b.iter(|| {
+                vec.extend(minimizer_scalar_it::<false>(packed_seq, k, w));
+                black_box(&mut vec).clear();
+            });
         });
-    });
-    g.bench_function("minimizer_simd_it_vec_dedup_vec", |b| {
-        b.iter(|| {
-            minimizer_simd_it::<false>(packed_seq, k, w)
-                .collect_vec()
-                .dedup()
+        g.bench_function(BenchmarkId::new("minimizer_simd_it_vec", len), |b| {
+            let mut vec = Vec::new();
+            b.iter(|| {
+                vec.extend(minimizer_simd_it::<false>(packed_seq, k, w));
+                black_box(&mut vec).clear();
+            });
         });
-    });
-    g.bench_function("minimizer_par_it_vec", |b| {
-        b.iter(|| black_box(minimizer_par_it::<false>(packed_seq, k, w).0.collect_vec()));
-    });
-    g.bench_function("minimizer_collect", |b| {
-        b.iter(|| black_box(minimizers_collect::<false>(packed_seq, k, w)));
-    });
-    g.bench_function("minimizer_dedup", |b| {
-        b.iter(|| minimizers_dedup::<false>(packed_seq, k, w));
-    });
-    g.bench_function("minimizer_collect_and_dedup", |b| {
-        b.iter(|| minimizers_collect_and_dedup::<false>(packed_seq, k, w));
-    });
+        g.bench_function(
+            BenchmarkId::new("minimizer_simd_it_vec_dedup_it", len),
+            |b| {
+                let mut vec = Vec::new();
+                b.iter(|| {
+                    vec.extend(minimizer_simd_it::<false>(packed_seq, k, w).dedup());
+                    black_box(&mut vec).clear();
+                });
+            },
+        );
+        g.bench_function(
+            BenchmarkId::new("minimizer_simd_it_vec_dedup_vec", len),
+            |b| {
+                let mut vec = Vec::new();
+                b.iter(|| {
+                    vec.extend(minimizer_simd_it::<false>(packed_seq, k, w));
+                    vec.dedup();
+                    black_box(&mut vec).clear();
+                });
+            },
+        );
+
+        g.bench_function(BenchmarkId::new("minimizer_par_it_vec", len), |b| {
+            let mut vec = Vec::new();
+            b.iter(|| {
+                vec.extend(minimizer_par_it::<false>(packed_seq, k, w).0);
+                black_box(&mut vec).clear();
+            });
+        });
+        g.bench_function(BenchmarkId::new("minimizer_collect", len), |b| {
+            b.iter(|| black_box(minimizers_collect::<false>(packed_seq, k, w)));
+        });
+        g.bench_function(BenchmarkId::new("minimizer_dedup", len), |b| {
+            b.iter(|| minimizers_dedup::<false>(packed_seq, k, w));
+        });
+        g.bench_function(BenchmarkId::new("minimizer_collect_and_dedup", len), |b| {
+            b.iter(|| minimizers_collect_and_dedup::<false>(packed_seq, k, w));
+        });
+        g.bench_function(BenchmarkId::new("minimizer_par_it_vec_sum", len), |b| {
+            b.iter(|| black_box(minimizer_par_it::<false>(packed_seq, k, w).0.sum::<S>()));
+        });
+    }
 }
 
 fn human_genome(c: &mut Criterion) {
