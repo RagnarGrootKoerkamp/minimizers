@@ -127,17 +127,16 @@ pub fn nthash32_par_it<'s, const RC: bool>(
 
     let mut h_fw = S::splat(0);
     let mut h_rc = S::splat(0);
-    let (mut add, tail) = seq.par_iter_bp(k + w - 1);
-    let (remove, _tail) = seq.par_iter_bp(k + w - 1);
+    let (mut add_remove, tail) = seq.par_iter_bp_delayed(k + w - 1, k - 1);
 
-    add.by_ref().take(k - 1).for_each(|a| {
+    add_remove.by_ref().take(k - 1).for_each(|(a, _r)| {
         h_fw = ((h_fw << 1) | (h_fw >> 31)) ^ intrinsics::table_lookup(table_fw, a);
         if RC {
             h_rc = ((h_rc >> 1) | (h_rc << 31)) ^ intrinsics::table_lookup(table_rc_rot, a);
         }
     });
 
-    let it = add.zip(remove).map(move |(a, r)| {
+    let it = add_remove.map(move |(a, r)| {
         let hfw_out = ((h_fw << 1) | (h_fw >> 31)) ^ intrinsics::table_lookup(table_fw, a);
         h_fw = hfw_out ^ intrinsics::table_lookup(table_fw_rot, r);
         if RC {

@@ -59,16 +59,15 @@ pub fn canonical_par_it<'s>(
     // Cnt of odd characters, offset by -l/2 so >0 is canonical and <0 is not.
     let mut cnt = i32x8::splat(-(l as i32) / 2);
 
-    let (mut add, tail) = seq.par_iter_bp(l);
-    let (remove, _tail) = seq.par_iter_bp(l);
+    let (mut add_remove, tail) = seq.par_iter_bp_delayed(k + w - 1, l - 1);
 
     let one = i32x8::splat(1);
 
-    add.by_ref().take(k - 1).for_each(|a| {
+    add_remove.by_ref().take(l - 1).for_each(|(a, _r)| {
         cnt += unsafe { transmute::<_, i32x8>(a) } & one;
     });
 
-    let it = add.zip(remove).map(
+    let it = add_remove.map(
         #[inline(always)]
         move |(a, r)| {
             cnt += unsafe { transmute::<_, i32x8>(a) } & one;
