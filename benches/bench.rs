@@ -405,6 +405,19 @@ fn simd_minimizer(c: &mut Criterion) {
         g.bench_function(BenchmarkId::new("minimizer_canonical_dedup", len), |b| {
             b.iter(|| canonical_minimizer_collect_and_dedup(packed_seq, k, w));
         });
+        g.bench_function(BenchmarkId::new("minimizer_canonical_new", len), |b| {
+            let mut vec = Vec::new();
+            b.iter(|| {
+                vec.extend(canonical_minimizer_par_it_new(packed_seq, k, w).0);
+                black_box(&mut vec).clear();
+            });
+        });
+        g.bench_function(
+            BenchmarkId::new("minimizer_canonical_dedup_new", len),
+            |b| {
+                b.iter(|| canonical_minimizer_collect_and_dedup_new(packed_seq, k, w));
+            },
+        );
     }
 }
 

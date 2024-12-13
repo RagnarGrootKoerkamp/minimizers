@@ -6,10 +6,13 @@ use crate::{
 };
 
 use super::{
+    canonical::canonical_mapper,
     collect::{collect, collect_and_dedup},
     dedup,
-    nthash::{nthash32_par_it, nthash32_scalar_it},
-    sliding_min::{sliding_lr_min_par_it, sliding_min_par_it, sliding_min_scalar_it},
+    nthash::{nthash32_par_it, nthash32_scalar_it, nthash_mapper},
+    sliding_min::{
+        sliding_lr_min_mapper, sliding_lr_min_par_it, sliding_min_par_it, sliding_min_scalar_it,
+    },
 };
 use itertools::Itertools;
 use packed_seq::{Seq, S};
@@ -137,9 +140,9 @@ pub fn canonical_minimizer_par_it<'s>(
     impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
 ) {
     let (kmer_hashes, kmer_hashes_tail) = nthash32_par_it::<true>(seq, k, w);
-    let lr = sliding_lr_min_par_it::<true>(kmer_hashes, w);
+    let lr_min = sliding_lr_min_par_it::<true>(kmer_hashes, w);
     let (canonical, canonical_tail) = canonical::canonical_par_it(seq, k, w);
-    let head = zip(canonical, lr).map(
+    let head = zip(canonical, lr_min).map(
         #[inline(always)]
         |(canonical, (left, right))| {
             // Select left or right based on canonical mask.
@@ -164,12 +167,51 @@ pub fn canonical_minimizer_par_it<'s>(
     (head, tail)
 }
 
+/// Use canonical NtHash, and keep both leftmost and rightmost minima.
+pub fn canonical_minimizer_par_it_new<'s>(
+    seq: impl Seq<'s>,
+    k: usize,
+    w: usize,
+) -> (
+    impl ExactSizeIterator<Item = S> + Captures<&'s ()>,
+    impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
+) {
+    let l = k + w - 1;
+
+    let (add_remove, tail) = seq.par_iter_bp_delayed_2(k + w - 1, k - 1, l - 1);
+
+    let mut nthash = nthash_mapper::<true>(k, w);
+    let mut canonical = canonical_mapper(k, w);
+    let mut sliding_min = sliding_lr_min_mapper::<true>(w, add_remove.size_hint().0);
+
+    let mut head = add_remove.map(move |(a, rk, rl)| {
+        let nthash = nthash((a, rk));
+        let (lmin, rmin) = sliding_min(nthash);
+        let canonical = canonical((a, rl));
+        unsafe { std::mem::transmute::<_, S>(canonical).blend(lmin, rmin) }
+    });
+
+    head.by_ref().take(l - 1).for_each(drop);
+
+    let tail = canonical_minimizer_scalar_it(tail, k, w);
+    (head, tail)
+}
+
 pub fn canonical_minimizer_collect_and_dedup<'s>(
     seq: impl Seq<'s>,
     k: usize,
     w: usize,
 ) -> Vec<u32> {
     let (par_head, tail) = canonical_minimizer_par_it(seq, k, w);
+    collect_and_dedup(par_head, tail)
+}
+
+pub fn canonical_minimizer_collect_and_dedup_new<'s>(
+    seq: impl Seq<'s>,
+    k: usize,
+    w: usize,
+) -> Vec<u32> {
+    let (par_head, tail) = canonical_minimizer_par_it_new(seq, k, w);
     collect_and_dedup(par_head, tail)
 }
 
