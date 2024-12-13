@@ -1,4 +1,9 @@
-use std::{array, mem::transmute};
+use std::{
+    array,
+    cell::{LazyCell, RefCell},
+    mem::transmute,
+    sync::LazyLock,
+};
 
 use packed_seq::S;
 use wide::u32x8;
@@ -51,62 +56,75 @@ pub fn collect(
     v
 }
 
+thread_local! {
+    static CACHE: RefCell<[Vec<u32>; 8]> = RefCell::new(array::from_fn(|_| Vec::new()));
+}
+
 /// Collect a parallel stream into a single vector.
 /// Works by taking 8 elements from each stream, and then transposing the SIMD-matrix before writing out the results.
 #[inline(always)]
 pub fn collect_and_dedup(
     par_head: impl ExactSizeIterator<Item = S>,
     tail: impl ExactSizeIterator<Item = u32>,
-) -> Vec<u32> {
+    out_vec: &mut Vec<u32>,
+) {
     let len = par_head.len();
-    let mut v: [Vec<u32>; 8] = array::from_fn(|_| vec![0; len]);
+    CACHE.with(|v| {
+        let mut v = v.borrow_mut();
+        for x in v.iter_mut() {
+            x.resize(len, 0);
+        }
+        // let mut v: [Vec<u32>; 8] = array::from_fn(|_| vec![0; len]);
 
-    let mut write_idx = [0; 8];
-    // Vec of last pushed elements in each lane.
-    let mut old = [unsafe { transmute([0; 8]) }; 8];
+        let mut write_idx = [0; 8];
+        // Vec of last pushed elements in each lane.
+        let mut old = [unsafe { transmute([0; 8]) }; 8];
 
-    let mut m = [u32x8::ZERO; 8];
-    let mut i = 0;
-    par_head.for_each(|x| {
-        m[i % 8] = x;
-        if i % 8 == 7 {
-            let t = transpose(m);
-            for j in 0..8 {
-                let lane = unsafe { transmute(t[j]) };
-                write_unique_with_old(old[j], lane, &mut v[j], &mut write_idx[j]);
-                old[j] = lane;
+        let mut m = [u32x8::ZERO; 8];
+        let mut i = 0;
+        par_head.for_each(|x| {
+            m[i % 8] = x;
+            if i % 8 == 7 {
+                let t = transpose(m);
+                for j in 0..8 {
+                    let lane = unsafe { transmute(t[j]) };
+                    write_unique_with_old(old[j], lane, &mut v[j], &mut write_idx[j]);
+                    old[j] = lane;
+                }
+            }
+            i += 1;
+        });
+
+        for j in 0..8 {
+            v[j].truncate(write_idx[j]);
+        }
+
+        // Manually write the unfinished parts of length k=i%8.
+        let t = transpose(m);
+        let k = i % 8;
+        for j in 0..8 {
+            let lane = &unsafe { transmute::<_, [u32; 8]>(t[j]) }[..k];
+            for x in lane {
+                if v[j].last() != Some(x) {
+                    v[j].push(*x);
+                }
             }
         }
-        i += 1;
-    });
 
-    for j in 0..8 {
-        v[j].truncate(write_idx[j]);
-    }
+        // Flatten v.
+        for lane in v.iter() {
+            out_vec.extend_from_slice(lane);
+        }
 
-    // Manually write the unfinished parts of length k=i%8.
-    let t = transpose(m);
-    let k = i % 8;
-    for j in 0..8 {
-        let lane = &unsafe { transmute::<_, [u32; 8]>(t[j]) }[..k];
-        for x in lane {
-            if v[j].last() != Some(x) {
-                v[j].push(*x);
+        // Manually write the dedup'ed explicit tail.
+        for x in tail {
+            if out_vec.last() != Some(&x) {
+                out_vec.push(x);
             }
         }
-    }
 
-    // Flatten v.
-    let mut v = v.concat();
-
-    // Manually write the dedup'ed explicit tail.
-    for x in tail {
-        if v.last() != Some(&x) {
-            v.push(x);
-        }
-    }
-
-    v
+        // v_flat
+    })
 }
 
 /// A utility function for creating masks to use with Intel shuffle and

@@ -115,9 +115,10 @@ pub fn minimizers_collect_and_dedup<'s, const RC: bool>(
     seq: impl Seq<'s>,
     k: usize,
     w: usize,
-) -> Vec<u32> {
+    out_vec: &mut Vec<u32>,
+) {
     let (par_head, tail) = minimizer_par_it::<RC>(seq, k, w);
-    collect_and_dedup(par_head, tail)
+    collect_and_dedup(par_head, tail, out_vec);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,18 +222,20 @@ pub fn canonical_minimizer_collect_and_dedup<'s>(
     seq: impl Seq<'s>,
     k: usize,
     w: usize,
-) -> Vec<u32> {
+    out_vec: &mut Vec<u32>,
+) {
     let (par_head, tail) = canonical_minimizer_par_it(seq, k, w);
-    collect_and_dedup(par_head, tail)
+    collect_and_dedup(par_head, tail, out_vec);
 }
 
 pub fn canonical_minimizer_collect_and_dedup_new<'s>(
     seq: impl Seq<'s>,
     k: usize,
     w: usize,
-) -> Vec<u32> {
+    out_vec: &mut Vec<u32>,
+) {
     let (par_head, tail) = canonical_minimizer_par_it_new(seq, k, w);
-    collect_and_dedup(par_head, tail)
+    collect_and_dedup(par_head, tail, out_vec);
 }
 
 #[cfg(test)]
