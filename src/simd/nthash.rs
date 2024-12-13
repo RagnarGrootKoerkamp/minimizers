@@ -108,6 +108,18 @@ pub fn nthash32_par_it<'s, const RC: bool>(
     impl ExactSizeIterator<Item = S> + Captures<&'s ()> + Clone,
     impl ExactSizeIterator<Item = u32> + Captures<&'s ()> + Clone,
 ) {
+    let (add_remove, tail) = seq.par_iter_bp_delayed(k + w - 1, k - 1);
+
+    let mut it = add_remove.map(nthash_mapper::<RC>(k, w));
+    it.by_ref().take(k - 1).for_each(drop);
+
+    let tail = nthash32_scalar_it::<RC>(tail, k);
+
+    (it, tail)
+}
+
+/// NOTE: First k-1 values are bogus.
+pub fn nthash_mapper<const RC: bool>(k: usize, w: usize) -> impl FnMut((S, S)) -> S + Clone {
     assert!(k > 0);
     assert!(w > 0);
     // Each 128-bit half has a copy of the 4 32-bit hashes.
@@ -125,18 +137,11 @@ pub fn nthash32_par_it<'s, const RC: bool>(
         .map(|c| HASHES_C[c as usize].rotate_left(k as u32 - 1))
         .into();
 
+    // FIXME: h_fw should be initialized to the hash of shifting out k-1 zeros.
     let mut h_fw = S::splat(0);
     let mut h_rc = S::splat(0);
-    let (mut add_remove, tail) = seq.par_iter_bp_delayed(k + w - 1, k - 1);
 
-    add_remove.by_ref().take(k - 1).for_each(|(a, _r)| {
-        h_fw = ((h_fw << 1) | (h_fw >> 31)) ^ intrinsics::table_lookup(table_fw, a);
-        if RC {
-            h_rc = ((h_rc >> 1) | (h_rc << 31)) ^ intrinsics::table_lookup(table_rc_rot, a);
-        }
-    });
-
-    let it = add_remove.map(move |(a, r)| {
+    move |(a, r)| {
         let hfw_out = ((h_fw << 1) | (h_fw >> 31)) ^ intrinsics::table_lookup(table_fw, a);
         h_fw = hfw_out ^ intrinsics::table_lookup(table_fw_rot, r);
         if RC {
@@ -147,11 +152,7 @@ pub fn nthash32_par_it<'s, const RC: bool>(
         } else {
             hfw_out
         }
-    });
-
-    let tail = nthash32_scalar_it::<RC>(tail, k);
-
-    (it, tail)
+    }
 }
 
 #[cfg(test)]

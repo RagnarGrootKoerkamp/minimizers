@@ -222,9 +222,19 @@ pub fn sliding_lr_min_par_it<const LEFT: bool>(
     it: impl ExactSizeIterator<Item = S>,
     w: usize,
 ) -> impl ExactSizeIterator<Item = (S, S)> {
+    let len = it.size_hint().0;
+    let mut it = it.map(sliding_lr_min_mapper::<LEFT>(w, len));
+    // This optimizes better than it.skip(w-1).
+    it.by_ref().take(w - 1).for_each(drop);
+    it
+}
+
+/// Len: `size_hint().0` of the input iterator.
+/// First w-1 values are bogus.
+pub fn sliding_lr_min_mapper<const LEFT: bool>(w: usize, len: usize) -> impl FnMut(S) -> (S, S) {
     assert!(w > 0);
     assert!(w < (1 << 15), "This method is not tested for large w.");
-    assert!(it.size_hint().0 * 8 < (1 << 32));
+    assert!(len * 8 < (1 << 32));
     let mut prefix_lr_min = (S::splat(u32::MAX), S::splat(u32::MAX));
     let mut ring_buf = RingBuf::new(w, prefix_lr_min);
     // We only compare the upper 16 bits of each hash.
@@ -233,47 +243,41 @@ pub fn sliding_lr_min_par_it<const LEFT: bool>(
     let pos_mask = S::splat(0x0000_ffff);
     let max_pos = S::splat((1 << 16) - 1);
     let mut pos = S::splat(0);
-    let mut pos_offset: S =
-        from_fn(|l| (l * (it.size_hint().0.saturating_sub(w - 1))) as u32).into();
+    let mut pos_offset: S = from_fn(|l| (l * (len.saturating_sub(w - 1))) as u32).into();
 
-    let mut it = it.map(
-        #[inline(always)]
-        move |val| {
-            // Make sure the position does not interfere with the hash value.
-            if pos == max_pos {
-                // Slow case extracted to a function to have better inlining here.
-                reset_positions_offsets_lr(
-                    w,
-                    &mut pos,
-                    &mut prefix_lr_min,
-                    &mut pos_offset,
-                    &mut ring_buf,
-                );
-            }
-            // slightly faster than assigning S::splat(u32::MAX)
-            let lelem = (val & val_mask) | pos;
-            let relem = (!val & val_mask) | pos;
-            let elem = (lelem, relem);
-            pos += S::splat(1);
-            ring_buf.push(elem);
-            prefix_lr_min = simd_lr_min(prefix_lr_min, elem);
-            // After a chunk has been filled, compute suffix minima.
-            if ring_buf.idx() == 0 {
-                // Slow case extracted to a function to have better inlining here.
-                suffix_lr_minima(&mut ring_buf, w, &mut prefix_lr_min, elem);
-            }
+    #[inline(always)]
+    move |val| {
+        // Make sure the position does not interfere with the hash value.
+        if pos == max_pos {
+            // Slow case extracted to a function to have better inlining here.
+            reset_positions_offsets_lr(
+                w,
+                &mut pos,
+                &mut prefix_lr_min,
+                &mut pos_offset,
+                &mut ring_buf,
+            );
+        }
+        // slightly faster than assigning S::splat(u32::MAX)
+        let lelem = (val & val_mask) | pos;
+        let relem = (!val & val_mask) | pos;
+        let elem = (lelem, relem);
+        pos += S::splat(1);
+        ring_buf.push(elem);
+        prefix_lr_min = simd_lr_min(prefix_lr_min, elem);
+        // After a chunk has been filled, compute suffix minima.
+        if ring_buf.idx() == 0 {
+            // Slow case extracted to a function to have better inlining here.
+            suffix_lr_minima(&mut ring_buf, w, &mut prefix_lr_min, elem);
+        }
 
-            let suffix_lr_min = unsafe { *ring_buf.get_unchecked(ring_buf.idx()) };
-            let (lmin, rmin) = simd_lr_min(prefix_lr_min, suffix_lr_min);
-            (
-                (lmin & pos_mask) + pos_offset,
-                (rmin & pos_mask) + pos_offset,
-            )
-        },
-    );
-    // This optimizes better than it.skip(w-1).
-    it.by_ref().take(w - 1).for_each(drop);
-    it
+        let suffix_lr_min = unsafe { *ring_buf.get_unchecked(ring_buf.idx()) };
+        let (lmin, rmin) = simd_lr_min(prefix_lr_min, suffix_lr_min);
+        (
+            (lmin & pos_mask) + pos_offset,
+            (rmin & pos_mask) + pos_offset,
+        )
+    }
 }
 
 #[inline(always)]
