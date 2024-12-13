@@ -11,7 +11,8 @@ use super::{
     dedup,
     nthash::{nthash32_par_it, nthash32_scalar_it, nthash_mapper},
     sliding_min::{
-        sliding_lr_min_mapper, sliding_lr_min_par_it, sliding_min_par_it, sliding_min_scalar_it,
+        sliding_lr_min_mapper, sliding_lr_min_par_it, sliding_min_mapper, sliding_min_par_it,
+        sliding_min_scalar_it,
     },
 };
 use itertools::Itertools;
@@ -72,11 +73,28 @@ pub fn minimizer_par_it<'s, const RC: bool>(
     impl ExactSizeIterator<Item = S> + Captures<&'s ()>,
     impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
 ) {
-    let (par_head, tail) = nthash32_par_it::<RC>(seq, k, w);
-    let par_head = sliding_min_par_it::<true>(par_head, w);
-    let offset = 8 * par_head.size_hint().0 as u32;
-    let tail = sliding_min_scalar_it::<true>(tail, w).map(move |pos| offset + pos);
-    (par_head, tail)
+    // let (par_head, tail) = nthash32_par_it::<RC>(seq, k, w);
+    // let par_head = sliding_min_par_it::<true>(par_head, w);
+    // let offset = 8 * par_head.size_hint().0 as u32;
+    // let tail = sliding_min_scalar_it::<true>(tail, w).map(move |pos| offset + pos);
+    // (par_head, tail)
+
+    let l = k + w - 1;
+
+    let (add_remove, tail) = seq.par_iter_bp_delayed(k + w - 1, k - 1);
+
+    let mut nthash = nthash_mapper::<RC>(k, w);
+    let mut sliding_min = sliding_min_mapper::<true>(w, add_remove.size_hint().0);
+
+    let mut head = add_remove.map(move |(a, rk)| {
+        let nthash = nthash((a, rk));
+        sliding_min(nthash)
+    });
+
+    head.by_ref().take(l - 1).for_each(drop);
+
+    let tail = canonical_minimizer_scalar_it(tail, k, w);
+    (head, tail)
 }
 
 pub fn minimizers_collect<'s, const RC: bool>(seq: impl Seq<'s>, k: usize, w: usize) -> Vec<u32> {
@@ -140,7 +158,7 @@ pub fn canonical_minimizer_par_it<'s>(
     impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
 ) {
     let (kmer_hashes, kmer_hashes_tail) = nthash32_par_it::<true>(seq, k, w);
-    let lr_min = sliding_lr_min_par_it::<true>(kmer_hashes, w);
+    let lr_min = sliding_lr_min_par_it(kmer_hashes, w);
     let (canonical, canonical_tail) = canonical::canonical_par_it(seq, k, w);
     let head = zip(canonical, lr_min).map(
         #[inline(always)]
@@ -178,11 +196,13 @@ pub fn canonical_minimizer_par_it_new<'s>(
 ) {
     let l = k + w - 1;
 
-    let (add_remove, tail) = seq.par_iter_bp_delayed_2(k + w - 1, k - 1, l - 1);
+    // FIXME: NtHash takes the return value *before* dropping the given character,
+    // while canonical first drops the character.
+    let (add_remove, tail) = seq.par_iter_bp_delayed_2(k + w - 1, k - 1, l);
 
     let mut nthash = nthash_mapper::<true>(k, w);
     let mut canonical = canonical_mapper(k, w);
-    let mut sliding_min = sliding_lr_min_mapper::<true>(w, add_remove.size_hint().0);
+    let mut sliding_min = sliding_lr_min_mapper(w, add_remove.size_hint().0);
 
     let mut head = add_remove.map(move |(a, rk, rl)| {
         let nthash = nthash((a, rk));
