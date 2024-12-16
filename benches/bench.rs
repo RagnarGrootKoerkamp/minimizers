@@ -340,30 +340,30 @@ fn simd_minimizer(c: &mut Criterion) {
         let owned_packed_seq = PackedSeqVec::random(len);
         let packed_seq = owned_packed_seq.as_slice();
 
-        g.bench_function(BenchmarkId::new("minimizer_scalar_it_vec", len), |b| {
-            let mut vec = Vec::new();
-            b.iter(|| {
-                vec.extend(minimizer_scalar_it::<false>(packed_seq, k, w));
-                black_box(&mut vec).clear();
-            });
-        });
-        g.bench_function(BenchmarkId::new("minimizer_simd_it_vec", len), |b| {
-            let mut vec = Vec::new();
-            b.iter(|| {
-                vec.extend(minimizer_simd_it::<false>(packed_seq, k, w));
-                black_box(&mut vec).clear();
-            });
-        });
-        g.bench_function(
-            BenchmarkId::new("minimizer_simd_it_vec_dedup_it", len),
-            |b| {
-                let mut vec = Vec::new();
-                b.iter(|| {
-                    vec.extend(minimizer_simd_it::<false>(packed_seq, k, w).dedup());
-                    black_box(&mut vec).clear();
-                });
-            },
-        );
+        // g.bench_function(BenchmarkId::new("minimizer_scalar_it_vec", len), |b| {
+        //     let mut vec = Vec::new();
+        //     b.iter(|| {
+        //         vec.extend(minimizer_scalar_it::<false>(packed_seq, k, w));
+        //         black_box(&mut vec).clear();
+        //     });
+        // });
+        // g.bench_function(BenchmarkId::new("minimizer_simd_it_vec", len), |b| {
+        //     let mut vec = Vec::new();
+        //     b.iter(|| {
+        //         vec.extend(minimizer_simd_it::<false>(packed_seq, k, w));
+        //         black_box(&mut vec).clear();
+        //     });
+        // });
+        // g.bench_function(
+        //     BenchmarkId::new("minimizer_simd_it_vec_dedup_it", len),
+        //     |b| {
+        //         let mut vec = Vec::new();
+        //         b.iter(|| {
+        //             vec.extend(minimizer_simd_it::<false>(packed_seq, k, w).dedup());
+        //             black_box(&mut vec).clear();
+        //         });
+        //     },
+        // );
         // g.bench_function(
         //     BenchmarkId::new("minimizer_simd_it_vec_dedup_vec", len),
         //     |b| {

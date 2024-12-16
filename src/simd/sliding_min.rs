@@ -131,6 +131,7 @@ fn simd_min<const LEFT: bool>(a: S, b: S) -> S {
     }
 }
 
+#[allow(unused)]
 #[inline(always)]
 pub fn sliding_min_par_it<const LEFT: bool>(
     it: impl ExactSizeIterator<Item = S>,

@@ -1,8 +1,7 @@
 use std::{
-    array,
-    cell::{LazyCell, RefCell},
+    array::{self, from_fn},
+    cell::RefCell,
     mem::transmute,
-    sync::LazyLock,
 };
 
 use packed_seq::S;

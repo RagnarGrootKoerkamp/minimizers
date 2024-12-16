@@ -11,8 +11,7 @@ use super::{
     dedup,
     nthash::{nthash32_par_it, nthash32_scalar_it, nthash_mapper},
     sliding_min::{
-        sliding_lr_min_mapper, sliding_lr_min_par_it, sliding_min_mapper, sliding_min_par_it,
-        sliding_min_scalar_it,
+        sliding_lr_min_mapper, sliding_lr_min_par_it, sliding_min_mapper, sliding_min_scalar_it,
     },
 };
 use itertools::Itertools;
