@@ -395,10 +395,20 @@ fn simd_minimizer(c: &mut Criterion) {
         g.bench_function(BenchmarkId::new("minimizer_collect_and_dedup", len), |b| {
             let mut vec = Vec::new();
             b.iter(|| {
-                minimizers_collect_and_dedup::<false>(packed_seq, k, w, &mut vec);
+                minimizers_collect_and_dedup::<false, false>(packed_seq, k, w, &mut vec);
                 black_box(&mut vec).clear();
             });
         });
+        g.bench_function(
+            BenchmarkId::new("minimizer_collect_and_dedup_super", len),
+            |b| {
+                let mut vec = Vec::new();
+                b.iter(|| {
+                    minimizers_collect_and_dedup::<false, true>(packed_seq, k, w, &mut vec);
+                    black_box(&mut vec).clear();
+                });
+            },
+        );
         g.bench_function(BenchmarkId::new("minimizer_canonical", len), |b| {
             let mut vec = Vec::new();
             b.iter(|| {
@@ -409,7 +419,7 @@ fn simd_minimizer(c: &mut Criterion) {
         g.bench_function(BenchmarkId::new("minimizer_canonical_dedup", len), |b| {
             let mut vec = Vec::new();
             b.iter(|| {
-                canonical_minimizer_collect_and_dedup(packed_seq, k, w, &mut vec);
+                canonical_minimizer_collect_and_dedup::<false>(packed_seq, k, w, &mut vec);
                 black_box(&mut vec).clear();
             });
         });
@@ -425,7 +435,17 @@ fn simd_minimizer(c: &mut Criterion) {
             |b| {
                 let mut vec = Vec::new();
                 b.iter(|| {
-                    canonical_minimizer_collect_and_dedup_new(packed_seq, k, w, &mut vec);
+                    canonical_minimizer_collect_and_dedup_new::<false>(packed_seq, k, w, &mut vec);
+                    black_box(&mut vec).clear();
+                });
+            },
+        );
+        g.bench_function(
+            BenchmarkId::new("minimizer_canonical_dedup_new_super", len),
+            |b| {
+                let mut vec = Vec::new();
+                b.iter(|| {
+                    canonical_minimizer_collect_and_dedup_new::<true>(packed_seq, k, w, &mut vec);
                     black_box(&mut vec).clear();
                 });
             },

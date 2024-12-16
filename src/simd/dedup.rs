@@ -56,8 +56,22 @@ fn write_unique_with_prev(prev: __m256i, new: __m256i, v: &mut [u32], write_idx:
     }
 }
 
+#[allow(unused)]
 #[inline(always)]
 pub fn write_unique_with_old(old: __m256i, new: __m256i, v: &mut [u32], write_idx: &mut usize) {
+    write_unique_with_old_distinct_vals(old, new, new, v, write_idx);
+}
+
+/// Compare adjacent `new` values (starting with the last element of `old`), and
+/// if an element is different from the preceding element, append the corresponding element of `vals` to `v[write_idx]`.
+#[inline(always)]
+pub fn write_unique_with_old_distinct_vals(
+    old: __m256i,
+    new: __m256i,
+    vals: __m256i,
+    v: &mut [u32],
+    write_idx: &mut usize,
+) {
     unsafe {
         use std::arch::x86_64::*;
 
@@ -68,7 +82,7 @@ pub fn write_unique_with_old(old: __m256i, new: __m256i, v: &mut [u32], write_id
         let m = _mm256_movemask_ps(transmute(_mm256_cmpeq_epi32(vec_tmp, new))) as usize;
         let numberofnewvalues = WIDTH - m.count_ones() as usize;
         let key = UNIQSHUF[m];
-        let val = _mm256_permutevar8x32_epi32(new, key);
+        let val = _mm256_permutevar8x32_epi32(vals, key);
         _mm256_storeu_si256(v.as_mut_ptr().add(*write_idx) as *mut __m256i, val);
         *write_idx += numberofnewvalues;
     }

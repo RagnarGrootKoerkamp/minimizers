@@ -8,7 +8,7 @@ use std::{
 use packed_seq::S;
 use wide::u32x8;
 
-use super::dedup::write_unique_with_old;
+use super::dedup::write_unique_with_old_distinct_vals;
 
 /// Collect a parallel stream into a single vector.
 /// Works by taking 8 elements from each stream, and then transposing the SIMD-matrix before writing out the results.
@@ -62,8 +62,13 @@ thread_local! {
 
 /// Collect a parallel stream into a single vector.
 /// Works by taking 8 elements from each stream, and then transposing the SIMD-matrix before writing out the results.
+///
+/// By default (when `SUPER` is false), the output is simply the 32 bit positions of all distinct minimizers.
+/// When `SUPER` is true, each u32 is a tuple of `(u16,16)` where the low bits are the position of the minimizer,
+/// and the high bits are the index of the stream it first appeared, i.e., the start of its super-k-mer.
+/// These positions are mod 2^16. When the window length is <2^16, this is sufficient to recover full positions.
 #[inline(always)]
-pub fn collect_and_dedup(
+pub fn collect_and_dedup<const SUPER: bool>(
     par_head: impl ExactSizeIterator<Item = S>,
     tail: impl ExactSizeIterator<Item = u32>,
     out_vec: &mut Vec<u32>,
@@ -80,16 +85,37 @@ pub fn collect_and_dedup(
         // Vec of last pushed elements in each lane.
         let mut old = [unsafe { transmute([0; 8]) }; 8];
 
+        let len = par_head.len();
+        let lane_offsets: [u32x8; 8] = from_fn(|i| u32x8::splat(((i * len) << 16) as u32));
+        let offsets: [u32; 8] = from_fn(|i| (i << 16) as u32);
+        let mut offsets: u32x8 = unsafe { transmute(offsets) };
+
         let mut m = [u32x8::ZERO; 8];
         let mut i = 0;
         par_head.for_each(|x| {
             m[i % 8] = x;
             if i % 8 == 7 {
                 let t = transpose(m);
+                offsets += u32x8::splat(8 << 16);
                 for j in 0..8 {
-                    let lane = unsafe { transmute(t[j]) };
-                    write_unique_with_old(old[j], lane, &mut v[j], &mut write_idx[j]);
-                    old[j] = lane;
+                    let lane = t[j];
+                    let vals = if SUPER {
+                        // High 16 bits are the index where the minimizer first becomes minimal.
+                        // Low 16 bits are the position of the minimizer itself.
+                        (offsets + lane_offsets[j]) | (lane & u32x8::splat(0xFFFF))
+                    } else {
+                        lane
+                    };
+                    unsafe {
+                        write_unique_with_old_distinct_vals(
+                            old[j],
+                            transmute(lane),
+                            transmute(vals),
+                            &mut v[j],
+                            &mut write_idx[j],
+                        );
+                        old[j] = transmute(lane);
+                    }
                 }
             }
             i += 1;
