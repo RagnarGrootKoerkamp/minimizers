@@ -128,9 +128,9 @@ impl<'a, const L: usize> NtHashParIt<'a, L> {
             return None;
         }
         let num_kmers = seq.len() - k + 1;
-        if num_kmers % L != 0 {
-            return None;
-        }
+        // if num_kmers % L != 0 {
+        //     return None;
+        // }
         let n = num_kmers / L;
 
         let fh = from_fn(|l| {

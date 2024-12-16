@@ -50,10 +50,10 @@ impl<'a> FxHashPackedSimdIt<'a> {
         if seq.len() > u32::MAX as _ {
             return None;
         }
-        let num_kmers = seq.len() - k + 1;
-        if num_kmers % L != 0 {
-            return None;
-        }
+        let num_kmers = 4 * seq.len() - k + 1;
+        // if num_kmers % L != 0 {
+        //     return None;
+        // }
         let n = num_kmers / L;
 
         Some(Self {
@@ -84,8 +84,8 @@ impl<'a> Iterator for FxHashPackedSimdIt<'a> {
         let i = self.current_idx;
         self.current_idx += 1;
         let read = |i| unsafe {
-            let oi1 = self.offsets.wrapping_add(Simd::splat(i));
-            let oi2 = self.offsets_next.wrapping_add(Simd::splat(i));
+            let oi1 = self.offsets.wrapping_add(Simd::splat(i / 4));
+            let oi2 = self.offsets_next.wrapping_add(Simd::splat(i / 4));
             let chars_i1: Simd<u32, 8> = transmute(Simd::<u64, 4>::gather_ptr(transmute(oi1)));
             let chars_i2: Simd<u32, 8> = transmute(Simd::<u64, 4>::gather_ptr(transmute(oi2)));
             chars_i1.deinterleave(chars_i2)

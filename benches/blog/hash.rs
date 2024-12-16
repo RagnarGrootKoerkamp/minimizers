@@ -131,6 +131,33 @@ where
     type Out = H::Out;
 
     fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = [H::Out; L]> {
+        let num_kmers = t.len() - k + 1;
+        let n = num_kmers / L;
+
+        let mut v = vec![[Self::Out::default(); L]; n];
+        let mut it = self.hasher.hash_kmers(k, t);
+        for i in 0..n {
+            let hs = it.next().unwrap();
+            for j in 0..L {
+                unsafe { v.get_unchecked_mut(i)[j] = hs[j] };
+            }
+        }
+        v.into_iter()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PackedBufferPar<const L: usize, H: ParHasher<L>> {
+    pub hasher: H,
+}
+
+impl<const L: usize, H: ParHasher<L>> ParHasher<L> for PackedBufferPar<L, H>
+where
+    H::Out: Default + Clone + Copy,
+{
+    type Out = H::Out;
+
+    fn hash_kmers(&mut self, k: usize, t: &[u8]) -> impl Iterator<Item = [H::Out; L]> {
         let num_kmers = 4 * t.len() - k + 1;
         let n = num_kmers / L;
 
