@@ -384,7 +384,7 @@ fn simd_minimizer(c: &mut Criterion) {
                 black_box(&mut vec).clear();
             });
         });
-        g.bench_function(BenchmarkId::new("minimizer_par_it_vec_sum", len), |b| {
+        g.bench_function(BenchmarkId::new("minimizer_par_it_sum", len), |b| {
             b.iter(|| black_box(minimizer_par_it::<false>(packed_seq, k, w).0.sum::<S>()));
         });
         g.bench_function(BenchmarkId::new("minimizer_collect", len), |b| {
@@ -400,6 +400,7 @@ fn simd_minimizer(c: &mut Criterion) {
                 black_box(&mut vec).clear();
             });
         });
+
         g.bench_function(
             BenchmarkId::new("minimizer_collect_and_dedup_super", len),
             |b| {
@@ -410,6 +411,18 @@ fn simd_minimizer(c: &mut Criterion) {
                 });
             },
         );
+
+        g.bench_function(
+            BenchmarkId::new("minimizer_collect_and_dedup_super_rc", len),
+            |b| {
+                let mut vec = Vec::new();
+                b.iter(|| {
+                    minimizers_collect_and_dedup::<true, true>(packed_seq, k, w, &mut vec);
+                    black_box(&mut vec).clear();
+                });
+            },
+        );
+
         g.bench_function(BenchmarkId::new("minimizer_canonical", len), |b| {
             let mut vec = Vec::new();
             b.iter(|| {
