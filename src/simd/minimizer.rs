@@ -83,11 +83,14 @@ pub fn minimizer_par_it<'s, const RC: bool>(
     let (add_remove, tail) = seq.par_iter_bp_delayed(k + w - 1, k - 1);
 
     let mut nthash = nthash_mapper::<RC>(k, w);
+    // let mut alex = alex::alex_mapper(k, w);
     let mut sliding_min = sliding_min_mapper::<true>(w, add_remove.size_hint().0);
 
     let mut head = add_remove.map(move |(a, rk)| {
         let nthash = nthash((a, rk));
         sliding_min(nthash)
+        // let alex = alex(a);
+        // sliding_min(alex)
     });
 
     head.by_ref().take(l - 1).for_each(drop);
@@ -206,8 +209,8 @@ pub fn canonical_minimizer_par_it_new<'s>(
 
     let mut head = add_remove.map(move |(a, rk, rl)| {
         let nthash = nthash((a, rk));
-        let (lmin, rmin) = sliding_min(nthash);
         let canonical = canonical((a, rl));
+        let (lmin, rmin) = sliding_min(nthash);
         unsafe { std::mem::transmute::<_, S>(canonical).blend(lmin, rmin) }
     });
 

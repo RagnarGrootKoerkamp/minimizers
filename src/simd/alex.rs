@@ -76,6 +76,22 @@ pub fn alex_par_it<'s>(
     (it, tail)
 }
 
+/// NOTE: First k-1 values are bogus.
+pub fn alex_mapper(k: usize, w: usize) -> impl FnMut(S) -> S + Clone {
+    assert!(k > 0);
+    assert!(w > 0);
+
+    let mask = S::splat(if k < 16 { (1 << (2 * k)) - 1 } else { u32::MAX });
+    let anti = S::splat(if k <= 16 { 3 << (2 * k - 2) } else { 3 << 30 });
+
+    let mut h_fw = S::splat(0);
+
+    move |a| {
+        h_fw = ((h_fw << 2) ^ a) & mask;
+        h_fw ^ anti
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
