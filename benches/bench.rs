@@ -493,17 +493,29 @@ fn human_genome(c: &mut Criterion) {
         packed_text
     });
 
-    let mut hasher = NtHashSimd::<true>;
     c.bench_function("human_genome", |b| {
-        let raw_packed_text = &(*packed_text).seq;
+        if packed_text.len() == 0 {
+            return Default::default();
+        }
+        let mut vec = Vec::new();
         b.iter(|| {
-            if raw_packed_text.is_empty() {
-                return Default::default();
-            }
-            SplitSimd
-                .sliding_min(w, hasher.hash_kmers(k, &raw_packed_text))
-                .map(|x| Simd::<u32, 8>::from(x))
-                .sum::<Simd<u32, 8>>()
+            minimizers_collect_and_dedup::<false, true>(packed_text.as_slice(), k, w, &mut vec);
+            black_box(&mut vec).clear();
+        });
+    });
+    c.bench_function("human_genome_rc", |b| {
+        if packed_text.len() == 0 {
+            return Default::default();
+        }
+        let mut vec = Vec::new();
+        b.iter(|| {
+            canonical_minimizer_collect_and_dedup_new::<true>(
+                packed_text.as_slice(),
+                k,
+                w,
+                &mut vec,
+            );
+            black_box(&mut vec).clear();
         });
     });
 }
