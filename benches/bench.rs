@@ -380,23 +380,23 @@ fn simd_minimizer(c: &mut Criterion) {
         g.bench_function(BenchmarkId::new("minimizer_par_it_vec", len), |b| {
             let mut vec = Vec::new();
             b.iter(|| {
-                vec.extend(minimizer_par_it::<false>(packed_seq, k, w).0);
+                vec.extend(minimizer_par_it(packed_seq, k, w).0);
                 black_box(&mut vec).clear();
             });
         });
         g.bench_function(BenchmarkId::new("minimizer_par_it_sum", len), |b| {
-            b.iter(|| black_box(minimizer_par_it::<false>(packed_seq, k, w).0.sum::<S>()));
+            b.iter(|| black_box(minimizer_par_it(packed_seq, k, w).0.sum::<S>()));
         });
         g.bench_function(BenchmarkId::new("minimizer_collect", len), |b| {
-            b.iter(|| black_box(minimizers_collect::<false>(packed_seq, k, w)));
+            b.iter(|| black_box(minimizers_collect(packed_seq, k, w)));
         });
         g.bench_function(BenchmarkId::new("minimizer_dedup", len), |b| {
-            b.iter(|| minimizers_dedup::<false>(packed_seq, k, w));
+            b.iter(|| minimizers_dedup(packed_seq, k, w));
         });
         g.bench_function(BenchmarkId::new("minimizer_collect_and_dedup", len), |b| {
             let mut vec = Vec::new();
             b.iter(|| {
-                minimizers_collect_and_dedup::<false, false>(packed_seq, k, w, &mut vec);
+                minimizers_collect_and_dedup::<false>(packed_seq, k, w, &mut vec);
                 black_box(&mut vec).clear();
             });
         });
@@ -406,18 +406,7 @@ fn simd_minimizer(c: &mut Criterion) {
             |b| {
                 let mut vec = Vec::new();
                 b.iter(|| {
-                    minimizers_collect_and_dedup::<false, true>(packed_seq, k, w, &mut vec);
-                    black_box(&mut vec).clear();
-                });
-            },
-        );
-
-        g.bench_function(
-            BenchmarkId::new("minimizer_collect_and_dedup_super_rc", len),
-            |b| {
-                let mut vec = Vec::new();
-                b.iter(|| {
-                    minimizers_collect_and_dedup::<true, true>(packed_seq, k, w, &mut vec);
+                    minimizers_collect_and_dedup::<true>(packed_seq, k, w, &mut vec);
                     black_box(&mut vec).clear();
                 });
             },
@@ -499,7 +488,7 @@ fn human_genome(c: &mut Criterion) {
         }
         let mut vec = Vec::new();
         b.iter(|| {
-            minimizers_collect_and_dedup::<false, true>(packed_text.as_slice(), k, w, &mut vec);
+            minimizers_collect_and_dedup::<true>(packed_text.as_slice(), k, w, &mut vec);
             black_box(&mut vec).clear();
         });
     });

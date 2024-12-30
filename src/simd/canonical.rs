@@ -16,7 +16,7 @@ pub fn canonical_scalar_it<'s>(
     let l = k + w - 1;
     assert!(
         l % 2 == 1,
-        "Window length must be odd to guarantee canonicality"
+        "Window length {l}={k}+{w}-1 must be odd to guarantee canonicality"
     );
 
     let mut add = seq.iter_bp();
@@ -53,7 +53,7 @@ pub fn canonical_par_it<'s>(
     let l = k + w - 1;
     assert!(
         l % 2 == 1,
-        "Window length must be odd to guarantee canonicality"
+        "Window length {l}={k}+{w}-1 must be odd to guarantee canonicality"
     );
 
     let (add_remove, tail) = seq.par_iter_bp_delayed(k + w - 1, l - 1);
@@ -71,7 +71,7 @@ pub fn canonical_mapper(k: usize, w: usize) -> impl FnMut((S, S)) -> i32x8 {
     let l = k + w - 1;
     assert!(
         l % 2 == 1,
-        "Window length must be odd to guarantee canonicality"
+        "Window length {l}={k}+{w}-1 must be odd to guarantee canonicality"
     );
 
     // Cnt of odd characters, offset by -l/2 so >0 is canonical and <0 is not.

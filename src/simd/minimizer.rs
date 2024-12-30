@@ -18,9 +18,8 @@ use itertools::Itertools;
 use packed_seq::{Seq, S};
 
 /// Returns the minimizer of a window using a naive linear scan.
-/// Uses NT hash with canonical hashes when `RC` is true.
-pub fn minimizer_window_naive<'s, const RC: bool>(seq: impl Seq<'s>, k: usize) -> usize {
-    nthash32_scalar_it::<RC>(seq, k)
+pub fn minimizer_window_naive<'s>(seq: impl Seq<'s>, k: usize) -> usize {
+    nthash32_scalar_it::<false>(seq, k)
         .map(|x| x & 0xffff_0000)
         .position_min()
         .unwrap()
@@ -31,12 +30,12 @@ pub fn minimizer_window_naive<'s, const RC: bool>(seq: impl Seq<'s>, k: usize) -
 /// `Itertools::dedup()` to obtain the distinct positions of the minimizers.
 ///
 /// Prefer `minimizer_simd_it` that internally used SIMD, or `minimizer_par_it` if it works for you.
-pub fn minimizer_scalar_it<'s, const RC: bool>(
+pub fn minimizer_scalar_it<'s>(
     seq: impl Seq<'s>,
     k: usize,
     w: usize,
 ) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
-    let it = nthash32_scalar_it::<RC>(seq, k);
+    let it = nthash32_scalar_it::<false>(seq, k);
     sliding_min_scalar_it::<true>(it, w)
 }
 
@@ -52,19 +51,19 @@ pub fn minimizer_scalar_it<'s, const RC: bool>(
 /// NOTE: This method is ~4x slower than the minimizer computation itself, and
 ///       only ~2x faster than the scalar version. Mostly because shuffling memory is slow.
 /// TODO: Fix this.
-pub fn minimizer_simd_it<'s, const RC: bool>(
+pub fn minimizer_simd_it<'s>(
     seq: impl Seq<'s>,
     k: usize,
     w: usize,
 ) -> impl ExactSizeIterator<Item = u32> + Captures<&'s ()> {
-    linearize::linearize_with_offset(seq, k + w - 1, move |seq| minimizer_par_it::<RC>(seq, k, w))
+    linearize::linearize_with_offset(seq, k + w - 1, move |seq| minimizer_par_it(seq, k, w))
 }
 
 /// Split the windows of the sequence into 8 chunks of equal length ~len/8.
 /// Then return the positions of the minimizers of each of them in parallel using SIMD,
 /// and return the remaining few using the second iterator.
 // TODO: Take a hash function as argument.
-pub fn minimizer_par_it<'s, const RC: bool>(
+pub fn minimizer_par_it<'s>(
     seq: impl Seq<'s>,
     k: usize,
     w: usize,
@@ -72,17 +71,11 @@ pub fn minimizer_par_it<'s, const RC: bool>(
     impl ExactSizeIterator<Item = S> + Captures<&'s ()>,
     impl ExactSizeIterator<Item = u32> + Captures<&'s ()>,
 ) {
-    // let (par_head, tail) = nthash32_par_it::<RC>(seq, k, w);
-    // let par_head = sliding_min_par_it::<true>(par_head, w);
-    // let offset = 8 * par_head.size_hint().0 as u32;
-    // let tail = sliding_min_scalar_it::<true>(tail, w).map(move |pos| offset + pos);
-    // (par_head, tail)
-
     let l = k + w - 1;
 
     let (add_remove, tail) = seq.par_iter_bp_delayed(k + w - 1, k - 1);
 
-    let mut nthash = nthash_mapper::<RC>(k, w);
+    let mut nthash = nthash_mapper::<false>(k, w);
     // let mut alex = alex::alex_mapper(k, w);
     let mut sliding_min = sliding_min_mapper::<true>(w, add_remove.size_hint().0);
 
@@ -95,31 +88,31 @@ pub fn minimizer_par_it<'s, const RC: bool>(
 
     head.by_ref().take(l - 1).for_each(drop);
 
-    let tail = canonical_minimizer_scalar_it(tail, k, w);
+    let tail = minimizer_scalar_it(tail, k, w);
     (head, tail)
 }
 
-pub fn minimizers_collect<'s, const RC: bool>(seq: impl Seq<'s>, k: usize, w: usize) -> Vec<u32> {
-    let (par_head, tail) = minimizer_par_it::<RC>(seq, k, w);
+pub fn minimizers_collect<'s>(seq: impl Seq<'s>, k: usize, w: usize) -> Vec<u32> {
+    let (par_head, tail) = minimizer_par_it(seq, k, w);
     collect(par_head, tail)
 }
 
 /// Prefer `minimizers_collect_and_dedup`
 #[doc(hidden)]
-pub fn minimizers_dedup<'s, const RC: bool>(seq: impl Seq<'s>, k: usize, w: usize) -> Vec<u32> {
-    let (par_head, tail) = minimizer_par_it::<RC>(seq, k, w);
+pub fn minimizers_dedup<'s>(seq: impl Seq<'s>, k: usize, w: usize) -> Vec<u32> {
+    let (par_head, tail) = minimizer_par_it(seq, k, w);
     let mut positions = collect(par_head, tail);
     dedup(&mut positions);
     positions
 }
 
-pub fn minimizers_collect_and_dedup<'s, const RC: bool, const SUPER: bool>(
+pub fn minimizers_collect_and_dedup<'s, const SUPER: bool>(
     seq: impl Seq<'s>,
     k: usize,
     w: usize,
     out_vec: &mut Vec<u32>,
 ) {
-    let (par_head, tail) = minimizer_par_it::<RC>(seq, k, w);
+    let (par_head, tail) = minimizer_par_it(seq, k, w);
     collect_and_dedup::<SUPER>(par_head, tail, out_vec);
 }
 
@@ -261,10 +254,10 @@ mod test {
                         .windows(w + k - 1)
                         .enumerate()
                         .map(|(pos, seq)| {
-                            (pos + minimizer_window_naive::<false>(AsciiSeq::new(seq, k), k)) as u32
+                            (pos + minimizer_window_naive(AsciiSeq::new(seq, k), k)) as u32
                         })
                         .collect::<Vec<_>>();
-                    let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
+                    let scalar = minimizer_scalar_it(seq, k, w).collect::<Vec<_>>();
                     assert_eq!(single, scalar, "k={k}, w={w}, len={len}");
                 }
             }
@@ -278,8 +271,8 @@ mod test {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128)) {
                     let seq = seq.slice(0..len);
-                    let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
-                    let (par_head, tail) = minimizer_par_it::<false>(seq, k, w);
+                    let scalar = minimizer_scalar_it(seq, k, w).collect::<Vec<_>>();
+                    let (par_head, tail) = minimizer_par_it(seq, k, w);
                     let par_head = par_head.collect::<Vec<_>>();
                     let parallel_iter = (0..8)
                         .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
@@ -299,8 +292,8 @@ mod test {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128)) {
                     let seq = seq.slice(0..len);
-                    let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
-                    let (par_head, tail) = minimizer_par_it::<false>(seq, k, w);
+                    let scalar = minimizer_scalar_it(seq, k, w).collect::<Vec<_>>();
+                    let (par_head, tail) = minimizer_par_it(seq, k, w);
                     let par_head = par_head.collect::<Vec<_>>();
                     let parallel_iter = (0..8)
                         .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
@@ -319,8 +312,8 @@ mod test {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
                 for len in (0..100).chain(once(1024 * 128 + 765)) {
                     let seq = seq.slice(0..len);
-                    let scalar = minimizer_scalar_it::<false>(seq, k, w).collect::<Vec<_>>();
-                    let simd = minimizer_simd_it::<false>(seq, k, w).collect::<Vec<_>>();
+                    let scalar = minimizer_scalar_it(seq, k, w).collect::<Vec<_>>();
+                    let simd = minimizer_simd_it(seq, k, w).collect::<Vec<_>>();
                     assert_eq!(
                         scalar,
                         simd,
