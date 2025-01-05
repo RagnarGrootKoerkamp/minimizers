@@ -138,9 +138,15 @@ pub fn nthash_mapper<const RC: bool>(k: usize, w: usize) -> impl FnMut((S, S)) -
         .map(|c| HASHES_C[c as usize].rotate_left(k as u32 - 1))
         .into();
 
-    // FIXME: h_fw should be initialized to the hash of shifting out k-1 zeros.
-    let mut h_fw = S::splat(0);
-    let mut h_rc = S::splat(0);
+    let mut fw = 0u32;
+    let mut rc = 0u32;
+    for _ in 0..k - 1 {
+        fw = fw.rotate_left(1) ^ HASHES_F[0];
+        rc = rc.rotate_right(1) ^ HASHES_C[0].rotate_left(k as u32 - 1);
+    }
+
+    let mut h_fw = S::splat(fw);
+    let mut h_rc = S::splat(rc);
 
     move |(a, r)| {
         let hfw_out = ((h_fw << 1) | (h_fw >> 31)) ^ intrinsics::table_lookup(table_fw, a);
