@@ -136,15 +136,16 @@ fn simd_min<const LEFT: bool>(a: S, b: S) -> S {
 pub fn sliding_min_par_it<const LEFT: bool>(
     it: impl ExactSizeIterator<Item = S>,
     w: usize,
+    k: usize,
 ) -> impl ExactSizeIterator<Item = S> {
     let len = it.size_hint().0;
-    let mut it = it.map(sliding_min_mapper::<LEFT>(w, len));
+    let mut it = it.map(sliding_min_mapper::<LEFT>(w, k, len));
     // This optimizes better than it.skip(w-1).
     it.by_ref().take(w - 1).for_each(drop);
     it
 }
 
-pub fn sliding_min_mapper<const LEFT: bool>(w: usize, len: usize) -> impl FnMut(S) -> S {
+pub fn sliding_min_mapper<const LEFT: bool>(w: usize, k: usize, len: usize) -> impl FnMut(S) -> S {
     assert!(w > 0);
     assert!(w < (1 << 15), "This method is not tested for large w.");
     assert!(len * 8 < (1 << 32));
@@ -156,7 +157,13 @@ pub fn sliding_min_mapper<const LEFT: bool>(w: usize, len: usize) -> impl FnMut(
     let pos_mask = S::splat(0x0000_ffff);
     let max_pos = S::splat((1 << 16) - 1);
     let mut pos = S::splat(0);
-    let mut pos_offset: S = from_fn(|l| (l * (len.saturating_sub(w - 1))) as u32).into();
+    // Sliding min is over w+k-1 characters, so chunks overlap w+k-2.
+    // Thus, the true length of each lane is len-(k+w-2).
+    //
+    // The k-mer starting at position 0 is done after processing the char at
+    // position k-1, so we compensate for that as well.
+    let mut pos_offset: S =
+        from_fn(|l| (l * len.saturating_sub(k + w - 2)).wrapping_sub(k - 1) as u32).into();
 
     #[inline(always)]
     move |val| {

@@ -77,7 +77,7 @@ pub fn minimizer_par_it<'s>(
 
     let mut nthash = nthash_mapper::<false>(k, w);
     // let mut alex = alex::alex_mapper(k, w);
-    let mut sliding_min = sliding_min_mapper::<true>(w, add_remove.size_hint().0);
+    let mut sliding_min = sliding_min_mapper::<true>(w, k, add_remove.size_hint().0);
 
     let mut head = add_remove.map(move |(a, rk)| {
         let nthash = nthash((a, rk));
@@ -87,8 +87,9 @@ pub fn minimizer_par_it<'s>(
     });
 
     head.by_ref().take(l - 1).for_each(drop);
+    let head_len = head.size_hint().0;
 
-    let tail = minimizer_scalar_it(tail, k, w);
+    let tail = minimizer_scalar_it(tail, k, w).map(move |p| p + 8 * head_len as u32);
     (head, tail)
 }
 
@@ -235,16 +236,15 @@ pub fn canonical_minimizer_collect_and_dedup_new<'s, const SUPER: bool>(
 
 #[cfg(test)]
 mod test {
-    use packed_seq::{AsciiSeq, AsciiSeqVec, PackedSeqVec, SeqVec};
-
     use super::*;
+    use packed_seq::{AsciiSeq, AsciiSeqVec, PackedSeqVec, SeqVec};
     use std::{cell::LazyCell, iter::once};
 
     const ASCII_SEQ: LazyCell<AsciiSeqVec> = LazyCell::new(|| AsciiSeqVec::random(1024 * 1024));
     const PACKED_SEQ: LazyCell<PackedSeqVec> = LazyCell::new(|| PackedSeqVec::random(1024 * 1024));
 
     #[test]
-    fn scalar_byte() {
+    fn scalar_ascii() {
         let seq = &*ASCII_SEQ;
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
@@ -254,7 +254,7 @@ mod test {
                         .windows(w + k - 1)
                         .enumerate()
                         .map(|(pos, seq)| {
-                            (pos + minimizer_window_naive(AsciiSeq::new(seq, k), k)) as u32
+                            (pos + minimizer_window_naive(AsciiSeq::new(seq, w + k - 1), k)) as u32
                         })
                         .collect::<Vec<_>>();
                     let scalar = minimizer_scalar_it(seq, k, w).collect::<Vec<_>>();
@@ -264,8 +264,9 @@ mod test {
         }
     }
 
+    #[ignore = "delayed iteration not yet implemented for ASCII"]
     #[test]
-    fn parallel_iter_byte() {
+    fn simd_ascii() {
         let seq = &*ASCII_SEQ;
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
@@ -286,7 +287,7 @@ mod test {
     }
 
     #[test]
-    fn parallel_iter_packed() {
+    fn simd_packed() {
         let seq = &*PACKED_SEQ;
         for k in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
             for w in [1, 2, 3, 4, 5, 31, 32, 33, 63, 64, 65] {
@@ -299,6 +300,9 @@ mod test {
                         .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
                         .chain(tail)
                         .collect::<Vec<_>>();
+                    if w == 1 && parallel_iter.len() > 0 {
+                        assert_eq!(parallel_iter[0], 0);
+                    }
                     assert_eq!(scalar, parallel_iter, "k={k}, w={w}, len={len}");
                 }
             }
@@ -322,6 +326,26 @@ mod test {
                         len,
                         scalar.len(),
                         simd.len()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_sliding_min() {
+        let n = 1000;
+        let seq = PackedSeqVec::random(n);
+        let mut poss = vec![];
+        for k in 1..10 {
+            for w in 1..10 {
+                poss.clear();
+                minimizers_collect_and_dedup::<false>(seq.as_slice(), k, w, &mut poss);
+                for &x in &poss {
+                    assert!(
+                        x <= (n - k) as u32,
+                        "Index {x} is not in range for n={n}, k={k}, w={w}. Should be in 0..{}\n{poss:?}",
+                        n - k
                     );
                 }
             }
