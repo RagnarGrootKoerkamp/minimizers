@@ -23,7 +23,8 @@ const HASHES_F: [u32; 4] = [
     0x2955_49f5_4be2_4456u64 as u32,
 ];
 const fn cmpl(base: u32) -> u32 {
-    base ^ 0x2
+    assert!(base < 4);
+    base ^ 2
 }
 /// Complement hashes.
 const HASHES_C: [u32; 4] = [
@@ -262,7 +263,7 @@ mod test {
             seq.seq
                 .iter()
                 .rev()
-                .map(|c| cmpl(*c as u32) as u8)
+                .map(|c| packed_seq::complement_char(*c))
                 .collect_vec(),
         );
         for k in [
