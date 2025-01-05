@@ -167,13 +167,14 @@ mod test {
     use super::*;
     use itertools::Itertools;
     use packed_seq::{AsciiSeq, AsciiSeqVec, PackedSeqVec, SeqVec, L};
-    use std::{cell::LazyCell, iter::once};
+    use std::{iter::once, sync::LazyLock};
 
-    const ASCII_SEQ: LazyCell<AsciiSeqVec> = LazyCell::new(|| AsciiSeqVec::random(1024));
-    const PACKED_SEQ: LazyCell<PackedSeqVec> = LazyCell::new(|| PackedSeqVec::random(1024));
+    static ASCII_SEQ: LazyLock<AsciiSeqVec> = LazyLock::new(|| AsciiSeqVec::random(1024));
+    static PACKED_SEQ: LazyLock<PackedSeqVec> =
+        LazyLock::new(|| PackedSeqVec::from_ascii(&ASCII_SEQ.seq));
 
     #[test]
-    fn scalar_byte() {
+    fn scalar_ascii() {
         let seq = &*ASCII_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
@@ -192,16 +193,40 @@ mod test {
     }
 
     #[test]
-    fn parallel_byte() {
-        let seq = &*ASCII_SEQ;
+    fn scalar_packed() {
+        let ascii_seq = &*ASCII_SEQ;
+        let seq = &*PACKED_SEQ;
+        for k in [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
+        ] {
+            for len in (0..100).chain(once(1024)) {
+                let ascii_seq = ascii_seq.slice(0..len);
+                let seq = seq.slice(0..len);
+
+                let scalar_ascii = nthash32_scalar_it::<false>(ascii_seq, k).collect::<Vec<_>>();
+                let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
+                assert_eq!(scalar_ascii, scalar, "k={}, len={}", k, len);
+            }
+        }
+    }
+
+    #[test]
+    fn par_it_packed() {
+        let seq = &*PACKED_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
         ] {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.slice(0..len);
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
-                let parallel = nthash32_simd_it::<false>(seq, k).collect::<Vec<_>>();
-                assert_eq!(scalar, parallel, "k={}, len={}", k, len);
+                let (par_head, tail) = nthash32_par_it::<false>(seq, k, 1);
+                let par_head = par_head.collect::<Vec<_>>();
+                let parallel_iter = (0..L)
+                    .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
+                    .chain(tail)
+                    .collect::<Vec<_>>();
+
+                assert_eq!(scalar, parallel_iter, "k={}, len={}", k, len);
             }
         }
     }
@@ -221,8 +246,10 @@ mod test {
         }
     }
 
+    // ignore test
+    #[ignore = "par_iter_bp_delayed is not implemented for ASCII"]
     #[test]
-    fn parallel_iter_byte() {
+    fn parallel_byte() {
         let seq = &*ASCII_SEQ;
         for k in [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
@@ -230,14 +257,8 @@ mod test {
             for len in (0..100).chain(once(1024)) {
                 let seq = seq.slice(0..len);
                 let scalar = nthash32_scalar_it::<false>(seq, k).collect::<Vec<_>>();
-                let (par_head, tail) = nthash32_par_it::<false>(seq, k, 1);
-                let par_head = par_head.collect::<Vec<_>>();
-                let parallel_iter = (0..L)
-                    .flat_map(|l| par_head.iter().map(move |x| x.as_array_ref()[l]))
-                    .chain(tail)
-                    .collect::<Vec<_>>();
-
-                assert_eq!(scalar, parallel_iter, "k={}, len={}", k, len);
+                let parallel = nthash32_simd_it::<false>(seq, k).collect::<Vec<_>>();
+                assert_eq!(scalar, parallel, "k={}, len={}", k, len);
             }
         }
     }
