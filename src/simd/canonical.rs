@@ -76,13 +76,13 @@ pub fn canonical_mapper(k: usize, w: usize) -> impl FnMut((S, S)) -> i32x8 {
 
     // Cnt of odd characters, offset by -l/2 so >0 is canonical and <0 is not.
     // TODO: Verify that the delayed removed characters are indeed 0.
-    let mut cnt = i32x8::splat(-(l as i32) / 2);
-    let one = i32x8::splat(1);
+    let mut cnt = i32x8::splat(-(l as i32));
+    let two = i32x8::splat(2);
 
     #[inline(always)]
     move |(a, r)| {
-        cnt += unsafe { transmute::<_, i32x8>(a) } & one;
-        cnt -= unsafe { transmute::<_, i32x8>(r) } & one;
+        cnt += unsafe { transmute::<_, i32x8>(a) } & two;
+        cnt -= unsafe { transmute::<_, i32x8>(r) } & two;
         cnt.cmp_gt(i32x8::splat(0))
     }
 }
