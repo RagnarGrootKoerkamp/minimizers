@@ -82,7 +82,7 @@ pub fn collect_and_dedup<const SUPER: bool>(
 
         let mut write_idx = [0; 8];
         // Vec of last pushed elements in each lane.
-        let mut old = [unsafe { transmute([0; 8]) }; 8];
+        let mut old = [unsafe { transmute([u32::MAX; 8]) }; 8];
 
         let len = par_head.len();
         let lane_offsets: [u32x8; 8] = from_fn(|i| u32x8::splat(((i * len) << 16) as u32));
@@ -138,6 +138,10 @@ pub fn collect_and_dedup<const SUPER: bool>(
 
         // Flatten v.
         for lane in v.iter() {
+            let mut lane = lane.as_slice();
+            while Some(lane[0]) == out_vec.last().copied() {
+                lane = &lane[1..];
+            }
             out_vec.extend_from_slice(lane);
         }
 
