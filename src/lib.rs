@@ -5,10 +5,10 @@
 pub mod de_bruijn_seq;
 pub mod monotone_queue;
 pub mod order;
+pub mod schemes;
+
 #[cfg(feature = "python-bindings")]
 mod py;
-pub mod schemes;
-pub mod simd;
 
 use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;

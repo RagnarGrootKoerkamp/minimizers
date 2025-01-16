@@ -54,7 +54,3 @@ crate-type = ["cdylib", "rlib"]
 
 [[example]]
 name = "lp"
-
-[[bench]]
-name = "bench"
-harness = false
