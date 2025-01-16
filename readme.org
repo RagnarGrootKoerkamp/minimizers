@@ -5,11 +5,10 @@ This repository hosts a number of different projects related to minimizers.
    - See also [[https://curiouscoding.nl/posts/minimizers/][this blogpost]].
    - These are also used for the lower bound [[https://doi.org/10.1101/2024.09.06.611668][paper]] with Bryce Kille:
    - Python bindings available in [[file:src/py.rs][src/py.rs]].
-2. A fast implementation of random minimizers in [[file:src/par/][src/par/]], corresponding to [[https://curiouscoding.nl/posts/fast-minimizers/][this post]].
-   - Computes the minimizers of a human genome in around two seconds.
-   - Code for the blogpost and corresponding benchmarks are in [[file:benches/blog/][benches/blog]] and [[file:benches/bench.rs][benches/bench.rs]].
-3. Ongoing research on new sampling schemes.
+2. Ongoing research on new sampling schemes.
    - Plots and experiments are in [[file:py/plot.ipynb][py/plot.ipynb]].
+
+The SIMD-based random-minimizers implementation corresponding to [[https://curiouscoding.nl/posts/fast-minimizers/][this post]] has moved to [[https://github.com/rust-seq/simd-minimizers]].
 
 * Implemented minimizer schemes
 
