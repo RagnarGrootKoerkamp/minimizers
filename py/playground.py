@@ -243,7 +243,7 @@ def findl(text, pat):
     return -1
 
 
-def sus(window, p=False):
+def sus2(window, p=False):
     w = len(window)
     best = (1, True, True, True, True, [9], -1)
     first1 = window.index(1) if 1 in window else 0
@@ -254,6 +254,8 @@ def sus(window, p=False):
 
     for i in range(first1, len(window)):
         subs = list(window[i:])
+        # for j in range(len(subs) - 1, 0, -1):
+        #     subs[j] ^= subs[j - 1]
         idx = first1 + findl(window[first1:], subs)
         uniq = idx < first1 or idx == i
 
@@ -306,8 +308,6 @@ def sus(window, p=False):
             fmt(window),
             f"{best[-1]:>2}",
             f"{fmt(best[-2][:-1]):{w}}",
-            "\t",
-            best[0:3],
         )
     assert best[-1] != -1
     return best[-1]
@@ -372,24 +372,29 @@ def ladder(window, p=False):
         else:
             break
 
+    mode = "MIN"
     # Only decreasing: return first 0
-    # if suffix == 0:
-    #     x = poss[prefix]
-    #     if p:
-    #         print(fmt(window), f"{x:>2}", "DEC", rs, f"({leading_ones})", runs, poss)
-    #     return x
+    if suffix == 0:
+        mode = "DEC"
+    if suffix == 0 and False:
+        x = poss[prefix - 1]
+        if p:
+            print(fmt(window), f"{x:>2}", mode, rs, f"({leading_ones})", runs, poss)
+        return x
 
     # assert suffix != prefix, "HUH??"
 
     # Increasing, then decreasing, without local minimum: return leftmost 0
+    if suffix < prefix:
+        mode = "TOP"
     if suffix < prefix and False:
-        x = poss[prefix]
+        x = poss[prefix - 1]
         # x = poss[0]
         if p:
             print(
                 fmt(window),
                 f"{x:>2}",
-                "TOP",
+                mode,
                 rs,
                 f"({leading_ones})",
                 runs,
@@ -422,14 +427,321 @@ def ladder(window, p=False):
         print(
             fmt(window),
             f"{x:>2}",
-            "MIN",
+            mode,
             rs,
             f"({leading_ones})",
             runs,
             poss,
             "UNSTABLE" if unstable else "",
         )
+    # TODO:
+    # Given some suffix S=00..1..,
+    # say the length p prefix makes it unique.
+    # Then no suffix (extended with zeros) of it may be less or equal than S[:p].
+
     return x
+
+
+def lcp(a, b):
+    i = 0
+    while i < len(a) and i < len(b) and a[i] == b[i]:
+        i += 1
+    return i
+
+
+# Position of smallest unique substring
+def sus(window, p=False):
+    w = len(window)
+    best = ([999], -1)
+    uniq_len = 0
+    for i in range(w):
+        s = window[i:] + [999]
+        u = lcp(s, best[0]) + 1
+        if s < best[0]:
+            best = (s, i)
+            uniq_len = u
+        else:
+            uniq_len = max(uniq_len, u)
+    return (best[1], uniq_len)
+
+
+# Find SUS of window+0+window+0.
+# Then return that if it's inside window.
+# Otherwise find SUS of the complement.
+def rot_sus(window, p=False):
+    if 1 not in window:
+        return 0
+
+    # Find SUS in window+0+window
+    w = len(window)
+    ww = window + [0] + window + [0]
+
+    best = ([999], -1)
+    uniq_len = 0
+    for i in range(w + 1):
+        s = ww[i : i + w + 1]
+        l = lcp(s, best[0])
+        if s < best[0]:
+            best = (s, i)
+            uniq_len = l + 1
+        else:
+            uniq_len = max(uniq_len, l + 1)
+    start = best[1]
+    end = start + uniq_len
+    if end <= w:
+        if p:
+            print(
+                fmt(window),
+                f"{start:>2}",
+                f"{uniq_len:>2}",
+                "A",
+                fmt(best[0][:uniq_len]),
+            )
+        return start
+
+    # Plain sus is the same? Return it also.
+    (s2, u2) = sus(window, p)
+    if start == s2:
+        if p:
+            print(
+                fmt(window),
+                f"{start:>2}",
+                f"{uniq_len:>2}",
+                "B",
+                fmt(best[0][:uniq_len]),
+            )
+        return start
+
+    if p:
+        print(
+            fmt(window),
+            f"{start:>2}",
+            f"{uniq_len:>2}",
+            "_",
+            fmt(best[0][:uniq_len]),
+            "i range",
+            end,
+            start + w + 1,
+        )
+
+    # SUS overlaps the appended 0.
+    # Find the next-best SUS in the complement.
+    best = ([999], -1)
+    for i in range(0, start):
+        s = ww[i : i + w + 1]
+        l = lcp(s, best[0])
+        if s < best[0]:
+            best = (s, i)
+            uniq_len = l + 1
+        else:
+            uniq_len = max(uniq_len, l + 1)
+    assert best[1] != -1
+    start = best[1] % (w + 1)
+    end = (start + uniq_len - 1) % (w + 1) + 1
+    if p:
+        print(
+            fmt(window), f"{start:>2}", f"{uniq_len:>2}", "C", fmt(best[0][:uniq_len])
+        )
+    return start
+
+
+# Find smallest substring of window+1+window+1
+# that starts inside the window, and skips the leading zeros.
+def new(window, p=False):
+    if 1 not in window:
+        return 0
+    suf = 1
+    w = len(window)
+    ww = window + [suf] + window + [suf]
+    best = ([999], -1)
+    uniq_len = 0
+    first1 = window.index(1)
+    for i in range(first1, w):
+        s = ww[i : i + w + 1]
+        u = lcp(s, best[0]) + 1
+        if s <= best[0]:
+            best = (s, i)
+            uniq_len = u
+        else:
+            uniq_len = max(uniq_len, u)
+
+    for r in range(uniq_len, 1, -1):
+        step = False
+        if best[1] + r < w and best[0][0:r] == best[0][r : 2 * r]:
+            step = True
+            if p:
+                print(
+                    fmt(window),
+                    f"{best[1]:>2}",
+                    f"{uniq_len:>2}",
+                    fmt(best[0][:uniq_len]),
+                    "before",
+                )
+            best = (best[0][r:], best[1] + r)
+            uniq_len -= r
+        if step:
+            break
+
+    if p:
+        print(fmt(window), f"{best[1]:>2}", f"{uniq_len:>2}", fmt(best[0][:uniq_len]))
+    return best[1]
+
+
+# Find the smallest suffix > 000.
+# Then pick the position of the first 1.
+def new2(window, p=False):
+    if 1 not in window:
+        return 0
+    w = len(window)
+    best = ([999], -1)
+    uniq_len = 0
+    for i in range(w):
+        s = window[i:] + [999]
+        if 1 not in s:
+            continue
+
+        u = lcp(s, best[0]) + 1
+        if s <= best[0]:
+            best = (s, i)
+            uniq_len = u
+        else:
+            uniq_len = max(uniq_len, u)
+
+    x = best[1] + best[0].index(1)
+
+    if best[0][:4] == [0, 1, 0, 1] or best[0] == [0, 1, 0, 999]:
+        x += 2
+
+    if p:
+        print(
+            fmt(window),
+            f"{x:>2}",
+            f"{best[1]:>2}",
+            f"{uniq_len:>2}",
+            fmt(best[0][:uniq_len]),
+        )
+    return x
+
+
+# Optimal for k=1,s=2,w<=9
+def lr2(lmer, p=False):
+    l = len(lmer)
+    # Find position of last 0 in the longest 000..0011..1111 run.
+    best = (0, 0, -100, -100)
+    bests = [l - 1]
+    for i in range(l - 1):
+        if lmer[i] == 0 and lmer[i + 1] == 1:
+            c0 = 0
+            d0 = 0
+            for j in range(i, -1, -1):
+                if lmer[j] == 0:
+                    c0 += 1
+                else:
+                    break
+            for j in range(j, -1, -1):
+                if lmer[j] == 1:
+                    d0 += 1
+                else:
+                    break
+            c1 = 0
+            d1 = 0
+            for j in range(i + 1, l):
+                if lmer[j] == 1:
+                    c1 += 1
+                else:
+                    break
+            for j in range(j, l):
+                if lmer[j] == 0:
+                    d1 += 1
+                else:
+                    break
+            # best = max(best, (c0 + c1, c1, d0 + d1, +d1, -i, i))
+            val = (c0 + c1, c1, 0, 0)
+            if val > best:
+                best = val
+                bests = [i]
+            elif val == best:
+                bests.append(i)
+
+    if p:
+        print(fmt(lmer), bests[0], fmt(lmer[bests[0] :]), bests)
+
+    if len(bests) == 1 or False:
+        return bests[0]
+
+    x = bests[-1]
+    for i in range(len(bests) - 1):
+        if (bests[i + 1] - bests[i]) % 2 == 0:
+            x = bests[i]
+            break
+
+    return x
+
+    # Left: find first 1; pos before that
+    # f1 = lmer.index("1")
+    # if f1 < bests[0]:
+    #     fl = f1 - 1
+    # else:
+    #     fl = -2
+    # x = [fl] + bests + [ll - 1 - int(lmer[-1] == "0")]
+    # print(x)
+    # b = (-1, -1, -1)
+    # for i in range(1, len(x) - 1):
+    #     b = max(b, (x[i + 1] - x[i], x[i] - x[i - 1], x[i]))
+    # print(b)
+    # if all:
+    #     return (b[2], x)
+    return b[2]
+
+
+# Smallest one, but prevent taking a substring that can be left-extended into something smaller.
+def sus3(window, p=False):
+    w = len(window)
+    best = (1, True, [9], -1)
+    first1 = window.index(1) if 1 in window else 0
+
+    if findl(window, [1, 0]) == -1:
+        return first1
+
+    for i in range(len(window)):
+        s = window[i:]
+        idx = first1 + findl(window[first1:], s)
+        uniq = idx < first1 or idx == i
+
+        prefix_repeats = False or i == w - 1
+        for r in range(1, len(s) + 1):
+            rep = s[:r]
+            reps = rep * (i // r + 1)
+            # Check if window[:i] is just copies of rep.
+            # If `rep` extends to the left, also check that it matches the end of the seq.
+            if window[:i] != reps[len(reps) - i :]:
+                continue
+            tail = len(reps) - i - 1
+            if tail > 0 and window[-tail:] != reps[:tail]:
+                continue
+            prefix_repeats = True
+
+        best = min(
+            best,
+            (
+                s[0],
+                prefix_repeats,
+                s + [9],
+                i,
+            ),
+        )
+
+    x = best[-1]
+    s = best[-2][:-1]
+
+    if p:
+        print(
+            fmt(window),
+            f"{best[-1]:>2}",
+            f"{fmt(best[-2][:-1]):{w}}",
+        )
+    assert best[-1] != -1
+    return best[-1]
 
 
 w = 6
@@ -444,5 +756,11 @@ if len(sys.argv) > 1:
 # density(step2, w)
 
 # density(step2, w)
-# density(sus, w) # w=12 -> 45
-density(ladder, w)  # w=13 -> 40
+# density(sus2, w)  # w=12 -> 45
+# density(ladder, w)  # w=12 -> 40
+# density(rot_sus, w)
+# density(new, w)
+# density(new2, w)  # w=12 -> 100
+# density(lr2, w)  # w=12 -> 100
+
+density(sus3, w)  # w=12 -> 45

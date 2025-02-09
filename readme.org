@@ -6,7 +6,7 @@ This repository hosts a number of different projects related to minimizers.
    - These are also used for the lower bound [[https://doi.org/10.1101/2024.09.06.611668][paper]] with Bryce Kille:
    - Python bindings available in [[file:src/py.rs][src/py.rs]].
 2. Ongoing research on new sampling schemes.
-   - Plots and experiments are in [[file:py/plot.ipynb][py/plot.ipynb]].
+   - Plots and experiments are in [[file:py][py/]].
 
 The SIMD-based random-minimizers implementation corresponding to [[https://curiouscoding.nl/posts/fast-minimizers/][this post]] has moved to [[https://github.com/rust-seq/simd-minimizers]].
 

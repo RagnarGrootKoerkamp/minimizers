@@ -13,8 +13,8 @@ if len(sys.argv) == 4:
 
 l = w + k - 1
 ll = l + 1
-with open(f"fwd/sols/w{w}-k{k}-s{s}.pck", "rb") as pck_in:
-    scheme = pck.load(pck_in)[(w, k, s)][0]
+# with open(f"fwd/sols/w{w}-k{k}-s{s}.pck", "rb") as pck_in:
+#     scheme = pck.load(pck_in)[(w, k, s)][0]
 
 
 def find(g, kmer):
@@ -293,9 +293,11 @@ alt8 = {
 
 alt = {}
 
-d1 = density(scheme)
+# d1 = density(scheme)
 d2 = density(lr)
+d1 = d2
 print(f"{" "*ll}      {d1:<5.4} | {d2:<5.4}    {(d2-d1)*2**ll}")
+exit(0)
 
 
 # TRY DIFFERENT SUFFIXES
