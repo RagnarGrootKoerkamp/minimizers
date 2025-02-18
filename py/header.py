@@ -5,6 +5,8 @@ from sympy import totient, isprime, divisors
 from sympy.functions.combinatorial.numbers import mobius
 from matplotlib.ticker import MaxNLocator, FormatStrFormatter
 from functools import cache
+import fractions
+import json
 
 ## PLOT STYLING
 
@@ -42,7 +44,9 @@ def style(ax, w, ks, title=None, plot_w=False, df=False):
         ax.set_title(title)
 
 
-def plot_lower_bounds(sigma, xs, wks, loose=True, tight=False, ctd=False, df=False):
+def plot_lower_bounds(
+    sigma, xs, wks, loose=True, tight=False, ctd=False, marcais=False, df=False
+):
     f = lambda w: w + 1 if df else 1
     if tight:
         plt.plot(
@@ -76,6 +80,14 @@ def plot_lower_bounds(sigma, xs, wks, loose=True, tight=False, ctd=False, df=Fal
 ## LOWER BOUNDS
 
 
+def marcais(w, k):
+    return (1.5 + max(0, (k - w) // w) + 1 / (2 * w)) / (w + k)
+
+
+def marcais_improved(w, k):
+    return 1.5 / (w + k - 0.5)
+
+
 # Simplified lb
 def lb(w, k):
     return 1 / (w + k) * ((w + k + (w - 1)) // w)
@@ -102,7 +114,7 @@ def g(sigma, w, k):
     s = 0
     for p in divisors(w + k):
         s += aperiodic_necklaces(p, sigma) * ((p + w - 1) // w)
-    return s / (sigma ** (w + k))
+    return fractions.Fraction(s, (sigma ** (w + k)))
 
 
 # g'
@@ -114,7 +126,9 @@ def gp(sigma, w, k):
 ## Cache rust calls
 
 
-_text = []
+from diskcache import Cache
+
+diskcache = Cache("cache")
 
 
 @cache
@@ -122,15 +136,24 @@ def gen_inner(text_len, sigma):
     return minimizers.generate_random_string(text_len, sigma)
 
 
+_text = []
+
+
 def gen(text_len, sigma):
     global _text
     _text = gen_inner(text_len, sigma)
 
 
-@cache
+@diskcache.memoize(tag="density")
 def density_inner(tp, text_len, w, k, sigma, **args):
     return minimizers.density(tp, _text, w, k, sigma, **args)
 
 
 def density(tp, w, k, sigma, **args):
     return density_inner(tp, len(_text), w, k, sigma, **args)
+
+
+fwd_wksigma_to_dens = {}
+fwd = json.load(open("fwd.json"))
+for w, k, sigma, d1, d2 in fwd:
+    fwd_wksigma_to_dens[(w, k, sigma)] = fractions.Fraction(d1, d2)
