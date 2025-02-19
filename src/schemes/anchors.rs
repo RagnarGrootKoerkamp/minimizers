@@ -8,16 +8,9 @@ impl Params for BdAnchor {
 }
 
 #[typetag::serialize]
-impl Params for SusAnchorLex {
-    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(SusAnchorS::new(w, k, Lex))
-    }
-}
-
-#[typetag::serialize]
-impl Params for SusAnchorALex {
-    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(SusAnchorS::new(w, k, AntiLex))
+impl<O: ToOrder> Params for SusAnchor<O> {
+    fn build(&self, w: usize, k: usize, sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(SusAnchorS::new(w, k, self.0.to_order(w, k, sigma)))
     }
 }
 

@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 
-use crate::{collect_stats, AntiLex, RandomO};
+use crate::{collect_stats, Alternating, AntiLex, Lex, RandomO, ThresholdABB, ABB};
 
 fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
     Ok(dict
@@ -29,13 +29,32 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "Rot" => Box::new(RM(RotMinimizer)),
         "AltRot" => Box::new(RM(AltRotMinimizer)),
         "Bruteforce" => Box::new(schemes::BruteforceP),
+        // Lex orders
         "Random" => Box::new(schemes::RM(())),
+        "Lex" => Box::new(schemes::M(Lex)),
+        "Alternating" => Box::new(schemes::M(Alternating)),
+        "ABB" => Box::new(schemes::M(ABB)),
+        "ABB2" => Box::new(schemes::M((ABB, Lex))),
+        "ThresholdABB" => Box::new(schemes::M(ThresholdABB { sigma: 0 })),
+        "ThresholdABB2" => Box::new(schemes::M((ThresholdABB { sigma: 0 }, Lex))),
         "AntiLex" => Box::new(schemes::M(AntiLex)),
+
+        // Decycling
         "Decycling" => Box::new(schemes::RM(Decycling { double: false })),
         "DoubleDecycling" => Box::new(schemes::RM(Decycling { double: true })),
+
+        // Selection schemes
         "BdAnchor" => Box::new(schemes::BdAnchor { r: get(args, "r")? }),
-        "SusAnchorLex" => Box::new(schemes::SusAnchorLex),
-        "SusAnchorALex" => Box::new(schemes::SusAnchorALex),
+
+        // SUS
+        "SusLex" => Box::new(schemes::SusAnchor(Lex)),
+        "SusAlternating" => Box::new(schemes::SusAnchor(Alternating)),
+        "SusABB" => Box::new(schemes::SusAnchor(ABB)),
+        "SusABB2" => Box::new(schemes::SusAnchor((ABB, Lex))),
+        "SusThresholdABB" => Box::new(schemes::SusAnchor(ThresholdABB { sigma: 0 })),
+        "SusThresholdABB2" => Box::new(schemes::SusAnchor((ThresholdABB { sigma: 0 }, Lex))),
+        "SusAntiLex" => Box::new(schemes::SusAnchor(AntiLex)),
+
         "FracMin" => Box::new(schemes::RM(schemes::FracMin { f: get(args, "f")? })),
         "OpenClosed" => {
             if get_bool(args, "anti_lex") {

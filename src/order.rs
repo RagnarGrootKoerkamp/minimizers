@@ -152,6 +152,66 @@ impl Order for Lex {
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct Alternating;
+
+impl Order for Alternating {
+    type T = usize;
+    fn key(&self, kmer: &[u8]) -> usize {
+        let s = 8usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 8];
+        for i in 0..8 - s {
+            prefix[7 - i] = kmer[i];
+            if i % 2 == 1 {
+                prefix[7 - i] ^= 0xff;
+            }
+        }
+        usize::from_ne_bytes(prefix)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct ABB;
+
+impl Order for ABB {
+    type T = usize;
+    fn key(&self, kmer: &[u8]) -> usize {
+        let s = 8usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 8];
+        for i in 0..8 - s {
+            prefix[7 - i] = kmer[i];
+            if i > 0 {
+                if prefix[7 - i] > 0 {
+                    prefix[7 - i] = 0;
+                } else {
+                    prefix[7 - i] = 1;
+                }
+            }
+        }
+        usize::from_ne_bytes(prefix)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct ThresholdABB {
+    pub sigma: u8,
+}
+
+impl Order for ThresholdABB {
+    type T = usize;
+    fn key(&self, kmer: &[u8]) -> usize {
+        let s = 8usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 8];
+        for i in 0..8 - s {
+            prefix[7 - i] = (kmer[i] >= self.sigma / 4) as u8;
+            if i > 0 {
+                prefix[7 - i] ^= 1;
+            }
+        }
+        usize::from_ne_bytes(prefix)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct AntiLex;
 
 impl Order for AntiLex {
@@ -161,8 +221,10 @@ impl Order for AntiLex {
         let mut prefix = [0xff; 8];
         for i in 0..8 - s {
             prefix[7 - i] = kmer[i];
+            if i != 0 {
+                prefix[7 - i] ^= 0xff;
+            }
         }
-        prefix[7] ^= 0xff;
         usize::from_ne_bytes(prefix)
     }
 }
@@ -212,6 +274,27 @@ impl ToOrder for Lex {
     type O = Lex;
     fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
         Lex
+    }
+}
+
+impl ToOrder for ABB {
+    type O = ABB;
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
+        ABB
+    }
+}
+
+impl ToOrder for ThresholdABB {
+    type O = ThresholdABB;
+    fn to_order(&self, _w: usize, _k: usize, sigma: usize) -> Self::O {
+        ThresholdABB { sigma: sigma as u8 }
+    }
+}
+
+impl ToOrder for Alternating {
+    type O = Alternating;
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
+        Alternating
     }
 }
 

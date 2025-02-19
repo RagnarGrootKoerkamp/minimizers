@@ -118,10 +118,7 @@ pub struct BdAnchor {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SusAnchorLex;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SusAnchorALex;
+pub struct SusAnchor<O: ToOrder>(pub O);
 
 // MINIMIZER WRAPPERS.
 
