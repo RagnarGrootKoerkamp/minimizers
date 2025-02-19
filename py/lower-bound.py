@@ -84,7 +84,7 @@ def style(
 
         ticks = [1 / w]
         if sigma and ilp:
-            extra = float(gp(w, k, sigma))
+            extra = float(gp(sigma, w, k))
             ticks.append(extra)
         else:
             ticks.append(2 / (w + 1))
@@ -336,10 +336,10 @@ fig.legend(
     ncols=3,
 )
 fig.supylabel("Density", x=0.04, fontsize=plot_font)
-fig.suptitle(
-    "Density lower bounds and optimal solutions for forward schemes",
-    fontsize=title_font - 1,
-)
+# fig.suptitle(
+#     "Density lower bounds and optimal solutions for forward schemes",
+#     fontsize=title_font - 1,
+# )
 fig.savefig(f"thesis/lower-bound.svg", bbox_inches="tight")
 # fig.show()
 # plt.close(fig)

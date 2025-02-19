@@ -11,7 +11,7 @@ import json
 ## PLOT STYLING
 
 
-def style(ax, w, ks, title=None, plot_w=False, df=False):
+def style(ax, w, ks, title=None, plot_w=False, plot_t=False, df=False):
 
     ax.grid(False)
     ax.grid(True, axis="x", color="#ccc", linewidth=0.5)
@@ -19,14 +19,14 @@ def style(ax, w, ks, title=None, plot_w=False, df=False):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["left"].set_visible(True)
+    if not plot_w:
+        ax.spines["bottom"].set_visible(False)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
 
-    ax.spines["bottom"].set_visible(False)
-
     df = w + 1 if df else 1
 
-    if not plot_w:
+    if not plot_w and not plot_t:
         ylim_pad_factor = 0.02
 
         ax.yaxis.set_major_locator(MaxNLocator(nbins=2))
@@ -37,6 +37,8 @@ def style(ax, w, ks, title=None, plot_w=False, df=False):
         ax.set_xlim(xmin=ks[0] / 2, xmax=ks[-1] + ks[0] / 2)
     if plot_w:
         ax.set_xlabel("w")
+    elif plot_t:
+        ax.set_xlabel("t")
     else:
         ax.set_xlabel("k")
     ax.set_ylabel("Density")
@@ -45,9 +47,26 @@ def style(ax, w, ks, title=None, plot_w=False, df=False):
 
 
 def plot_lower_bounds(
-    sigma, xs, wks, loose=True, tight=False, ctd=False, marcais=False, df=False
+    sigma,
+    xs,
+    wks,
+    loose=False,
+    tight=True,
+    ctd=False,
+    marcais=False,
+    df=False,
+    trivial=True,
 ):
+    # Fix for density factor
     f = lambda w: w + 1 if df else 1
+    if ctd:
+        plt.plot(
+            xs,
+            [lb_continuation(w, k) * f(w) for (w, k) in wks],
+            color="black",
+            linewidth=1,
+            label="continuation",
+        )
     if tight:
         plt.plot(
             xs,
@@ -60,21 +79,18 @@ def plot_lower_bounds(
         plt.plot(
             xs,
             [lbp(w, k) * f(w) for (w, k) in wks],
-            color="red",
+            color="royalblue",
             linewidth=1.5,
             label="⌈(w+k)/w⌉/(w+k)",
         )
-    if ctd:
+    if trivial:
         plt.plot(
             xs,
-            [lb_continuation(w, k) * f(w) for (w, k) in wks],
+            [1 / w * f(w) for (w, k) in wks],
             color="black",
-            linewidth=1,
-            label="continuation",
+            linewidth=1.5,
+            label="1/w",
         )
-    plt.plot(
-        xs, [1 / w * f(w) for (w, k) in wks], color="black", linewidth=1.5, label="1/w"
-    )
 
 
 ## LOWER BOUNDS
