@@ -580,27 +580,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mem_dbg"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfd7536481f50e36a48185e622c9643919a0fca99422069424c214e67d8ed264"
-dependencies = [
- "bitflags",
- "mem_dbg-derive",
-]
-
-[[package]]
-name = "mem_dbg-derive"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f31df6bf503386c041c631223d4eb77ee55912d7e75645c960a24512aded0d89"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -651,7 +630,6 @@ dependencies = [
  "needletail",
  "nthash",
  "num",
- "packed-seq",
  "pyo3",
  "rand",
  "rand_chacha 0.9.0-beta.1",
@@ -794,17 +772,6 @@ name = "oorandom"
 version = "11.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b410bbe7e14ab526a0e86877eb47c6996a2bd7746f027ba551028c925390e4e9"
-
-[[package]]
-name = "packed-seq"
-version = "0.1.0"
-source = "git+https://github.com/rust-seq/packed-seq#03126a76ce43fc9ddadacfded1eea35ce0632950"
-dependencies = [
- "cfg-if",
- "mem_dbg",
- "rand",
- "wide",
-]
 
 [[package]]
 name = "pkg-config"
