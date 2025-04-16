@@ -6,3 +6,5 @@ perf.data*
 flamegraph.svg
 /benches/human-genome.fa
 /.env/
+/py/cache/
+/py/defense
