@@ -214,63 +214,78 @@ t = 4
 n = 10000000
 h.gen(n, sigma)
 
-# Plot 0: t value
-# k =
-w = 24
-k = 60
-ts = range(1, k + 1)
-fs = [
-    ("Random", {"sampling": 0, "lc": "orange", "label": "Random"}),
-    ("Random", {"mod": 1, "sampling": 0, "lc": "blue", "label": "Random mod-mini"}),
-]
-plot("thesis/0-mod-t", fs, plot_t=True, k=k, ymin=0.0380, ymax=0.115, height=2.8)
-
-# Plot 1: Random and lexicographic minimizers
-ks = range(1, 32)
-fs = [
-    ("Lex", {"label": "Lex"}),
-    ("Random", {"lc": "orange", "label": "Random"}),
-    ("Alternating", {"label": "Alternating"}),
-    ("AntiLex", {"label": "AntiLex"}),
-    ("ABB", {"label": "ABB"}),
-    ("ABB2", {"lc": "teal", "label": "ABB+"}),
-    # (
-    #     "Threshold",
-    #     {
-    #         "r": t,
-    #         "t": 3,
-    #         "open": 0,
-    #         "h": 1,
-    #         "loose": 1,
-    #         "mod": 1,
-    #         "lc": "teal",
-    #         "label": "Threshold",
-    #     },
-    # ),
-]
-plot("thesis/1-lex", fs, ymax=0.09)
-
 # Plot 2: Pure schemes
-ks = range(1, 60)
+ks = range(1, 83)
 fs = [
     ("Random", {"lc": "orange", "label": "Random"}),
-    ("ABB2", {"lc": "teal", "label": "ABB+"}),
+    # ("ABB2", {"lc": "teal", "label": "ABB+"}),
     ("Decycling", {"lc": "grey", "label": "Decycling"}),
     ("DoubleDecycling", {"lc": "black", "label": "Double Decycling"}),
-    ("OpenClosed", {"r": t, "open": 1, "lc": "#bb0066", "label": "O"}),
+    # ("OpenClosed", {"r": t, "open": 1, "lc": "#bb0066", "label": "O"}),
     (
         "OpenClosed",
         {"r": t, "closed": 1, "lc": "#00dd00", "label": "C=Miniception"},
     ),
+    # (
+    #     "OpenClosed",
+    #     {"r": t, "open": 1, "closed": 1, "lc": "#6600bb", "label": "OC"},
+    # ),
+]
+plot(
+    "slides/1-before",
+    fs,
+    ymin=0.040,
+    add=0,
+    ncols=4,
+    trivial=True,
+    tight=False,
+    marcais=True,
+    mini=True,
+)
+
+# Add mod
+fs = [
+    # ("Random", {"lc": "orange", "label": "Random"}),
+    ("Random", {"lc": "orange", "label": "Random", "thin": True}),
+    ("Random", {"mod": 1, "r": t, "lc": "orange", "label": "Random-mod"}),
+    # ("ABB2", {"lc": "teal", "label": "ABB+"}),
+    ("Decycling", {"lc": "grey", "label": "Decycling"}),
+    ("DoubleDecycling", {"lc": "black", "label": "Double Decycling"}),
+    # ("OpenClosed", {"r": t, "open": 1, "lc": "#bb0066", "label": "O"}),
     (
         "OpenClosed",
-        {"r": t, "open": 1, "closed": 1, "lc": "#6600bb", "label": "OC"},
+        {"r": t, "closed": 1, "lc": "#00dd00", "label": "C=Miniception"},
     ),
+    # (
+    #     "OpenClosed",
+    #     {"r": t, "open": 1, "closed": 1, "lc": "#6600bb", "label": "OC"},
+    # ),
 ]
-plot("thesis/2-ext", fs, ymin=0.0485, add=0, ncols=4, trivial=False)
+plot(
+    "slides/2-mod",
+    fs,
+    ymin=0.040,
+    add=0,
+    ncols=4,
+    trivial=True,
+    tight=False,
+    marcais=True,
+    mini=True,
+)
+plot(
+    "slides/3-lb",
+    fs,
+    ymin=0.040,
+    add=0,
+    ncols=4,
+    trivial=True,
+    tight=True,
+    marcais=True,
+    mini=True,
+)
+
 
 # Plot 3: Mod schemes
-ks = range(1, 83)
 
 
 def fs_mod(t, sus=False):
@@ -335,7 +350,16 @@ def fs_mod(t, sus=False):
     return l
 
 
-plot("thesis/3-mod", fs_mod(t), add=0, ncols=3, trivial=True)
+plot(
+    "slides/4-full",
+    fs_mod(t),
+    add=1,
+    ncols=3,
+    trivial=True,
+    mini=True,
+    ymin=0.04,
+    marcais=True,
+)
 
 # Plot 3: k=1 anchors
 k = 1
@@ -350,8 +374,19 @@ fs = [
     ("SusAntiLex", {"lc": "#0000ff", "label": "Sus-anchor AntiLex"}),
 ]
 plot(
-    "thesis/4-selection",
-    fs,
+    "slides/10-bd-anchor",
+    fs[0:4],
+    plot_w=True,
+    tight=True,
+    ymin=0,
+    ymax=0.85,
+    ncols=3,
+    add=1,
+    bold_last=False,
+)
+plot(
+    "slides/11-sus",
+    fs[0:5],
     plot_w=True,
     tight=True,
     ymin=0,
@@ -360,12 +395,35 @@ plot(
     add=1,
     bold_last=True,
 )
+plot(
+    "slides/12-abb",
+    fs[0:6],
+    plot_w=True,
+    tight=True,
+    ymin=0,
+    ymax=0.85,
+    ncols=3,
+    add=1,
+    bold_last=True,
+)
+plot(
+    "slides/13-asus",
+    fs[0:7],
+    plot_w=True,
+    tight=True,
+    ymin=0,
+    ymax=0.85,
+    ncols=3,
+    add=1,
+    bold_last=True,
+)
+
 
 # Plot 4: selection for alphabet 2
 sigma = 2
 h.gen(n, sigma)
 plot(
-    "thesis/5-selection-s2",
+    "slides/14-asus-s2",
     fs,
     plot_w=True,
     tight=True,
@@ -375,16 +433,3 @@ plot(
     add=1,
     bold_last=True,
 )
-
-# Plot 5: sampling with selection for alphabet 4
-sigma = 4
-w = 24
-ks = range(1, 40)
-h.gen(n, sigma)
-plot("thesis/6-small-k", fs_mod(t, sus=True), add=0, ncols=3, trivial=True)
-
-# Plot 6: sampling with selection for alphabet 256
-# sigma = 256
-# t = 1
-# h.gen(n, sigma)
-# plot("thesis/7-large-alphabet", fs_mod(t, sus=True), add=0, ncols=3, trivial=True)
