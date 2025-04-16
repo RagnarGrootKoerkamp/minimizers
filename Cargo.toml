@@ -39,6 +39,7 @@ minimizer-iter = "1.2.1"
 needletail = "0.5.1"
 nthash = "0.5.1"
 good_lp = { version = "1.7", features = ["lp-solvers"], default-features = false }
+colored = "3.0.0"
 
 [features]
 # Hides the `simd` warnings when neither AVX nor NEON is detected.
