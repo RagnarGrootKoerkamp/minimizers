@@ -744,6 +744,61 @@ def sus3(window, p=False):
     return best[-1]
 
 
+# lyndon-factorization
+def duval(s, p=False):
+    n = len(s)
+    i = 0
+    factors = []
+    while i < n:
+        j = i + 1
+        k = i
+        while j < n and s[k] <= s[j]:
+            if s[k] < s[j]:
+                k = i
+            else:
+                k += 1
+            j += 1
+        x = None
+        start = i
+        while i <= k:
+            y = s[i : i + j - k]
+            factors.append((i, i + j - k, s[i : i + j - k]))
+            i += j - k
+            if x is None:
+                x = y
+            else:
+                assert x == y
+    return factors
+
+
+def lyndon(window, p=False):
+    w = len(window)
+    # Find the lyndon factorization:
+    # repeatedly find the longest
+    d = duval(window, p=p)
+    d0 = d[:]
+    i = len(d) - 1
+    while len(d) > 1:
+        l = w - d[i][0]
+        # if len(d[i - 1][2]) >= l and d[i - 1][2][:l] == d[i][2]:
+        if window[d[i - 1][0] : d[i - 1][0] + l] == window[d[i][0] :]:
+            i -= 1
+            d.pop()
+        else:
+            break
+    if p:
+        print(
+            fmt(window),
+            "\t",
+            d[-1][0],
+            "\t\t",
+            *(fmt(x[2]) for x in d0),
+            "\t\t",
+            *(fmt(x[2]) for x in d),
+        )
+    return d[-1][0]
+
+
 w = 6
 if len(sys.argv) > 1:
     w = int(sys.argv[1])
@@ -763,4 +818,5 @@ if len(sys.argv) > 1:
 # density(new2, w)  # w=12 -> 100
 # density(lr2, w)  # w=12 -> 100
 
-density(sus3, w)  # w=12 -> 45
+# density(sus3, w)  # w=12 -> 45
+density(lyndon, w)  # w=12 -> 45
