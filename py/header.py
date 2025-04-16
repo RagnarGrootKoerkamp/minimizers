@@ -56,9 +56,19 @@ def plot_lower_bounds(
     marcais=False,
     df=False,
     trivial=True,
+    mini=False,
 ):
     # Fix for density factor
     f = lambda w: w + 1 if df else 1
+    if mini:
+        plt.plot(
+            xs,
+            [1 / sigma**k * f(w) for (w, k) in wks],
+            color="red",
+            linewidth=1,
+            ls="--",
+            label="1/σ^k",
+        )
     if ctd:
         plt.plot(
             xs,
@@ -73,7 +83,7 @@ def plot_lower_bounds(
             [gp(sigma, w, k) * f(w) for (w, k) in wks],
             color="red",
             linewidth=1.5,
-            label="g'",
+            label="New l.b.",
         )
     if loose:
         plt.plot(
@@ -82,6 +92,14 @@ def plot_lower_bounds(
             color="royalblue",
             linewidth=1.5,
             label="⌈(w+k)/w⌉/(w+k)",
+        )
+    if marcais:
+        plt.plot(
+            xs,
+            [marcais_improved(w, k) * f(w) for (w, k) in wks],
+            color="grey",
+            linewidth=1.5,
+            label="1.5/(w+k-0.5)",
         )
     if trivial:
         plt.plot(

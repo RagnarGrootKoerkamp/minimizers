@@ -1,0 +1,359 @@
+#!/usr/bin/env python3
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+from math import log
+import matplotlib as mpl
+import header as h
+from header import plt
+from sympy import Symbol, Lambda, Max, Min
+from matplotlib.ticker import MaxNLocator
+
+
+## PLOTTING
+
+
+def plot(
+    name,
+    tps,
+    add=0,
+    bold_last=False,
+    plot_w=False,
+    plot_t=False,
+    ymin=0.0405,
+    ymax=0.082,
+    rol=True,
+    df=False,
+    ncols=4,
+    k=None,
+    height=4.8,
+    **kwargs,
+):
+    global w
+    data = []
+    # if plot_w:
+    #     title = f"Densities and lower bounds (σ={sigma})"
+    # else:
+    #     title = f"Densities and lower bounds (σ={sigma}, w={w})"
+    ax = plt.gca()
+    fig = plt.gcf()
+    fig.set_size_inches(6.4, height)
+    h.style(ax, w, ks, plot_w=plot_w, plot_t=plot_t, df=df)
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=10))
+    ax.grid(True, axis="y", color="#ccc", linewidth=0.5)
+    ax.set_ylim(ymin=ymin, ymax=ymax)
+
+    if plot_t:
+        wks = [(w, k) for _ in ts]
+        xs = ts
+    elif plot_w:
+        wks = [(w, 1) for w in ws]
+        xs = ws
+    else:
+        wks = [(w, k) for k in ks]
+        xs = ks
+
+    for i, tp_args in enumerate(tps):
+        if isinstance(tp_args, tuple):
+            (tp, args) = tp_args
+        else:
+            tp = tp_args
+            args = {}
+
+        last = 1.5 if bold_last and i == len(tps) - 1 else 0
+
+        print(f"{tp}: {args}", flush=True)
+        ds = []
+        if plot_t:
+            for t in ts:
+                my_args = {k: v for (k, v) in args.items()}
+                if "lc" in my_args:
+                    my_args.pop("lc")
+                if "ls" in my_args:
+                    my_args.pop("ls")
+                if "o" in args:
+                    my_args["offset"] = args["o"](k)
+                if "k0" in args and not isinstance(args["k0"], int):
+                    my_args["k0"] = my_args["k0"](k)
+                if "label" in my_args:
+                    my_args.pop("label")
+                if "thin" in my_args:
+                    my_args.pop("thin")
+                my_args["sampling"] = t
+                d = h.density(tp, w, k, sigma, **my_args)
+                if df:
+                    d *= w + 1
+                my_args["k"] = k
+                my_args["w"] = w
+                my_args["d"] = d
+                my_args["tp"] = tp
+                my_args["sigma"] = sigma
+
+                data.append(my_args)
+                ds.append(d)
+        else:
+            for w, k in wks:
+                my_args = {k: v for (k, v) in args.items()}
+                if "lc" in my_args:
+                    my_args.pop("lc")
+                if "ls" in my_args:
+                    my_args.pop("ls")
+                if "o" in args:
+                    my_args["offset"] = args["o"](k)
+                if "k0" in args and not isinstance(args["k0"], int):
+                    my_args["k0"] = my_args["k0"](k)
+                if "label" in my_args:
+                    my_args.pop("label")
+                if "thin" in my_args:
+                    my_args.pop("thin")
+                d = h.density(tp, w, k, sigma, **my_args)
+                if df:
+                    d *= w + 1
+                my_args["k"] = k
+                my_args["w"] = w
+                my_args["d"] = d
+                my_args["tp"] = tp
+                my_args["sigma"] = sigma
+
+                data.append(my_args)
+                ds.append(d)
+        print(ds[0])
+        lc = args.get("lc", None)
+        ls = args.get("ls", None)
+        label = str(args.get("label", tp))
+        if label is None:
+            args.pop("label")
+            if "lc" in args:
+                args.pop("lc")
+            if "ls" in args:
+                args.pop("ls")
+            label = f"{tp}: {args}"
+        if not args.get("ao", False) and not args.get("aot", False):
+            ls = "solid"
+        if args.get("ao", False) and not args.get("aot", False):
+            label += " ak"
+            if not ls:
+                ls = "dotted"
+        if not args.get("ao", False) and args.get("aot", False):
+            label += " at"
+            if not ls:
+                ls = "dashed"
+        if args.get("ao", False) and args.get("aot", False):
+            label += " at,ak"
+            if not ls:
+                ls = "dashdot"
+        lw = 1 + last
+        if args.get("modulo", False):
+            lw -= 0.5
+        alpha = 1
+        if args.get("thin", False):
+            alpha = 0.4
+            lw = 0.5
+            last = -1
+            label = None
+
+        (line,) = plt.plot(
+            xs,
+            ds,
+            label=None,
+            linestyle=ls,
+            color=lc,
+            marker="o",
+            markersize=2 + last,
+            lw=0,
+            alpha=alpha,
+        )
+
+        # Rolling minimum of ds
+        dm = 1
+        dms = []
+        for d in ds:
+            if rol and not plot_t:
+                dm = min(dm, d)
+            else:
+                dm = d
+            dms.append(dm)
+        plt.plot(
+            xs,
+            dms,
+            label=None,
+            color=line.get_color(),
+            markersize=0,
+            lw=lw,
+            alpha=alpha,
+        )
+        # Add unified legend item.
+        plt.plot(
+            [],
+            [],
+            label=label,
+            color=line.get_color(),
+            marker="o",
+            markersize=2 + last,
+            lw=lw,
+        )
+
+    for _ in range(add):
+        plt.plot([], [], label=" ", alpha=0)
+
+    h.plot_lower_bounds(sigma, xs, wks, df=df, **kwargs)
+
+    if plot_w:
+        loc = "upper center"
+    else:
+        loc = "lower center"
+    plt.legend(
+        loc=loc, bbox_to_anchor=(0, 0.06, 1, 1), ncols=ncols, mode="expand", fontsize=9
+    )
+    plt.savefig(f"{name}.png", bbox_inches="tight", dpi=400)
+    plt.savefig(f"{name}.svg", bbox_inches="tight")
+    plt.close()
+    return data
+
+
+sigma = 4
+w = 24
+k = Symbol("k")
+ks = None
+t = 4
+
+n = 10000000
+h.gen(n, sigma)
+
+
+hl = "#0000cc"
+gr = "#00cc00"
+ks = range(1, 83)
+
+# Plot 1: Baseline
+fs = [
+    ("DoubleDecycling", {"lc": gr, "label": "Double Decycling"}),
+    ("Random", {"lc": hl, "label": "Random"}),
+]
+plot(
+    "defense/defense-1-before",
+    fs,
+    ymin=0.040,
+    add=4,
+    ncols=4,
+    trivial=True,
+    tight=False,
+    marcais=True,
+)
+
+# Plot 2: Mod-mini
+fs[1][1]["thin"] = True
+fs.append(("Random", {"mod": 1, "r": t, "lc": hl, "label": "Mod-mini"}))
+plot(
+    "defense/defense-2-mod",
+    fs,
+    ymin=0.040,
+    add=4,
+    ncols=4,
+    trivial=True,
+    tight=False,
+    marcais=True,
+)
+# Plot 3: Lower bound
+plot(
+    "defense/defense-3-lb",
+    fs,
+    ymin=0.040,
+    add=3,
+    ncols=4,
+    trivial=True,
+    tight=True,
+    marcais=True,
+)
+
+# Plot 4: Small-k schemes
+fs.extend(
+    [
+        ("SusAntiLex", {"lc": "brown", "label": "Sus-anchor"}),
+        ("ABB2", {"lc": "teal", "label": "ABB+"}),
+    ]
+)
+
+
+plot(
+    "defense/defense-4-small-k",
+    fs,
+    add=1,
+    ncols=4,
+    trivial=True,
+    ymin=0.04,
+    marcais=True,
+)
+
+# Plot 5: Extended-mod-mini
+fs = [
+    ("DoubleDecycling", {"lc": gr, "label": "Double Decycling", "thin": True}),
+    ("DoubleDecycling", {"lc": gr, "label": "Double Decycling", "mod": 1}),
+    ("Random", {"lc": hl, "label": "Random", "thin": True}),
+    ("Random", {"mod": 1, "r": t, "lc": hl, "label": "Mod-mini"}),
+    ("SusAntiLex", {"lc": "brown", "label": "Sus-anchor", "thin": True}),
+    ("SusAntiLex", {"lc": "brown", "label": "Sus-anchor", "mod": 1}),
+    ("ABB2", {"lc": "teal", "label": "ABB+", "thin": True}),
+    ("ABB2", {"lc": "teal", "label": "ABB+", "mod": 1}),
+]
+
+plot(
+    "defense/defense-5-ext-mod",
+    fs,
+    add=1,
+    ncols=4,
+    trivial=True,
+    ymin=0.04,
+    marcais=True,
+)
+
+# Large-sigma
+
+# Plot 5: Extended-mod-mini
+fs = [
+    ("DoubleDecycling", {"lc": gr, "label": "Double Decycling", "thin": True}),
+    ("DoubleDecycling", {"lc": gr, "label": "Double Decycling", "mod": 1}),
+    ("Random", {"lc": hl, "label": "Random", "thin": True}),
+    ("Random", {"mod": 1, "r": t, "lc": hl, "label": "Mod-mini"}),
+    ("SusAntiLex", {"lc": "brown", "label": "Sus-anchor", "thin": True}),
+    ("SusAntiLex", {"lc": "brown", "label": "Sus-anchor", "mod": 1}),
+    ("ABB2", {"lc": "teal", "label": "ABB+", "thin": True}),
+    ("ABB2", {"lc": "teal", "label": "ABB+", "mod": 1}),
+]
+
+plot(
+    "defense/defense-5-ext-mod",
+    fs,
+    add=1,
+    ncols=4,
+    trivial=True,
+    ymin=0.04,
+    marcais=True,
+)
+
+
+sigma = 256
+t = 1
+h.gen(n, sigma)
+
+# Plot 6: large-sigma
+fs = [
+    ("DoubleDecycling", {"lc": gr, "label": "Double Decycling", "thin": True}),
+    ("DoubleDecycling", {"lc": gr, "label": "Double Decycling", "mod": 1}),
+    ("Random", {"lc": hl, "label": "Random", "thin": True}),
+    ("Random", {"mod": 1, "r": t, "lc": hl, "label": "Mod-mini"}),
+    ("SusAntiLex", {"lc": "brown", "label": "Sus-anchor", "thin": True}),
+    ("SusAntiLex", {"lc": "brown", "label": "Sus-anchor", "mod": 1}),
+    ("ABB2", {"lc": "teal", "label": "ABB+", "thin": True}),
+    ("ABB2", {"lc": "teal", "label": "ABB+", "mod": 1}),
+]
+
+plot(
+    "defense/defense-6-large-sigma",
+    fs,
+    add=1,
+    ncols=4,
+    trivial=True,
+    ymin=0.04,
+    marcais=True,
+)
