@@ -193,21 +193,40 @@ impl Order for ABB {
 
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct ThresholdABB {
-    pub sigma: u8,
+    pub thr: u8,
 }
 
 impl Order for ThresholdABB {
-    type T = usize;
-    fn key(&self, kmer: &[u8]) -> usize {
-        let s = 8usize.saturating_sub(kmer.len());
-        let mut prefix = [0xff; 8];
-        for i in 0..8 - s {
-            prefix[7 - i] = (kmer[i] >= self.sigma / 4) as u8;
-            if i > 0 {
-                prefix[7 - i] ^= 1;
-            }
+    type T = u64;
+    fn key(&self, kmer: &[u8]) -> Self::T {
+        let mut x = 1;
+        for &c in kmer {
+            x ^= (c < self.thr) as u64;
+            x <<= 1;
         }
-        usize::from_ne_bytes(prefix)
+        // eprintln!("{x:>32b}");
+        x
+    }
+}
+
+/// Search for 11, followed by as long as possible without 11.
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct T2 {
+    pub thr: u8,
+}
+
+impl Order for T2 {
+    type T = u64;
+    fn key(&self, kmer: &[u8]) -> Self::T {
+        let mut x = 1;
+        let mut last = kmer[0] < self.thr;
+        for &c in &kmer[1..] {
+            x ^= (last & (c < self.thr)) as u64;
+            last = c < self.thr;
+            x <<= 1;
+        }
+        // eprintln!("{x:>32b}");
+        x
     }
 }
 
@@ -286,8 +305,15 @@ impl ToOrder for ABB {
 
 impl ToOrder for ThresholdABB {
     type O = ThresholdABB;
-    fn to_order(&self, _w: usize, _k: usize, sigma: usize) -> Self::O {
-        ThresholdABB { sigma: sigma as u8 }
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
+        *self
+    }
+}
+
+impl ToOrder for T2 {
+    type O = T2;
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
+        *self
     }
 }
 

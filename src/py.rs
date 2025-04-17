@@ -1,6 +1,9 @@
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 
-use crate::{collect_stats, Alternating, AntiLex, Lex, RandomO, ThresholdABB, ABB};
+use crate::{
+    collect_stats, order::T2, schemes::greedy::GreedyP, Alternating, AntiLex, Lex, RandomO,
+    ThresholdABB, ABB,
+};
 
 fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
     Ok(dict
@@ -35,9 +38,39 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "Alternating" => Box::new(schemes::M(Alternating)),
         "ABB" => Box::new(schemes::M(ABB)),
         "ABB2" => Box::new(schemes::M((ABB, Lex))),
-        "ThresholdABB" => Box::new(schemes::M(ThresholdABB { sigma: 0 })),
-        "ThresholdABB2" => Box::new(schemes::M((ThresholdABB { sigma: 0 }, Lex))),
+        "ThresholdABB" => Box::new(schemes::M(ThresholdABB {
+            thr: get(args, "thr")? as u8,
+        })),
+        "ThresholdABB2" => Box::new(schemes::M((
+            ThresholdABB {
+                thr: get(args, "thr")? as u8,
+            },
+            AntiLex,
+        ))),
+        "T2" => Box::new(schemes::M((
+            T2 {
+                thr: get(args, "thr")? as u8,
+            },
+            AntiLex,
+        ))),
+        "Thresholds" => Box::new(schemes::M((
+            (
+                (
+                    ThresholdABB {
+                        thr: get(args, "thr")? as u8,
+                    },
+                    ThresholdABB {
+                        thr: 2 * get(args, "thr")? as u8,
+                    },
+                ),
+                ThresholdABB {
+                    thr: 3 * get(args, "thr")? as u8,
+                },
+            ),
+            AntiLex,
+        ))),
         "AntiLex" => Box::new(schemes::M(AntiLex)),
+        "Greedy" => Box::new(schemes::M(GreedyP)),
 
         // Decycling
         "Decycling" => Box::new(schemes::RM(Decycling { double: false })),
@@ -51,8 +84,15 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "SusAlternating" => Box::new(schemes::SusAnchor(Alternating)),
         "SusABB" => Box::new(schemes::SusAnchor(ABB)),
         "SusABB2" => Box::new(schemes::SusAnchor((ABB, Lex))),
-        "SusThresholdABB" => Box::new(schemes::SusAnchor(ThresholdABB { sigma: 0 })),
-        "SusThresholdABB2" => Box::new(schemes::SusAnchor((ThresholdABB { sigma: 0 }, Lex))),
+        "SusThresholdABB" => Box::new(schemes::SusAnchor(ThresholdABB {
+            thr: get(args, "thr")? as u8,
+        })),
+        "SusThresholdABB2" => Box::new(schemes::SusAnchor((
+            ThresholdABB {
+                thr: get(args, "thr")? as u8,
+            },
+            Lex,
+        ))),
         "SusAntiLex" => Box::new(schemes::SusAnchor(AntiLex)),
 
         "FracMin" => Box::new(schemes::RM(schemes::FracMin { f: get(args, "f")? })),
