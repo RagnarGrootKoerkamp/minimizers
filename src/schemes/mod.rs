@@ -5,6 +5,7 @@ mod bruteforce;
 mod decycling;
 mod explicit;
 mod fracmin;
+pub mod greedy;
 mod minimizer;
 mod modmini;
 mod open_closed;
