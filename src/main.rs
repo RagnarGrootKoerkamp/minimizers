@@ -187,8 +187,8 @@ fn main() {
                 let l = w + k - 1;
                 let tps = vec![tp];
                 for (tp, name) in tps {
-                    let (density, positions, dists, transfer) =
-                        collect_stats(w, text, &*tp.build(w, k, sigma));
+                    let (density, positions, dists, transfer, _counts) =
+                        collect_stats(w, k, text, &*tp.build(w, k, sigma));
                     let mut results = results.lock().unwrap();
                     results.push(Some(Result {
                         sigma,

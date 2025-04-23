@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 
 use crate::{
@@ -155,9 +157,9 @@ fn stats(
     k: usize,
     sigma: usize,
     params: Option<&Bound<'_, PyDict>>,
-) -> PyResult<(f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>)> {
+) -> PyResult<(f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>, HashMap<u64, usize>)> {
     let scheme = get_scheme(tp, params)?.build(w, k, sigma);
-    let stats = collect_stats(w, &text, &*scheme);
+    let stats = collect_stats(w, k, &text, &*scheme);
     Ok(stats)
 }
 
@@ -187,7 +189,7 @@ fn density(
     sigma: usize,
     params: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<f64> {
-    stats(tp, text, w, k, sigma, params).map(|(density, _, _, _)| density)
+    stats(tp, text, w, k, sigma, params).map(|(density, _, _, _, _)| density)
 }
 
 #[pyfunction]
