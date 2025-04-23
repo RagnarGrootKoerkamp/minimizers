@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Plots for my thesis chapters on minimizers: https://curiouscoding.nl/posts/minimizers
+# Plots for DSB 2025 slides on minimizers: https://curiouscoding.nl/slides/minimizers-dsb25/
 
 import header as h
 from header import plot
@@ -15,74 +15,87 @@ t = 4
 n = 10000000
 h.gen(n, sigma)
 
-# Plot 0: t value
-# k =
-w = 24
-k = 60
-ts = range(1, k + 1)
-fs = [
-    ("Random", {"sampling": 0, "lc": "orange", "label": "Random"}),
-    ("Random", {"mod": 1, "sampling": 0, "lc": "blue", "label": "Random mod-mini"}),
-]
-plot(
-    "thesis/0-mod-t",
-    sigma,
-    w,
-    fs,
-    plot_t=True,
-    k=k,
-    ymin=0.0380,
-    ymax=0.115,
-    height=2.8,
-    ts=ts,
-)
-
-# Plot 1: Random and lexicographic minimizers
-ks = range(1, 32)
-fs = [
-    ("Lex", {"label": "Lex"}),
-    ("Random", {"lc": "orange", "label": "Random"}),
-    ("Alternating", {"label": "Alternating"}),
-    ("AntiLex", {"label": "AntiLex"}),
-    ("ABB", {"label": "ABB"}),
-    ("ABB2", {"lc": "teal", "label": "ABB+"}),
-    # (
-    #     "Threshold",
-    #     {
-    #         "r": t,
-    #         "t": 3,
-    #         "open": 0,
-    #         "h": 1,
-    #         "loose": 1,
-    #         "mod": 1,
-    #         "lc": "teal",
-    #         "label": "Threshold",
-    #     },
-    # ),
-]
-plot("thesis/1-lex", sigma, w, fs, ymax=0.09, ks=ks)
-
 # Plot 2: Pure schemes
-ks = range(1, 60)
+ks = range(1, 83)
 fs = [
     ("Random", {"lc": "orange", "label": "Random"}),
-    ("ABB2", {"lc": "teal", "label": "ABB+"}),
+    # ("ABB2", {"lc": "teal", "label": "ABB+"}),
     ("Decycling", {"lc": "grey", "label": "Decycling"}),
     ("DoubleDecycling", {"lc": "black", "label": "Double Decycling"}),
-    ("OpenClosed", {"r": t, "open": 1, "lc": "#bb0066", "label": "O"}),
+    # ("OpenClosed", {"r": t, "open": 1, "lc": "#bb0066", "label": "O"}),
     (
         "OpenClosed",
         {"r": t, "closed": 1, "lc": "#00dd00", "label": "C=Miniception"},
     ),
+    # (
+    #     "OpenClosed",
+    #     {"r": t, "open": 1, "closed": 1, "lc": "#6600bb", "label": "OC"},
+    # ),
+]
+plot(
+    "dsb-slides/1-before",
+    sigma,
+    w,
+    fs,
+    ymin=0.040,
+    add=0,
+    ncols=4,
+    trivial=True,
+    tight=False,
+    marcais=True,
+    mini=True,
+    ks=ks,
+)
+
+# Add mod
+fs = [
+    # ("Random", {"lc": "orange", "label": "Random"}),
+    ("Random", {"lc": "orange", "label": "Random", "thin": True}),
+    ("Random", {"mod": 1, "r": t, "lc": "orange", "label": "Random-mod"}),
+    # ("ABB2", {"lc": "teal", "label": "ABB+"}),
+    ("Decycling", {"lc": "grey", "label": "Decycling"}),
+    ("DoubleDecycling", {"lc": "black", "label": "Double Decycling"}),
+    # ("OpenClosed", {"r": t, "open": 1, "lc": "#bb0066", "label": "O"}),
     (
         "OpenClosed",
-        {"r": t, "open": 1, "closed": 1, "lc": "#6600bb", "label": "OC"},
+        {"r": t, "closed": 1, "lc": "#00dd00", "label": "C=Miniception"},
     ),
+    # (
+    #     "OpenClosed",
+    #     {"r": t, "open": 1, "closed": 1, "lc": "#6600bb", "label": "OC"},
+    # ),
 ]
-plot("thesis/2-ext", sigma, w, fs, ymin=0.0485, add=0, ncols=4, trivial=False, ks=ks)
+plot(
+    "dsb-slides/2-mod",
+    sigma,
+    w,
+    fs,
+    ymin=0.040,
+    add=0,
+    ncols=4,
+    trivial=True,
+    tight=False,
+    marcais=True,
+    mini=True,
+    ks=ks,
+)
+plot(
+    "dsb-slides/3-lb",
+    sigma,
+    w,
+    fs,
+    ymin=0.040,
+    add=0,
+    ncols=4,
+    trivial=True,
+    tight=True,
+    marcais=True,
+    mini=True,
+    ks=ks,
+)
+
 
 # Plot 3: Mod schemes
-ks = range(1, 83)
 
 
 def fs_mod(t, sus=False):
@@ -147,7 +160,19 @@ def fs_mod(t, sus=False):
     return l
 
 
-plot("thesis/3-mod", sigma, w, fs_mod(t), add=0, ncols=3, trivial=True, ks=ks)
+plot(
+    "dsb-slides/4-full",
+    sigma,
+    w,
+    fs_mod(t),
+    add=1,
+    ncols=3,
+    trivial=True,
+    mini=True,
+    ymin=0.04,
+    marcais=True,
+    ks=ks,
+)
 
 # Plot 3: k=1 anchors
 k = 1
@@ -162,10 +187,24 @@ fs = [
     ("SusAntiLex", {"lc": "#0000ff", "label": "Sus-anchor AntiLex"}),
 ]
 plot(
-    "thesis/4-selection",
+    "dsb-slides/10-bd-anchor",
     sigma,
     w,
-    fs,
+    fs[0:4],
+    plot_w=True,
+    tight=True,
+    ymin=0,
+    ymax=0.85,
+    ncols=3,
+    add=1,
+    bold_last=False,
+    ws=ws,
+)
+plot(
+    "dsb-slides/11-sus",
+    sigma,
+    w,
+    fs[0:5],
     plot_w=True,
     tight=True,
     ymin=0,
@@ -175,12 +214,41 @@ plot(
     bold_last=True,
     ws=ws,
 )
+plot(
+    "dsb-slides/12-abb",
+    sigma,
+    w,
+    fs[0:6],
+    plot_w=True,
+    tight=True,
+    ymin=0,
+    ymax=0.85,
+    ncols=3,
+    add=1,
+    bold_last=True,
+    ws=ws,
+)
+plot(
+    "dsb-slides/13-asus",
+    sigma,
+    w,
+    fs[0:7],
+    plot_w=True,
+    tight=True,
+    ymin=0,
+    ymax=0.85,
+    ncols=3,
+    add=1,
+    bold_last=True,
+    ws=ws,
+)
+
 
 # Plot 4: selection for alphabet 2
 sigma = 2
 h.gen(n, sigma)
 plot(
-    "thesis/5-selection-s2",
+    "dsb-slides/14-asus-s2",
     sigma,
     w,
     fs,
@@ -193,34 +261,3 @@ plot(
     bold_last=True,
     ws=ws,
 )
-
-# Plot 5: sampling with selection for alphabet 4
-sigma = 4
-w = 24
-ks = range(1, 40)
-h.gen(n, sigma)
-plot(
-    "thesis/6-small-k",
-    sigma,
-    w,
-    fs_mod(t, sus=True),
-    add=0,
-    ncols=3,
-    trivial=True,
-    ks=ks,
-)
-
-# Plot 6: sampling with selection for alphabet 256
-# sigma = 256
-# t = 1
-# h.gen(n, sigma)
-# plot(
-#     "thesis/7-large-alphabet",
-#     sigma,
-#     w,
-#     fs_mod(t, sus=True),
-#     add=0,
-#     ncols=3,
-#     trivial=True,
-#     ks=ks,
-# )

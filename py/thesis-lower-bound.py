@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+# Plot for the minimizer density lower bound paper and thesis for small parameters.
+
 import math
 import gzip
 import json
