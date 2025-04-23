@@ -39,7 +39,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         "Lex" => Box::new(schemes::M(Lex)),
         "Alternating" => Box::new(schemes::M(Alternating)),
         "ABB" => Box::new(schemes::M(ABB)),
-        "ABB2" => Box::new(schemes::M((ABB, Lex))),
+        "ABB2" => Box::new(schemes::M((ABB, AntiLex))),
         "ThresholdABB" => Box::new(schemes::M(ThresholdABB {
             thr: get(args, "thr")? as u8,
         })),

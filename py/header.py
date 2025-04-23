@@ -50,13 +50,14 @@ def plot_lower_bounds(
     sigma,
     xs,
     wks,
+    df=False,
     loose=False,
     tight=True,
     ctd=False,
     marcais=False,
-    df=False,
     trivial=True,
     mini=False,
+    ilp=False,
 ):
     # Fix for density factor
     f = lambda w: w + 1 if df else 1
@@ -109,6 +110,44 @@ def plot_lower_bounds(
             linewidth=1.5,
             label="1/w",
         )
+    if ilp:
+        match_k = []
+        match_dens = []
+        nonmatch_k = []
+        nonmatch_dens = []
+        for (w, k), x in zip(wks, xs):
+            if (w, k, sigma) in fwd_wksigma_to_dens:
+                hasmatch = gp(sigma, w, k) == fwd_wksigma_to_dens[(w, k, sigma)]
+                if hasmatch:
+                    match_k.append(x)
+                    match_dens.append(fwd_wksigma_to_dens[(w, k, sigma)])
+                else:
+                    nonmatch_k.append(x)
+                    nonmatch_dens.append(fwd_wksigma_to_dens[(w, k, sigma)])
+
+        # Plot transparent circle
+        ax = plt.gca()
+        ax.scatter(
+            nonmatch_k,
+            nonmatch_dens,
+            # label="Optimal solution",
+            label=None,
+            color="black",
+            s=30,
+            facecolors="none",
+            lw=1.3,
+            zorder=100,
+        )
+        ax.scatter(
+            match_k,
+            match_dens,
+            # label="Optimum matches bound",
+            label=None,
+            color="black",
+            s=30,
+            zorder=100,
+        )
+        # ax.set_ylim(ymax=(1 + ylim_pad_factor) * match_dens[0])
 
 
 ## LOWER BOUNDS
@@ -214,13 +253,14 @@ def plot(
     ws=None,
     ts=None,
     height=4.8,
+    title=None,
     **kwargs,
 ):
     data = []
     ax = plt.gca()
     fig = plt.gcf()
     fig.set_size_inches(6.4, height)
-    style(ax, w, ks, plot_w=plot_w, plot_t=plot_t, df=df)
+    style(ax, w, ks, plot_w=plot_w, plot_t=plot_t, df=df, title=title)
     ax.yaxis.set_major_locator(MaxNLocator(nbins=10))
     ax.grid(True, axis="y", color="#ccc", linewidth=0.5)
     ax.set_ylim(ymin=ymin, ymax=ymax)
