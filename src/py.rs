@@ -157,7 +157,14 @@ fn stats(
     k: usize,
     sigma: usize,
     params: Option<&Bound<'_, PyDict>>,
-) -> PyResult<(f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>, HashMap<u64, usize>)> {
+) -> PyResult<(
+    f64,
+    Vec<f64>,
+    Vec<f64>,
+    Vec<Vec<f64>>,
+    HashMap<u64, usize>,
+    HashMap<u64, Vec<usize>>,
+)> {
     let scheme = get_scheme(tp, params)?.build(w, k, sigma);
     let stats = collect_stats(w, k, &text, &*scheme);
     Ok(stats)
@@ -189,7 +196,7 @@ fn density(
     sigma: usize,
     params: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<f64> {
-    stats(tp, text, w, k, sigma, params).map(|(density, _, _, _, _)| density)
+    stats(tp, text, w, k, sigma, params).map(|out| out.0)
 }
 
 #[pyfunction]

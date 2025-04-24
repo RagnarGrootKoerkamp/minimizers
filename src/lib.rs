@@ -99,7 +99,14 @@ pub fn collect_stats(
     k: usize,
     text: &[u8],
     scheme: &dyn SamplingScheme,
-) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>, HashMap<u64, usize>) {
+) -> (
+    f64,
+    Vec<f64>,
+    Vec<f64>,
+    Vec<Vec<f64>>,
+    HashMap<u64, usize>,
+    HashMap<u64, Vec<usize>>,
+) {
     let it = scheme.stream(text);
 
     let mut n = 0;
@@ -109,6 +116,7 @@ pub fn collect_stats(
     let mut transfer = vec![vec![0; w]; w];
     let mut last = 0;
     let mut counts = HashMap::new();
+    let mut dist_counts = HashMap::new();
     for (i, idx) in it.into_iter().enumerate() {
         assert!(
             i <= idx && idx < i + w,
@@ -120,7 +128,8 @@ pub fn collect_stats(
         transfer[last - (i - 1)][idx - i] += 1;
         if idx != last {
             anchors += 1;
-            ds[w + idx - last] += 1;
+            let dist = idx - last;
+            ds[w + dist] += 1;
             last = idx;
 
             // last bits
@@ -129,6 +138,7 @@ pub fn collect_stats(
                 x = (x << 1) | (c as u64 & 1);
             }
             *counts.entry(x).or_default() += 1;
+            dist_counts.entry(x).or_insert(vec![0; w + 1])[dist] += 1;
         }
     }
     let density = anchors as f64 / n as f64;
@@ -141,7 +151,7 @@ pub fn collect_stats(
         .into_iter()
         .map(|row| row.into_iter().map(|c| c as f64 / n as f64).collect())
         .collect();
-    (density, ps, ds, transfer, counts)
+    (density, ps, ds, transfer, counts, dist_counts)
 }
 
 /// Compute statistics on number of sampled positions on cycles of a given length.
