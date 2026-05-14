@@ -5,9 +5,9 @@ import itertools
 import sys
 from math import log
 
-w = 3
-k = 1
-s = 3
+w = 5
+k = 3
+s = 2
 if len(sys.argv) == 4:
     k, s, w = map(int, sys.argv[1:])
 
@@ -49,23 +49,21 @@ def greedy(scheme, g=[]):
     return f
 
 
-SUF = [0, -0.5]
+SUF = [2]
 
 
 def asus(lmer):
     global SUF
-    suffixes = sorted(
-        [
-            (
-                [ord(lmer[i]) - ord("0")]
-                + [-(ord(x) - ord("0")) for x in lmer[i + 1 :]]
-                + SUF,
-                i,
-            )
-            for i in range(len(lmer))
-        ]
+    best = min(
+        (
+            [ord(lmer[i]) - ord("0")]
+            + [-(ord(x) - ord("0")) for x in lmer[i + 1 :]]
+            + SUF,
+            i,
+        )
+        for i in range(len(lmer))
     )
-    return suffixes[0][1]
+    return best[1]
 
 
 def merge(pre, suf):
@@ -189,15 +187,19 @@ def density(scheme, ll=None):
     return density
 
 
-def cycles(s1, s2):
+def cycles(
+    s1,
+    # s2
+):
     print()
     print("BROKEN CYCLES")
+    count = 0
     for llmer in itertools.product(range(s), repeat=ll):
         llmer = "".join(str(x) for x in llmer)
         ismin = True
         llmer2 = llmer * 2
         p1 = set()
-        p2 = set()
+        # p2 = set()
         for i in range(ll):
             llmer3 = llmer2[i : i + ll]
             if llmer3 < llmer:
@@ -208,24 +210,45 @@ def cycles(s1, s2):
 
         for i in range(ll):
             lmer = llmer2[i : i + l]
-            p1.add((i + s1[lmer]) % ll)
-            p2.add((i + s2[lmer]) % ll)
-        if len(p1) == len(p2):
-            continue
+            p1.add((i + s1(lmer)) % ll)
+            # p2.add((i + s2[lmer]) % ll)
+        # if len(p1) == len(p2):
+        #     continue
 
-        print(llmer, p1, p2)
+        if len(p1) == 2:
+            continue
+        p1 = sorted(list(p1))
+
+        if ll % len(p1) == 0:
+            # Check if samples are exactly cyclic.
+            dist = ll // len(p1)
+            all = True
+            for i in range(len(p1) - 1):
+                if (p1[i + 1] - p1[i]) != dist:
+                    all = False
+                    break
+            if all:
+                continue
+
+        count += 1
+        print(llmer, p1)
         for i in range(ll):
             lmer = llmer2[i : i + l]
-            idx1 = s1[lmer]
-            idx2 = s2[lmer]
-            p1.add((i + idx1) % ll)
-            p2.add((i + idx2) % ll)
+            idx1 = s1(lmer)
+            # idx2 = s2[lmer]
+            # p1.push((i + idx1) % ll)
+            # p2.add((i + idx2) % ll)
             print(
                 f'{" " * i}{lmer}{" " * (ll - i)}',
-                f"{(i + idx2) % ll:>2}",
-                f"{lmer[idx2:]:<14}",
+                f"{(i + idx1) % ll:>2}",
+                f"{lmer[idx1:]:<14}",
                 list((i + x) for x in lr2(lmer, all=True)[1]),
             )
+    print("Total broken cycles:", count)
+
+
+cycles(asus)
+exit(0)
 
 
 # for lmer in scheme:

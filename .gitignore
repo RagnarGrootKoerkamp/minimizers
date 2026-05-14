@@ -8,3 +8,5 @@ flamegraph.svg
 /.env/
 /py/cache/
 /py/defense
+/py/.jupyter_ystore.db
+/py/fwd-sols

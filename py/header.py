@@ -58,6 +58,7 @@ def plot_lower_bounds(
     trivial=True,
     mini=False,
     ilp=False,
+    diff=False,
 ):
     # Fix for density factor
     f = lambda w: w + 1 if df else 1
@@ -79,20 +80,30 @@ def plot_lower_bounds(
             label="continuation",
         )
     if tight:
-        plt.plot(
-            xs,
-            [gp(sigma, w, k) * f(w) for (w, k) in wks],
-            color="red",
-            linewidth=1.5,
-            label="New l.b. (g')",
-        )
+        if diff is False:
+            plt.plot(
+                xs,
+                [gp(sigma, w, k) * f(w) for (w, k) in wks],
+                color="red",
+                linewidth=1.5,
+                label="New l.b. (g')",
+            )
+        if diff == "loose":
+            plt.plot(
+                xs,
+                [(gp(sigma, w, k) - lbp(w, k)) * f(w) for (w, k) in wks],
+                color="red",
+                linewidth=1.5,
+                label="New l.b. (g')",
+            )
     if loose:
         plt.plot(
             xs,
             [lbp(w, k) * f(w) for (w, k) in wks],
-            color="royalblue",
+            color="red",
             linewidth=1.5,
             label="⌈(w+k)/w⌉/(w+k)",
+            ls=":",
         )
     if marcais:
         plt.plot(
@@ -254,6 +265,7 @@ def plot(
     ts=None,
     height=4.8,
     title=None,
+    diff=False,
     **kwargs,
 ):
     data = []
@@ -304,6 +316,10 @@ def plot(
                 my_args["sampling"] = t
                 print("sigma", sigma)
                 d = density(tp, w, k, sigma, **my_args)
+                if diff == "tight":
+                    d -= gp(sigma, w, k)
+                if diff == "loose":
+                    d -= lbp(w, k)
                 if df:
                     d *= w + 1
                 my_args["k"] = k
@@ -330,6 +346,10 @@ def plot(
                 if "thin" in my_args:
                     my_args.pop("thin")
                 d = density(tp, w, k, sigma, **my_args)
+                if diff == "tight":
+                    d -= gp(sigma, w, k)
+                if diff == "loose":
+                    d -= lbp(w, k)
                 if df:
                     d *= w + 1
                 my_args["k"] = k
@@ -419,7 +439,7 @@ def plot(
     for _ in range(add):
         plt.plot([], [], label=" ", alpha=0)
 
-    plot_lower_bounds(sigma, xs, wks, df=df, **kwargs)
+    plot_lower_bounds(sigma, xs, wks, df=df, diff=diff, **kwargs)
 
     if plot_w:
         loc = "upper center"
@@ -428,7 +448,7 @@ def plot(
     plt.legend(
         loc=loc, bbox_to_anchor=(0, 0.03, 1, 1), ncols=ncols, mode="expand", fontsize=9
     )
-    # plt.savefig(f"{name}.png", bbox_inches="tight", dpi=400)
+    plt.savefig(f"{name}.png", bbox_inches="tight", dpi=400)
     plt.savefig(f"{name}.svg", bbox_inches="tight")
     plt.close()
     return data

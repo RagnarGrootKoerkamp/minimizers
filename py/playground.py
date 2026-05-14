@@ -13,6 +13,17 @@ def min_rot(window):
     return window == min(window[i:] + window[:i] for i in range(len(window)))
 
 
+def print_scheme(f, w):
+    for s in itertools.product([0, 1], repeat=w):
+        p = f(s)
+        print(
+            fmt(s),
+            f"{p:>2}",
+            " " * (w - p),
+            fmt(s[:p]) + " " + str(s[p]) + " " + fmt(s[p + 1 :]),
+        )
+
+
 def density(f, w):
     ll = w + 1
 
@@ -156,6 +167,7 @@ def step_runs(vals, p=False):
     if len(runs) > 1 and runs[-1][1] == 0:
         runs.pop()
 
+    # Go from (0+1, 0) to (0+1,1) to (0,1)
     for i in range(len(runs)):
         runs[i][1] = runs[i][0] - runs[i][1]
         runs[i][0] -= runs[i][1]
@@ -803,20 +815,50 @@ w = 6
 if len(sys.argv) > 1:
     w = int(sys.argv[1])
 
+
+import pickle as pck
+
+k = 1
+sigma = 2
+file = f"fwd-sols/w{w}-k{k}-s{sigma}.pck"
+ilp_data = pck.load(open(file, "rb"))[(w, k, sigma)]
+assert len(ilp_data) == 1
+ilp_data = ilp_data[0]
+
+
+def ilp(window, p=False):
+    return ilp_data[fmt(window)]
+
+
+print_scheme(ilp, w)
+
+# density(step2, w)  # up to 11
+density(ilp, w)  # up to 12
+
+
+# BEST: step2
+
 # density(scheme1, w)
 # density(scheme2, w)
 # density(scheme3, w)
-# density(step1, w)
-# density(step3, w)
-# density(step2, w)
+# density(step1, w)  # up to 9
+# density(step2, w)  # up to 11
+# density(step3, w)  # up to 9
+# density(ilp, w)  # up to 12
 
 # density(step2, w)
+# print("\n\nGGGGGGGGGGGGG\n\n")
 # density(sus2, w)  # w=12 -> 45
+# print("\n\nHHHHHHHHHHHHH\n\n")
 # density(ladder, w)  # w=12 -> 40
+# print("\n\nIIIIIIIIIIIIII\n\n")
 # density(rot_sus, w)
+# print("\n\nJJJJJJJJJJJJJ\n\n")
 # density(new, w)
+# print("\n\nKKKKKKKKKKKKK\n\n")
 # density(new2, w)  # w=12 -> 100
+# print("\n\nLLLLLLLLLLLLL\n\n")
 # density(lr2, w)  # w=12 -> 100
 
 # density(sus3, w)  # w=12 -> 45
-density(lyndon, w)  # w=12 -> 45
+# density(lyndon, w)  # w=12 -> 45
