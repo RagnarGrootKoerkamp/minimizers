@@ -142,7 +142,7 @@ fn main() {
 
 fn run(f: &ExplicitLocalScheme) {
     let (text, len) = cyclic_exact_density_string(f.k, f.w, f.sigma, false);
-    let cnt = f.cyclic_text_density(&text, len);
+    let cnt = f.cyclic_text_samples(&text, len).len();
     let fwd = f.is_forward(&text);
 
     eprintln!(

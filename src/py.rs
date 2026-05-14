@@ -163,7 +163,7 @@ fn stats(
     Vec<f64>,
     Vec<Vec<f64>>,
     HashMap<u64, usize>,
-    HashMap<u64, Vec<usize>>,
+    HashMap<u64, (Vec<usize>, Vec<usize>, Vec<usize>)>,
 )> {
     let scheme = get_scheme(tp, params)?.build(w, k, sigma);
     let stats = collect_stats(w, k, &text, &*scheme);
@@ -182,7 +182,7 @@ fn cycle_stats(
     params: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<(f64, Vec<f64>)> {
     let scheme = get_scheme(tp, params)?.build(w, k, sigma);
-    let stats = super::cycle_stats(l, &text, &*scheme);
+    let stats = super::cycle_stats(l, w, &text, &*scheme);
     Ok(stats)
 }
 
@@ -201,7 +201,7 @@ fn density(
 
 #[pyfunction]
 pub fn generate_random_string(n: usize, sigma: usize) -> PyResult<Vec<u8>> {
-    Ok(super::generate_random_string(n, sigma))
+    Ok(super::generate_true_random_string(n, sigma))
 }
 
 /// A Python module implemented in Rust. The name of this function must match

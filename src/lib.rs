@@ -13,8 +13,9 @@ mod py;
 use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;
 use order::*;
+use rand::{thread_rng, RngCore};
 use rand_chacha::{
-    rand_core::{RngCore, SeedableRng},
+    rand_core::{RngCore as _, SeedableRng},
     ChaChaRng,
 };
 use std::{collections::HashMap, fmt::Debug};
@@ -57,12 +58,12 @@ pub trait SamplingScheme: Sync {
     /// characters must equal a prefix of the text.
     ///
     /// Returns the number of selected minimizers.
-    fn cyclic_text_density(&self, text: &[u8], len: usize) -> usize {
+    fn cyclic_text_samples(&self, text: &[u8], len: usize) -> Vec<usize> {
         let text = &text[..len + self.l() - 1];
         let mut poss: Vec<_> = self.stream(text).iter().map(|p| p % len).collect();
         poss.sort();
         poss.dedup();
-        poss.len()
+        poss
     }
 
     fn is_forward(&self, text: &[u8]) -> bool {
@@ -89,6 +90,13 @@ pub fn generate_random_string(n: usize, sigma: usize) -> Vec<u8> {
         .collect()
 }
 
+pub fn generate_true_random_string(n: usize, sigma: usize) -> Vec<u8> {
+    let mut rng = thread_rng();
+    (0..n)
+        .map(|_| (((rng.next_u64() as usize) % sigma) as u8))
+        .collect()
+}
+
 /// Returns:
 /// - density
 /// - position distribution
@@ -105,7 +113,7 @@ pub fn collect_stats(
     Vec<f64>,
     Vec<Vec<f64>>,
     HashMap<u64, usize>,
-    HashMap<u64, Vec<usize>>,
+    HashMap<u64, (Vec<usize>, Vec<usize>, Vec<usize>)>,
 ) {
     let it = scheme.stream(text);
 
@@ -117,6 +125,7 @@ pub fn collect_stats(
     let mut last = 0;
     let mut counts = HashMap::new();
     let mut dist_counts = HashMap::new();
+    let mut last_x = 0;
     for (i, idx) in it.into_iter().enumerate() {
         assert!(
             i <= idx && idx < i + w,
@@ -124,22 +133,37 @@ pub fn collect_stats(
             i + w
         );
         n += 1;
-        ps[idx - i] += 1;
+        let pos = idx - i;
+        ps[pos] += 1;
         transfer[last - (i - 1)][idx - i] += 1;
+
+        let mut x = 0;
+        for &c in &text[idx..idx + k] {
+            x = (x << 1) | (c as u64 & 1);
+        }
         if idx != last {
             anchors += 1;
             let dist = idx - last;
             ds[w + dist] += 1;
             last = idx;
 
-            // last bits
-            let mut x = 0;
-            for &c in &text[idx..idx + k] {
-                x = (x << 1) | (c as u64 & 1);
-            }
             *counts.entry(x).or_default() += 1;
-            dist_counts.entry(x).or_insert(vec![0; w + 1])[dist] += 1;
+            if idx > last {
+                dist_counts
+                    .entry(x)
+                    .or_insert((vec![0; w + 1], vec![0; w + 1], vec![0; w]))
+                    .0[dist] += 1;
+                dist_counts
+                    .entry(last_x)
+                    .or_insert((vec![0; w + 1], vec![0; w + 1], vec![0; w]))
+                    .1[dist] += 1;
+            }
         }
+        dist_counts
+            .entry(x)
+            .or_insert((vec![0; w + 1], vec![0; w + 1], vec![0; w]))
+            .2[pos] += 1;
+        last_x = x;
     }
     let density = anchors as f64 / n as f64;
     let ps = ps.into_iter().map(|c| (c * w) as f64 / n as f64).collect();
@@ -155,12 +179,19 @@ pub fn collect_stats(
 }
 
 /// Compute statistics on number of sampled positions on cycles of a given length.
-pub fn cycle_stats(l: usize, text: &[u8], scheme: &dyn SamplingScheme) -> (f64, Vec<f64>) {
+pub fn cycle_stats(
+    l: usize,
+    w: usize,
+    text: &[u8],
+    scheme: &dyn SamplingScheme,
+) -> (f64, Vec<f64>) {
     let mut cycle = vec![0; 4 * l];
     let mut stats = vec![0; l + 1];
     let mut total = 0;
     let mut num_windows = 0;
     let mut num_cycles = 0;
+
+    let mut bad_cycles = HashMap::new();
 
     // Find length-l cycles.
     for c in text.chunks_exact(l) {
@@ -169,12 +200,36 @@ pub fn cycle_stats(l: usize, text: &[u8], scheme: &dyn SamplingScheme) -> (f64, 
         cycle[l..2 * l].copy_from_slice(c);
         cycle[2 * l..3 * l].copy_from_slice(c);
         cycle[3 * l..4 * l].copy_from_slice(c);
-        let samples = scheme.cyclic_text_density(&cycle, l);
-        stats[samples] += 1;
-        total += samples;
+        let mut samples = scheme.cyclic_text_samples(&cycle, l);
+        stats[samples.len()] += 1;
+        total += samples.len();
         num_windows += l;
         num_cycles += 1;
+
+        if samples.len() > l.div_ceil(w) {
+            // find the min rotation
+            let min_pos = cycle.windows(l).take(l).position_min().unwrap();
+            let c = &mut cycle[min_pos..min_pos + l];
+
+            for x in c.iter_mut() {
+                *x += b'0';
+            }
+            let s = unsafe { String::from_utf8_unchecked(c.to_vec()) };
+            for x in &mut samples {
+                *x = (*x + l - min_pos) % l;
+            }
+            samples.sort();
+            bad_cycles.insert(s, samples);
+        }
     }
+
+    let mut bad_cycles = bad_cycles.into_iter().collect::<Vec<_>>();
+    bad_cycles.sort();
+    eprintln!("\nBad cycles");
+    for (bad_cycle, samples) in bad_cycles {
+        println!("{bad_cycle} {samples:?}");
+    }
+
     let density = total as f64 / num_windows as f64;
     let stats = stats
         .into_iter()

@@ -51,7 +51,7 @@ pub fn bruteforce_minimizer(
                 idx: perm,
             };
             let minimizer = Minimizer::new(k, w, o);
-            let cnt = minimizer.cyclic_text_density(&text, len);
+            let cnt = minimizer.cyclic_text_samples(&text, len).len();
             (cnt, minimizer)
         })
         .min_by_key(|x| x.0)
@@ -90,7 +90,7 @@ pub fn bruteforce_directed_minimizer(
                         idx: zip(perm.iter().copied(), directions.iter().copied()).collect_vec(),
                     };
                     let minimizer = Minimizer::new(k, w, o);
-                    let cnt = minimizer.cyclic_text_density(&text, len);
+                    let cnt = minimizer.cyclic_text_samples(&text, len).len();
                     (cnt, minimizer)
                 })
                 .min_by_key(|x| x.0)
