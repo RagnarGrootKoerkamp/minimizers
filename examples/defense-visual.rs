@@ -1,11 +1,10 @@
 //! Take a .fa file, compute minimizers, and highlight those in red.
 
-use std::{ops::Range, thread::sleep, time::Duration};
+use std::ops::Range;
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use colored::Colorize;
 use minimizers::{order::Lex, schemes::Minimizer, SamplingScheme};
-use needletail::Sequence;
 
 #[derive(Parser)]
 enum Commands {
