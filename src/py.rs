@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 
 use crate::{
-    collect_stats, order::T2, schemes::greedy::GreedyP, Alternating, AntiLex, Lex, RandomO,
-    ThresholdABB, ABB,
+    collect_stats,
+    order::{RandomLexO, RcAntiLex, RcAntiLexMax, T2},
+    schemes::greedy::GreedyP,
+    Alternating, AntiLex, Lex, RandomO, ThresholdABB, ABB,
 };
 
 fn get(dict: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<usize> {
@@ -73,6 +75,8 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         ))),
         "AntiLex" => Box::new(schemes::M(AntiLex)),
         "Greedy" => Box::new(schemes::M(GreedyP)),
+        "RcAntiLex" => Box::new(schemes::M(RcAntiLex)),
+        "RcAntiLexMax" => Box::new(schemes::M(RcAntiLexMax)),
 
         // Decycling
         "Decycling" => Box::new(schemes::RM(Decycling { double: false })),
@@ -96,6 +100,10 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
             Lex,
         ))),
         "SusAntiLex" => Box::new(schemes::SusAnchor(AntiLex)),
+        "SusAntiLexLong" => Box::new(schemes::SusAnchor(AntiLexLong)),
+        "SusRandomLex" => Box::new(schemes::SusAnchor(RandomLexO(
+            get(args, "seed").unwrap_or(8797977),
+        ))),
 
         "FracMin" => Box::new(schemes::RM(schemes::FracMin { f: get(args, "f")? })),
         "OpenClosed" => {

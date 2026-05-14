@@ -248,6 +248,81 @@ impl Order for AntiLex {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct RcAntiLex;
+
+impl Order for RcAntiLex {
+    type T = usize;
+    fn key(&self, kmer: &[u8]) -> usize {
+        let k = kmer.len();
+        assert!(k <= 8);
+        let mut fwd = [0xff; 8];
+        for i in 0..k {
+            fwd[i] = kmer[k - 1 - i];
+            if i != k - 1 {
+                fwd[i] ^= 0xff;
+            }
+        }
+        let f = usize::from_ne_bytes(fwd);
+
+        let mut rev = [0xff; 8];
+        for i in 0..k {
+            rev[i] = !kmer[i];
+            if i != k - 1 {
+                rev[i] ^= 0xff;
+            }
+        }
+        let r = usize::from_ne_bytes(rev);
+        f.min(r)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct RcAntiLexMax;
+
+impl Order for RcAntiLexMax {
+    type T = usize;
+    fn key(&self, kmer: &[u8]) -> usize {
+        let k = kmer.len();
+        assert!(k <= 8);
+        let mut fwd = [0xff; 8];
+        for i in 0..k {
+            fwd[i] = kmer[k - 1 - i];
+            if i != k - 1 {
+                fwd[i] ^= 0xff;
+            }
+        }
+        let f = usize::from_ne_bytes(fwd);
+
+        let mut rev = [0xff; 8];
+        for i in 0..k {
+            rev[i] = !kmer[i];
+            if i != k - 1 {
+                rev[i] ^= 0xff;
+            }
+        }
+        let r = usize::from_ne_bytes(rev);
+        f.max(r)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct RandomLexO(pub usize);
+
+impl Order for RandomLexO {
+    type T = [u8; 8];
+    fn key(&self, kmer: &[u8]) -> Self::T {
+        let s = 8usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 8];
+        let mut hashes = [u8::MAX; 8];
+        for i in 0..8 - s {
+            prefix[7 - i] = kmer[i];
+            hashes[i] = (fxhash::hash32(&(usize::from_ne_bytes(prefix) ^ self.0)) >> 24) as u8;
+        }
+        hashes
+    }
+}
+
 impl<O1: Order, O2: Order> Order for (O1, O2) {
     type T = (O1::T, O2::T);
     fn key(&self, kmer: &[u8]) -> Self::T {
@@ -328,5 +403,24 @@ impl ToOrder for AntiLex {
     type O = AntiLex;
     fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
         AntiLex
+    }
+}
+impl ToOrder for RcAntiLex {
+    type O = RcAntiLex;
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
+        RcAntiLex
+    }
+}
+impl ToOrder for RcAntiLexMax {
+    type O = RcAntiLexMax;
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
+        RcAntiLexMax
+    }
+}
+
+impl ToOrder for RandomLexO {
+    type O = RandomLexO;
+    fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> Self::O {
+        *self
     }
 }
