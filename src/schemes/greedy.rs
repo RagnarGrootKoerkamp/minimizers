@@ -1,5 +1,6 @@
 use std::{fs::File, io::Read};
 
+use itertools::Itertools;
 use serde::Serialize;
 
 use crate::order::{Order, ToOrder};
@@ -8,9 +9,25 @@ use crate::order::{Order, ToOrder};
 pub struct GreedyP;
 
 pub struct Greedy {
+    k: usize,
     base: usize,
     factor: usize,
     idx: Vec<u16>,
+}
+
+impl Greedy {
+    pub fn print(&self) {
+        let mut data = self.idx.iter().copied().enumerate().collect_vec();
+        data.sort_by_key(|(_, v)| *v);
+        let max = self.idx.iter().copied().max().unwrap();
+        let data = data
+            .iter()
+            .filter_map(|&(i, v)| (v < max).then(|| i))
+            .collect_vec();
+        for kmer in data {
+            eprintln!("{kmer:>0k$b}", k = self.k);
+        }
+    }
 }
 
 impl ToOrder for GreedyP {
@@ -43,7 +60,12 @@ impl ToOrder for GreedyP {
             idx[i] = u64::from_ne_bytes(data[start..end].try_into().unwrap()) as u16;
         }
         let factor = base.pow(k as _);
-        Greedy { base, factor, idx }
+        Greedy {
+            k,
+            base,
+            factor,
+            idx,
+        }
     }
 }
 
