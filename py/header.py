@@ -27,6 +27,10 @@ def style(ax, w, ks, title=None, plot_w=False, plot_t=False, df=False):
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
 
+    if df:
+        ax.set_ylabel("Density factor")
+    else:
+        ax.set_ylabel("Density")
     df = w + 1 if df else 1
 
     if not plot_w and not plot_t:
@@ -44,7 +48,6 @@ def style(ax, w, ks, title=None, plot_w=False, plot_t=False, df=False):
         ax.set_xlabel("t")
     else:
         ax.set_xlabel("k")
-    ax.set_ylabel("Density")
     if title:
         ax.set_title(title)
 
@@ -223,21 +226,22 @@ def gen_inner(text_len, sigma):
     return minimizers.generate_random_string(text_len, sigma)
 
 
-_text = []
+_text_len = 0
 
 
 def gen(text_len, sigma):
-    global _text
-    _text = gen_inner(text_len, sigma)
+    global _text_len
+    _text_len = text_len
 
 
 @diskcache.memoize(tag="density")
-def density_inner(tp, text_len, w, k, sigma, **args):
-    return minimizers.density(tp, _text, w, k, sigma, **args)
+def density_inner(tp, w, k, sigma, **args):
+    text = minimizers.generate_random_string(_text_len, sigma)
+    return minimizers.density(tp, text, w, k, sigma, **args)
 
 
 def density(tp, w, k, sigma, **args):
-    return density_inner(tp, len(_text), w, k, sigma, **args)
+    return density_inner(tp, w, k, sigma, **args)
 
 
 fwd_wksigma_to_dens = {}
@@ -296,7 +300,7 @@ def plot(
 
     for i, tp_args in enumerate(tps):
         if isinstance(tp_args, tuple):
-            (tp, args) = tp_args
+            tp, args = tp_args
         else:
             tp = tp_args
             args = {}
