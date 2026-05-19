@@ -3,10 +3,13 @@ import matplotlib.pyplot as plt
 import sympy
 from sympy import totient, isprime, divisors
 from sympy.functions.combinatorial.numbers import mobius
-from matplotlib.ticker import MaxNLocator, FormatStrFormatter
+from matplotlib.ticker import MaxNLocator, FormatStrFormatter, AutoLocator
 from functools import cache
 import fractions
 import json
+import numpy as np
+
+
 
 ## PLOT STYLING
 
@@ -266,6 +269,7 @@ def plot(
     height=4.8,
     title=None,
     diff=False,
+    split=None,
     **kwargs,
 ):
     data = []
@@ -276,6 +280,9 @@ def plot(
     ax.yaxis.set_major_locator(MaxNLocator(nbins=10))
     ax.grid(True, axis="y", color="#ccc", linewidth=0.5)
     ax.set_ylim(ymin=ymin, ymax=ymax)
+
+    if split is not None:
+        ax.set_xscale("split_linear_log2", split=split)
 
     if plot_t:
         wks = [(w, k) for _ in ts]

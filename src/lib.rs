@@ -13,7 +13,7 @@ mod py;
 use crate::monotone_queue::MonotoneQueue;
 use itertools::Itertools;
 use order::*;
-use rand::{thread_rng, RngCore};
+use rand::{thread_rng, Rng};
 use rand_chacha::{
     rand_core::{RngCore as _, SeedableRng},
     ChaChaRng,
@@ -86,14 +86,14 @@ pub trait SamplingScheme: Sync {
 pub fn generate_random_string(n: usize, sigma: usize) -> Vec<u8> {
     let mut rng = ChaChaRng::seed_from_u64(213456);
     (0..n)
-        .map(|_| (((rng.next_u64() as usize) % sigma) as u8))
+        .map(|_| ((rng.next_u64() as usize) % sigma) as u8)
         .collect()
 }
 
 pub fn generate_true_random_string(n: usize, sigma: usize) -> Vec<u8> {
     let mut rng = thread_rng();
     (0..n)
-        .map(|_| (((rng.next_u64() as usize) % sigma) as u8))
+        .map(|_| rng.gen_range(0..=(sigma - 1) as u8))
         .collect()
 }
 
