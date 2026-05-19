@@ -100,7 +100,6 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
             Lex,
         ))),
         "SusAntiLex" => Box::new(schemes::SusAnchor(AntiLex)),
-        "SusAntiLexLong" => Box::new(schemes::SusAnchor(AntiLexLong)),
         "SusRandomLex" => Box::new(schemes::SusAnchor(RandomLexO(
             get(args, "seed").unwrap_or(8797977),
         ))),

@@ -234,17 +234,17 @@ impl Order for T2 {
 pub struct AntiLex;
 
 impl Order for AntiLex {
-    type T = usize;
-    fn key(&self, kmer: &[u8]) -> usize {
-        let s = 8usize.saturating_sub(kmer.len());
-        let mut prefix = [0xff; 8];
-        for i in 0..8 - s {
-            prefix[7 - i] = kmer[i];
+    type T = u128;
+    fn key(&self, kmer: &[u8]) -> u128 {
+        let s = 16usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 16];
+        for i in 0..16 - s {
+            prefix[15 - i] = kmer[i];
             if i != 0 {
-                prefix[7 - i] ^= 0xff;
+                prefix[15 - i] ^= 0xff;
             }
         }
-        usize::from_ne_bytes(prefix)
+        u128::from_ne_bytes(prefix)
     }
 }
 
