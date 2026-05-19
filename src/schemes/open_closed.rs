@@ -18,7 +18,7 @@ impl OpenClosed<RandomO> {
     }
 }
 
-impl<OO: Order<T = usize>, O: ToOrder<O = OO>> ToOrder for OpenClosed<O> {
+impl<OO: Order<T = u128>, O: ToOrder<O = OO>> ToOrder for OpenClosed<O> {
     type O = OpenClosedO<O::O>;
     fn to_order(&self, w: usize, k: usize, sigma: usize) -> Self::O {
         let Self {
@@ -75,7 +75,7 @@ pub struct OpenClosedO<O: Order> {
     fastmod_w: FM32,
 }
 
-impl<O: Order<T = usize>> OpenClosedO<O> {
+impl<O: Order<T = u128>> OpenClosedO<O> {
     #[inline(always)]
     fn inner_key(&self, kmer: &[u8], x: usize) -> (u8, O::T) {
         let w0 = self.k - self.r + 1;
@@ -111,7 +111,7 @@ impl<O: Order<T = usize>> OpenClosedO<O> {
     }
 }
 
-impl<O: Order<T = usize>> Order for OpenClosedO<O> {
+impl<O: Order<T = u128>> Order for OpenClosedO<O> {
     type T = (u8, O::T);
 
     #[inline(always)]

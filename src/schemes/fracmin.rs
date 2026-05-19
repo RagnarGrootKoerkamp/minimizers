@@ -2,14 +2,14 @@ use super::*;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FracMinO {
-    bound: usize,
+    bound: u128,
     o: RandomO,
 }
 
 impl ToOrder for FracMin {
     type O = FracMinO;
     fn to_order(&self, _w: usize, _k: usize, _sigma: usize) -> FracMinO {
-        let bound = usize::MAX / self.f;
+        let bound = u128::MAX / self.f as u128;
         FracMinO { bound, o: RandomO }
     }
 }

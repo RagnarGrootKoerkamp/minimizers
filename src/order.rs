@@ -65,10 +65,10 @@ impl Order for () {
 pub struct RandomO;
 
 impl Order for RandomO {
-    type T = usize;
+    type T = u128;
     #[inline(always)]
-    fn key(&self, kmer: &[u8]) -> usize {
-        wyhash::wyhash(kmer, 3141592) as usize
+    fn key(&self, kmer: &[u8]) -> u128 {
+        wyhash::wyhash(kmer, 3141592) as u128
     }
 }
 
@@ -140,14 +140,14 @@ impl DirectedOrder for ExplicitDirectedOrder {
 pub struct Lex;
 
 impl Order for Lex {
-    type T = usize;
-    fn key(&self, kmer: &[u8]) -> usize {
-        let s = 8usize.saturating_sub(kmer.len());
-        let mut prefix = [0xff; 8];
-        for i in 0..8 - s {
-            prefix[7 - i] = kmer[i];
+    type T = u128;
+    fn key(&self, kmer: &[u8]) -> u128 {
+        let s = 16usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 16];
+        for i in 0..16 - s {
+            prefix[15 - i] = kmer[i];
         }
-        usize::from_ne_bytes(prefix)
+        u128::from_ne_bytes(prefix)
     }
 }
 
@@ -155,17 +155,17 @@ impl Order for Lex {
 pub struct Alternating;
 
 impl Order for Alternating {
-    type T = usize;
-    fn key(&self, kmer: &[u8]) -> usize {
-        let s = 8usize.saturating_sub(kmer.len());
-        let mut prefix = [0xff; 8];
-        for i in 0..8 - s {
-            prefix[7 - i] = kmer[i];
+    type T = u128;
+    fn key(&self, kmer: &[u8]) -> u128 {
+        let s = 16usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 16];
+        for i in 0..16 - s {
+            prefix[15 - i] = kmer[i];
             if i % 2 == 1 {
-                prefix[7 - i] ^= 0xff;
+                prefix[15 - i] ^= 0xff;
             }
         }
-        usize::from_ne_bytes(prefix)
+        u128::from_ne_bytes(prefix)
     }
 }
 
@@ -173,21 +173,21 @@ impl Order for Alternating {
 pub struct ABB;
 
 impl Order for ABB {
-    type T = usize;
-    fn key(&self, kmer: &[u8]) -> usize {
-        let s = 8usize.saturating_sub(kmer.len());
-        let mut prefix = [0xff; 8];
-        for i in 0..8 - s {
-            prefix[7 - i] = kmer[i];
+    type T = u128;
+    fn key(&self, kmer: &[u8]) -> u128 {
+        let s = 16usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 16];
+        for i in 0..16 - s {
+            prefix[15 - i] = kmer[i];
             if i > 0 {
-                if prefix[7 - i] > 0 {
-                    prefix[7 - i] = 0;
+                if prefix[15 - i] > 0 {
+                    prefix[15 - i] = 0;
                 } else {
-                    prefix[7 - i] = 1;
+                    prefix[15 - i] = 1;
                 }
             }
         }
-        usize::from_ne_bytes(prefix)
+        u128::from_ne_bytes(prefix)
     }
 }
 
@@ -197,11 +197,11 @@ pub struct ThresholdABB {
 }
 
 impl Order for ThresholdABB {
-    type T = u64;
+    type T = u128;
     fn key(&self, kmer: &[u8]) -> Self::T {
         let mut x = 1;
         for &c in kmer {
-            x ^= (c < self.thr) as u64;
+            x ^= (c < self.thr) as u128;
             x <<= 1;
         }
         // eprintln!("{x:>32b}");
@@ -252,27 +252,27 @@ impl Order for AntiLex {
 pub struct RcAntiLex;
 
 impl Order for RcAntiLex {
-    type T = usize;
-    fn key(&self, kmer: &[u8]) -> usize {
+    type T = u128;
+    fn key(&self, kmer: &[u8]) -> u128 {
         let k = kmer.len();
-        assert!(k <= 8);
-        let mut fwd = [0xff; 8];
+        assert!(k <= 16);
+        let mut fwd = [0xff; 16];
         for i in 0..k {
             fwd[i] = kmer[k - 1 - i];
             if i != k - 1 {
                 fwd[i] ^= 0xff;
             }
         }
-        let f = usize::from_ne_bytes(fwd);
+        let f = u128::from_ne_bytes(fwd);
 
-        let mut rev = [0xff; 8];
+        let mut rev = [0xff; 16];
         for i in 0..k {
             rev[i] = !kmer[i];
             if i != k - 1 {
                 rev[i] ^= 0xff;
             }
         }
-        let r = usize::from_ne_bytes(rev);
+        let r = u128::from_ne_bytes(rev);
         f.min(r)
     }
 }
@@ -281,43 +281,43 @@ impl Order for RcAntiLex {
 pub struct RcAntiLexMax;
 
 impl Order for RcAntiLexMax {
-    type T = usize;
-    fn key(&self, kmer: &[u8]) -> usize {
+    type T = u128;
+    fn key(&self, kmer: &[u8]) -> u128 {
         let k = kmer.len();
-        assert!(k <= 8);
-        let mut fwd = [0xff; 8];
+        assert!(k <= 16);
+        let mut fwd = [0xff; 16];
         for i in 0..k {
             fwd[i] = kmer[k - 1 - i];
             if i != k - 1 {
                 fwd[i] ^= 0xff;
             }
         }
-        let f = usize::from_ne_bytes(fwd);
+        let f = u128::from_ne_bytes(fwd);
 
-        let mut rev = [0xff; 8];
+        let mut rev = [0xff; 16];
         for i in 0..k {
             rev[i] = !kmer[i];
             if i != k - 1 {
                 rev[i] ^= 0xff;
             }
         }
-        let r = usize::from_ne_bytes(rev);
+        let r = u128::from_ne_bytes(rev);
         f.max(r)
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize)]
-pub struct RandomLexO(pub usize);
+pub struct RandomLexO(pub u128);
 
 impl Order for RandomLexO {
-    type T = [u8; 8];
+    type T = [u8; 16];
     fn key(&self, kmer: &[u8]) -> Self::T {
-        let s = 8usize.saturating_sub(kmer.len());
-        let mut prefix = [0xff; 8];
-        let mut hashes = [u8::MAX; 8];
-        for i in 0..8 - s {
+        let s = 16usize.saturating_sub(kmer.len());
+        let mut prefix = [0xff; 16];
+        let mut hashes = [u8::MAX; 16];
+        for i in 0..16 - s {
             prefix[7 - i] = kmer[i];
-            hashes[i] = (fxhash::hash32(&(usize::from_ne_bytes(prefix) ^ self.0)) >> 24) as u8;
+            hashes[i] = (fxhash::hash32(&(u128::from_ne_bytes(prefix) ^ self.0)) >> 24) as u8;
         }
         hashes
     }

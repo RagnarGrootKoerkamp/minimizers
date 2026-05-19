@@ -5,7 +5,7 @@ fn main() {
     let args = std::env::args().collect_vec();
     let seed = args[1].parse::<usize>().unwrap();
     let k = args[2].parse::<usize>().unwrap();
-    let o = RandomLexO(seed);
+    let o = RandomLexO(seed as u128);
 
     let sigma = 2;
     let mut strings = vec![];

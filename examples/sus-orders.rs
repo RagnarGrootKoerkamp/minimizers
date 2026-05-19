@@ -40,7 +40,7 @@ fn main() {
         for w in 2..=w {
             eprint!("w {w:>3}:  ");
             for &seed in &args.seed {
-                let s = SusAnchorS::new(w, k, RandomLexO(seed));
+                let s = SusAnchorS::new(w, k, RandomLexO(seed as u128));
                 let lb = (len * (w + k).div_ceil(w) / (w + k)) as isize;
                 let cnt;
                 if exact {
@@ -66,7 +66,7 @@ fn main() {
     for i in 0..1000 {
         // let s = s.build(w, k, sigma);
         let seed = random::<u32>() as usize;
-        let s = Box::new(SusAnchorS::new(w, k, RandomLexO(seed)));
+        let s = Box::new(SusAnchorS::new(w, k, RandomLexO(seed as u128)));
         let cnt;
         let cnt2;
         if exact {

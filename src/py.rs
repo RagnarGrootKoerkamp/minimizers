@@ -101,7 +101,7 @@ fn get_scheme(tp: &str, args: Option<&Bound<'_, PyDict>>) -> PyResult<Box<dyn su
         ))),
         "SusAntiLex" => Box::new(schemes::SusAnchor(AntiLex)),
         "SusRandomLex" => Box::new(schemes::SusAnchor(RandomLexO(
-            get(args, "seed").unwrap_or(8797977),
+            get(args, "seed").unwrap_or(8797977) as u128,
         ))),
 
         "FracMin" => Box::new(schemes::RM(schemes::FracMin { f: get(args, "f")? })),

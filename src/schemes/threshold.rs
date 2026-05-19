@@ -62,7 +62,7 @@ impl ThresholdMinimizer {
         }
     }
 
-    fn hash_kmer(&self, kmer: &[u8]) -> (i32, isize, usize) {
+    fn hash_kmer(&self, kmer: &[u8]) -> (i32, isize, u128) {
         // Hash all tmers in the kmer.
         // If the first tmer is the only one > threshold, it's a good kmer.
         let mut pref = 0;
