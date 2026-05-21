@@ -1,15 +1,14 @@
 import minimizers.minimizers
 import matplotlib.pyplot as plt
+import math
 import sympy
 from sympy import totient, isprime, divisors
 from sympy.functions.combinatorial.numbers import mobius
-from matplotlib.ticker import MaxNLocator, FormatStrFormatter, AutoLocator
+from matplotlib.ticker import MaxNLocator, FormatStrFormatter, LogLocator, FuncFormatter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import cache
 import fractions
 import json
-import numpy as np
-
-
 
 ## PLOT STYLING
 
@@ -271,6 +270,7 @@ def plot(
     title=None,
     diff=False,
     split=None,
+    lw=0,
     **kwargs,
 ):
     data = []
@@ -282,14 +282,13 @@ def plot(
     ax.grid(True, axis="y", color="#ccc", linewidth=0.5)
     ax.set_ylim(ymin=ymin, ymax=ymax)
 
-    if split is not None:
-        ax.set_xscale("split_linear_log2", split=split)
+    input_lw = lw
 
     if plot_t:
         wks = [(w, k) for _ in ts]
         xs = ts
     elif plot_w:
-        wks = [(w, 1) for w in ws]
+        wks = [(w, k or 1) for w in ws]
         xs = ws
     else:
         wks = [(w, k) for k in ks]
@@ -411,7 +410,7 @@ def plot(
             color=lc,
             marker="o",
             markersize=2 + last,
-            lw=0,
+            lw=input_lw,
             alpha=alpha,
         )
 
@@ -449,13 +448,98 @@ def plot(
 
     plot_lower_bounds(sigma, xs, wks, df=df, diff=diff, **kwargs)
 
-    if plot_w:
+    if split is not None:
+        # Build a right axes with log2 scale covering [split, max_x].
+        divider = make_axes_locatable(ax)
+        ax_right = divider.append_axes("right", size="40%", pad=0.0)
+
+        # Copy every line drawn on ax to ax_right.
+        for line in list(ax.lines):
+            ax_right.plot(
+                line.get_xdata()[line.get_xdata() >= split],
+                line.get_ydata()[line.get_xdata() >= split],
+                color=line.get_color(),
+                lw=line.get_linewidth(),
+                ls=line.get_linestyle(),
+                marker=line.get_marker(),
+                markersize=line.get_markersize(),
+                alpha=line.get_alpha() if line.get_alpha() is not None else 1.0,
+                label=line.get_label(),
+                zorder=line.get_zorder(),
+            )
+
+        # Copy scatter collections (used in plot_lower_bounds when ilp=True).
+        for coll in list(ax.collections):
+            offsets = coll.get_offsets()
+            offsets = offsets[offsets[:, 0] >= split]
+            fc = coll.get_facecolor()
+            ec = coll.get_edgecolor()
+            ax_right.scatter(
+                offsets[:, 0],
+                offsets[:, 1],
+                s=coll.get_sizes(),
+                facecolors=fc,
+                edgecolors=ec,
+                linewidths=coll.get_linewidths(),
+                zorder=coll.get_zorder(),
+                label=coll.get_label(),
+            )
+
+        # Vertical line at the split point (drawn on both axes for visual continuity).
+        ax.axvline(x=split, color="black", linestyle="--", linewidth=0.8, zorder=10)
+        ax_right.axvline(
+            x=split, color="black", linestyle="--", linewidth=0.8, zorder=10
+        )
+
+        # Left axes: linear scale, 0..split.
+        ax.set_xlim(0, split)
+        ax.spines["right"].set_visible(False)
+        ax.tick_params(right=False)
+
+        # Right axes: log2 scale, split..max_x.
+        ax_right.set_xscale("log", base=2)
+        ax_right.set_xlim(split + 0, xs[-1])
+        locator = LogLocator(base=2, numticks=10)
+        ax_right.xaxis.set_major_locator(locator)
+        ax_right.xaxis.set_major_formatter(
+            FuncFormatter(
+                lambda x, pos: "" if x == split else f"$2^{{{int(math.log(x, 2))}}}$"
+            )
+        )
+        # ax_right.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{int(x)}"))
+        ax_right.set_ylim(ymin=ymin, ymax=ymax)
+        ax_right.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
+        ax_right.yaxis.set_major_locator(MaxNLocator(nbins=10))
+        ax_right.grid(True, axis="both", color="#ccc", linewidth=0.5)
+        ax_right.spines["top"].set_visible(False)
+        ax_right.spines["left"].set_visible(False)
+        ax_right.spines["right"].set_visible(False)
+        ax_right.tick_params(left=False, labelleft=False)
+
+    if plot_w and not df:
         loc = "upper center"
     else:
         loc = "lower center"
-    plt.legend(
-        loc=loc, bbox_to_anchor=(0, 0.03, 1, 1), ncols=ncols, mode="expand", fontsize=9
-    )
+
+    if split is not None:
+        # Span both axes using figure-level legend.
+        handles, labels = ax.get_legend_handles_labels()
+        fig.legend(
+            handles,
+            labels,
+            loc="lower center",
+            bbox_to_anchor=(0.5, -0.2),
+            ncols=ncols,
+            fontsize=9,
+        )
+    else:
+        ax.legend(
+            loc=loc,
+            bbox_to_anchor=(0, 0.03, 1, 1),
+            ncols=ncols,
+            mode="expand",
+            fontsize=9,
+        )
     plt.savefig(f"{name}.png", bbox_inches="tight", dpi=400)
     plt.savefig(f"{name}.svg", bbox_inches="tight")
     plt.close()
