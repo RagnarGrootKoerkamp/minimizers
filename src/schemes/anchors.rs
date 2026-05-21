@@ -2,8 +2,8 @@ use super::*;
 
 #[typetag::serialize]
 impl Params for BdAnchor {
-    fn build(&self, w: usize, _k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
-        Box::new(BdAnchorS::new(w, self.r))
+    fn build(&self, w: usize, k: usize, _sigma: usize) -> Box<dyn SamplingScheme> {
+        Box::new(BdAnchorS::new(w, self.r.max(k - 1)))
     }
 }
 
