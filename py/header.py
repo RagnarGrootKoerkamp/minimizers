@@ -220,28 +220,25 @@ from diskcache import Cache
 
 diskcache = Cache("cache")
 
-
-@cache
-def gen_inner(text_len, sigma):
-    return minimizers.generate_random_string(text_len, sigma)
-
-
 _text_len = 0
 
 
+# Set the text length
 def gen(text_len, sigma):
     global _text_len
     _text_len = text_len
 
 
+# text_len is just to clear the cache easily
 @diskcache.memoize(tag="density")
-def density_inner(tp, w, k, sigma, **args):
+def density_inner(tp, text_len, w, k, sigma, **args):
+    # text = minimizers.generate_random_or_db_string(_text_len, sigma, w, k)
     text = minimizers.generate_random_string(_text_len, sigma)
     return minimizers.density(tp, text, w, k, sigma, **args)
 
 
 def density(tp, w, k, sigma, **args):
-    return density_inner(tp, w, k, sigma, **args)
+    return density_inner(tp, _text_len, w, k, sigma, **args)
 
 
 fwd_wksigma_to_dens = {}
