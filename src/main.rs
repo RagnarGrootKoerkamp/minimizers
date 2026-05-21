@@ -228,6 +228,7 @@ fn main() {
 #[cfg(test)]
 mod test {
     use super::{schemes::*, *};
+    use minimizers::order::{AntiLex, Lex};
     use order::RandomO;
 
     #[test]
@@ -325,6 +326,28 @@ mod test {
                     let stream = m.stream(&text);
                     let stream_naive = m.stream_naive(&text);
                     assert_eq!(stream, stream_naive);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sus_anchor() {
+        for sigma in [2, 4] {
+            for k in 1..5 {
+                let text = generate_random_string(200, sigma);
+                for w in 1..=100 {
+                    // eprintln!("---------- w = {w} ---------");
+                    let m = SusAnchor(Lex).build(w, k, sigma);
+                    let stream_naive = m.stream_naive(&text);
+                    let stream = m.stream(&text);
+                    assert_eq!(stream_naive, stream);
+
+                    let m = SusAnchor(AntiLex).build(w, k, sigma);
+                    let stream_naive = m.stream_naive(&text);
+                    let stream = m.stream(&text);
+                    // eprintln!("text: {text:?}");
+                    assert_eq!(stream_naive, stream);
                 }
             }
         }

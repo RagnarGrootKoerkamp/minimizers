@@ -73,4 +73,83 @@ impl<O: Order> SamplingScheme for SusAnchorS<O> {
         }
         best.1
     }
+
+    fn stream(&self, text: &[u8]) -> Vec<usize> {
+        let w = self.w;
+        let k = self.k;
+        let l = self.l();
+        let mut active = vec![];
+        let events_len = 2 * self.l();
+        let mut events = vec![vec![]; events_len];
+
+        let mut poss = vec![];
+
+        for i in 0..text.len() - (k - 1) {
+            let end = i + k;
+            let mut evs = std::mem::take(&mut events[(end - 1) % events_len]);
+            // Process the new empty suffix.
+            active.push(i);
+            evs.push(i);
+            // eprintln!("push {i}: {:?}", &text[i..(i + l).min(text.len())]);
+            // eprintln!("active: {active:?}");
+            // eprintln!("events: {evs:?}");
+            // Process events
+            for &pos in &evs {
+                if let Some(mut idx) = active.iter().position(|x| *x == pos) {
+                    while idx > 0 {
+                        let prev_active = active[idx - 1];
+                        // eprintln!("cmp prev {prev_active}.. with new {pos}..");
+                        let new_suffix = &text[pos..end];
+                        // eprintln!("new ..: {new_suffix:?}");
+                        let old_suffix = &text[prev_active..end];
+                        // eprintln!("prev..: {old_suffix:?}");
+                        if self.o.key(new_suffix) < self.o.key(old_suffix) {
+                            // eprintln!("new is smaller; drop prev");
+                            active.remove(idx - 1);
+                            idx -= 1;
+                        } else {
+                            // Check if new suffix becomes smaller eventually
+                            let l = lcp(
+                                &text[pos..(pos + l).min(text.len())],
+                                &text[prev_active..(prev_active + l).min(text.len())],
+                            );
+                            // eprintln!("new is not larger. lcp={l}");
+                            if l < self.l()
+                                && pos + l < text.len()
+                                && self.o.key(&text[pos..=pos + l])
+                                    < self.o.key(&text[prev_active..=prev_active + l])
+                            {
+                                // eprintln!("new will be smaller from i={}", pos + l);
+                                events[(pos + l) % events_len].push(pos);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            evs.clear();
+            events[(end - 1) % events_len] = evs;
+
+            // eprintln!("{i}: {active:?}");
+            assert!(i.saturating_sub(w - 1) <= active[0] && active[0] <= i);
+            if i >= w - 1 {
+                poss.push(active[0]);
+            }
+            if active[0] + (w - 1) == i {
+                active.remove(0);
+            }
+        }
+        poss
+    }
+}
+
+// TODO: Word-based or SIMD-based
+fn lcp(a: &[u8], b: &[u8]) -> usize {
+    let l = a.len().min(b.len());
+    for i in 0..l {
+        if a[i] != b[i] {
+            return i;
+        }
+    }
+    return l;
 }
