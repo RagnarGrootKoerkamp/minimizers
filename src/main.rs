@@ -228,7 +228,7 @@ fn main() {
 #[cfg(test)]
 mod test {
     use super::{schemes::*, *};
-    use minimizers::order::{AntiLex, Lex};
+    use minimizers::order::{AntiLex, Lex, ToOrder};
     use order::RandomO;
 
     #[test]
@@ -332,24 +332,54 @@ mod test {
     }
 
     #[test]
-    fn sus_anchor() {
-        for sigma in [2, 4] {
-            for k in 1..5 {
+    fn sus_anchor_test() {
+        for _ in 0..100 {
+            for sigma in [2, 4] {
                 let text = generate_random_string(200, sigma);
-                for w in 1..=100 {
-                    // eprintln!("---------- w = {w} ---------");
-                    let m = SusAnchor(Lex).build(w, k, sigma);
-                    let stream_naive = m.stream_naive(&text);
-                    let stream = m.stream(&text);
-                    assert_eq!(stream_naive, stream);
+                for k in 1..4 {
+                    for w in 1..=100 {
+                        // eprintln!("---------- k = {k}, w = {w} ---------");
+                        let m = SusAnchorS::new(w, k, Lex.to_order(w, k, sigma));
+                        let stream_naive = m.stream_naive(&text);
+                        let stream = m.stream(&text);
+                        assert_eq!(stream_naive, stream);
+                        let stream2 = m.stream_queue(&text);
+                        // eprintln!("w = {w}; text: {text:?}");
+                        assert_eq!(stream_naive, stream2);
 
-                    let m = SusAnchor(AntiLex).build(w, k, sigma);
-                    let stream_naive = m.stream_naive(&text);
-                    let stream = m.stream(&text);
-                    // eprintln!("text: {text:?}");
-                    assert_eq!(stream_naive, stream);
+                        let m = SusAnchorS::new(w, k, AntiLex.to_order(w, k, sigma));
+                        let stream_naive = m.stream_naive(&text);
+                        let stream = m.stream(&text);
+                        assert_eq!(stream_naive, stream);
+                        let stream2 = m.stream_queue(&text);
+                        assert_eq!(stream_naive, stream2);
+                    }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn sus_anchor_perf() {
+        let sigma = 4;
+        let k = 1;
+        let text = generate_random_string(1000000, sigma);
+
+        for w in [16, 32, 64] {
+            let m = SusAnchorS::new(w, k, AntiLex.to_order(w, k, sigma));
+
+            let time = |name, f: &dyn Fn() -> Vec<usize>| {
+                let start = std::time::Instant::now();
+                let res = f();
+                let elapsed = start.elapsed();
+                eprintln!("{name} took {elapsed:?}");
+                res
+            };
+            let stream_naive = time("naive", &|| m.stream_naive(&text));
+            let stream = time("stream", &|| m.stream(&text));
+            let stream2 = time("stream_2", &|| m.stream_queue(&text));
+            assert_eq!(stream_naive, stream);
+            assert_eq!(stream_naive, stream2);
         }
     }
 }

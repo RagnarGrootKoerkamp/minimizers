@@ -75,6 +75,12 @@ impl<O: Order> SamplingScheme for SusAnchorS<O> {
     }
 
     fn stream(&self, text: &[u8]) -> Vec<usize> {
+        self.stream_queue(text)
+    }
+}
+
+impl<O: Order> SusAnchorS<O> {
+    pub fn stream_events(&self, text: &[u8]) -> Vec<usize> {
         let w = self.w;
         let k = self.k;
         let l = self.l();
@@ -136,6 +142,83 @@ impl<O: Order> SamplingScheme for SusAnchorS<O> {
                 poss.push(active[0]);
             }
             if active[0] + (w - 1) == i {
+                active.remove(0);
+            }
+        }
+        poss
+    }
+    pub fn stream_queue(&self, text: &[u8]) -> Vec<usize> {
+        let w = self.w;
+        let k = self.k;
+        let l = self.l();
+        // (start-pos of anchor, index of text character where it becomes active)
+        let mut active: Vec<(usize, usize)> = vec![];
+
+        let mut poss = vec![];
+
+        for i in 0..text.len() - (k - 1) {
+            let end = i + k;
+            // Process the new empty suffix.
+            // eprintln!("push {i}: {:?}", &text[i..(i + l).min(text.len())]);
+            // eprintln!("active: {active:?}");
+            {
+                // Find out where this suffix becomes active
+                let pos = i;
+                let mut active_at = end - 1;
+                while let Some(&(prev, prev_activates_at)) = active.last() {
+                    // eprintln!("cmp prev {prev} ({prev_activates_at}).. with new {pos}..");
+                    // let new_suffix = &text[pos..end];
+                    // eprintln!("new ..: {new_suffix:?}");
+                    // let old_suffix = &text[prev..end];
+                    // eprintln!("prev..: {old_suffix:?}");
+                    // Check if new suffix becomes smaller eventually
+                    let l = lcp(
+                        &text[pos..(pos + l).min(text.len())],
+                        &text[prev..(prev + l).min(text.len())],
+                    );
+                    // eprintln!("lcp={l}");
+                    if pos + l < text.len()
+                        && self.o.key(&text[pos..=pos + l]) < self.o.key(&text[prev..=prev + l])
+                    {
+                        let pos_activates_at = (pos + l).min(prev + self.l());
+                        // assert!(pos_activates_at != prev_activates_at);
+                        if pos_activates_at >= end && pos_activates_at > prev_activates_at {
+                            // eprintln!(
+                            // "New will be smaller later: active from {pos_activates_at} > {prev_activates_at}"
+                            // );
+                            active_at = pos_activates_at;
+                            break;
+                        } else {
+                            // eprintln!(
+                            // "New will be smaller before: active from {pos_activates_at} < {prev_activates_at}. Pop prev."
+                            // );
+                            active.pop();
+                            if active.is_empty() {
+                                // active_at = end - 1;
+                                break;
+                            }
+                            continue;
+                        }
+                    } else {
+                        // eprintln!("New is larger: active when previous element drops");
+                        active_at = prev + self.l();
+                        break;
+                    }
+                    // unreachable
+                }
+                // eprintln!("Pos {pos} activates at char {active_at}");
+                assert!(pos <= active_at);
+                active.push((pos, active_at));
+            }
+
+            // eprintln!("{i}: {active:?}");
+            assert!(i.saturating_sub(w - 1) <= active[0].0 && active[0].0 <= i);
+            if i >= w - 1 {
+                poss.push(active[0].0);
+            }
+            if active[0].0 + (w - 1) == i {
+                active.remove(0);
+            } else if active.len() > 1 && active[1].1 <= (i + k) {
                 active.remove(0);
             }
         }
