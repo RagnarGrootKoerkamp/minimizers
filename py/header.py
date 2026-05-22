@@ -91,7 +91,7 @@ def plot_lower_bounds(
                 [gp(sigma, w, k) * f(w) for (w, k) in wks],
                 color="red",
                 linewidth=1.5,
-                label="New l.b. (g')",
+                label="Lower bound",
             )
         if diff == "loose":
             plt.plot(
@@ -271,12 +271,18 @@ def plot(
     diff=False,
     split=None,
     lw=0,
+    ax=None,
+    save=True,
+    show_legend=True,
     **kwargs,
 ):
     data = []
+    if ax is not None:
+        plt.sca(ax)
     ax = plt.gca()
     fig = plt.gcf()
-    fig.set_size_inches(6.4, height)
+    if save:
+        fig.set_size_inches(6.4, height)
     style(ax, w, ks, plot_w=plot_w, plot_t=plot_t, df=df, title=title)
     ax.yaxis.set_major_locator(MaxNLocator(nbins=10))
     ax.grid(True, axis="y", color="#ccc", linewidth=0.5)
@@ -516,31 +522,34 @@ def plot(
         ax_right.spines["right"].set_visible(False)
         ax_right.tick_params(left=False, labelleft=False)
 
-    if plot_w and not df:
-        loc = "upper center"
-    else:
-        loc = "lower center"
+    if show_legend:
+        if plot_w and not df:
+            loc = "upper center"
+        else:
+            loc = "lower center"
 
-    if split is not None:
-        # Span both axes using figure-level legend.
-        handles, labels = ax.get_legend_handles_labels()
-        fig.legend(
-            handles,
-            labels,
-            loc="lower center",
-            bbox_to_anchor=(0.5, -0.2),
-            ncols=ncols,
-            fontsize=9,
-        )
-    else:
-        ax.legend(
-            loc=loc,
-            bbox_to_anchor=(0, 0.03, 1, 1),
-            ncols=ncols,
-            mode="expand",
-            fontsize=9,
-        )
-    plt.savefig(f"{name}.png", bbox_inches="tight", dpi=400)
-    plt.savefig(f"{name}.svg", bbox_inches="tight")
-    plt.close()
+        if split is not None:
+            # Span both axes using figure-level legend.
+            handles, labels = ax.get_legend_handles_labels()
+            fig.legend(
+                handles,
+                labels,
+                loc="lower center",
+                bbox_to_anchor=(0.5, -0.2),
+                ncols=ncols,
+                fontsize=9,
+            )
+        else:
+            ax.legend(
+                loc=loc,
+                bbox_to_anchor=(0, 0.03, 1, 1),
+                ncols=ncols,
+                mode="expand",
+                fontsize=9,
+            )
+
+    if save:
+        plt.savefig(f"{name}.png", bbox_inches="tight", dpi=400)
+        plt.savefig(f"{name}.svg", bbox_inches="tight")
+        plt.close()
     return data
