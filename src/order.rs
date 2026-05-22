@@ -178,8 +178,9 @@ impl Order for ABB {
         let s = 16usize.saturating_sub(kmer.len());
         let mut prefix = [0xff; 16];
         for i in 0..16 - s {
-            prefix[15 - i] = kmer[i];
-            if i > 0 {
+            if i == 0 {
+                prefix[15 - i] = kmer[i];
+            } else {
                 if prefix[15 - i] > 0 {
                     prefix[15 - i] = 0;
                 } else {
