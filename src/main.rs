@@ -332,6 +332,27 @@ mod test {
     }
 
     #[test]
+    fn bd_anchor() {
+        for _ in 0..100 {
+            for sigma in [2, 4] {
+                let text = generate_random_string(200, sigma);
+                for k in 1..4 {
+                    for w in 1..=100 {
+                        for r in k - 1..4 {
+                            let m = BdAnchor { r }.build(w, k, sigma);
+                            let poss = m.stream_naive(&text);
+                            assert_eq!(poss.len(), text.len() - (w + k - 2));
+                            for (i, x) in poss.iter().enumerate() {
+                                assert!((i..i + w).contains(x));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn sus_anchor_test() {
         for _ in 0..100 {
             for sigma in [2, 4] {
