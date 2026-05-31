@@ -374,6 +374,22 @@ mod test {
                         assert_eq!(stream_naive, stream);
                         let stream2 = m.stream_queue(&text);
                         assert_eq!(stream_naive, stream2);
+
+                        // The implementations only match for total orders.
+
+                        // let m = SusAnchorS::new(w, k, ABB.to_order(w, k, sigma));
+                        // let stream_naive = m.stream_naive(&text);
+                        // let stream = m.stream(&text);
+                        // assert_eq!(stream_naive, stream);
+                        // let stream2 = m.stream_queue(&text);
+                        // assert_eq!(stream_naive, stream2);
+
+                        // let m = SusAnchorS::new(w, k, (ABB, Lex).to_order(w, k, sigma));
+                        // let stream_naive = m.stream_naive(&text);
+                        // let stream = m.stream(&text);
+                        // assert_eq!(stream_naive, stream);
+                        // let stream2 = m.stream_queue(&text);
+                        // assert_eq!(stream_naive, stream2);
                     }
                 }
             }
