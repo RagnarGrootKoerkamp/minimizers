@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-# Experiments for selection schemes.
-# Initially copies from thesis.py.
+# Plot in sus-anchors paper.
+# based on thesis.py.
 
 import header as h
 from header import plot
 import matplotlib.pyplot as plt
-from sympy import Symbol, Lambda, Max, Min
 
-n = 1000009
+n = 10000000
 w = 0
 k = 1
 
