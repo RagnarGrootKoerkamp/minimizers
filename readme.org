@@ -1,13 +1,44 @@
 This repository hosts code for a number of different projects related to minimizers.
 
-1. In [[file:src/lib.rs][src/lib.rs]], reference implementations for the schemes presented in the mod-minimizer
+1. Python code in [[file:py/header.py][py/header.py]] to evaluate the density lower bound of
+   #+begin_quote
+   Bryce Kille, Ragnar Groot Koerkamp, Drake McAdams, Alan Liu, and Todd J Treangen.
+   A near-tight Lower Bound on the Density of Forward Sampling Schemes.
+   Bioinformatics, December 2024.
+   https://doi.org/10.1093/bioinformatics/btae736
+   #+end_quote
+
+2. In [[file:src/lib.rs][src/lib.rs]], reference implementations for the schemes presented in the mod-minimizer
    [[https://doi.org/10.4230/LIPIcs.WABI.2024.11][paper]] with Giulio Ermanno Pibiri.
    - See also [[https://curiouscoding.nl/posts/minimizers/][this blogpost]].
    - These are also used for the lower bound [[https://doi.org/10.1101/2024.09.06.611668][paper]] with Bryce Kille:
    - Python bindings available in [[file:src/py.rs][src/py.rs]].
-2. Ongoing research on new sampling schemes.
-   - Plots and experiments are in [[file:py][py/]].
+
+   #+begin_quote
+   Ragnar Groot Koerkamp, and Giulio Ermanno Pibiri.
+   The Mod-Minimizer: A Simple and Efficient Sampling Algorithm for Long k-Mers.
+   WABI 2024.
+   https://doi.org/10.4230/LIPIcs.WABI.2024.11
+   #+end_quote
+
+   #+begin_quote
+   Ragnar Groot Koerkamp, Daniel Liu, and Giulio Ermanno Pibiri.
+   The Open-Closed Mod-Minimizer Algorithm.
+   Algorithms for Molecular Biology, March 2025.
+   https://doi.org/10.1093/bioinformatics/btae736
+   #+end_quote
+
 3. An implementation ([[file:src/schemes/anchors.rs][src/schemes/anchors.rs]]) and experiments ([[file:py/sus-anchors-1.py][py/sus-anchors-1.py]]) of SUS-anchors ([[https://arxiv.org/abs/2606.01190][arxiv]]).
+
+   #+begin_quote
+   Ragnar Groot Koerkamp.
+   The Anti-Lexicographic SUS-anchor: A near-Optimal k=1 Sampling Scheme.  
+   Arxiv 2026.
+   https://doi.org/10.48550/ARXIV.2606.01190
+   #+end_quote
+
+4. Ongoing research on new sampling schemes.
+   - Plots and experiments are in [[file:py][py/]].
 
 The SIMD-based random-minimizers implementation corresponding to [[https://curiouscoding.nl/posts/fast-minimizers/][this post]] has moved to [[https://github.com/rust-seq/simd-minimizers]].
 
@@ -23,7 +54,7 @@ The SIMD-based random-minimizers implementation corresponding to [[https://curio
 
 [[file:./fig/density_4.svg]]
 
-* Reproducing results
+* Reproducing SUS-anchor results
 1. Install [[https://github.com/pyo3/maturin][maturin]], the build system we use for creating python libraries out of
    Rust code.
 2. Create a python environment: =just py-init= (=python -m venv -env=.) and load
