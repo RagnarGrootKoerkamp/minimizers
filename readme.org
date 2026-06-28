@@ -1,4 +1,4 @@
-This repository hosts a number of different projects related to minimizers.
+This repository hosts code for a number of different projects related to minimizers.
 
 1. In [[file:src/lib.rs][src/lib.rs]], reference implementations for the schemes presented in the mod-minimizer
    [[https://doi.org/10.4230/LIPIcs.WABI.2024.11][paper]] with Giulio Ermanno Pibiri.
@@ -7,6 +7,7 @@ This repository hosts a number of different projects related to minimizers.
    - Python bindings available in [[file:src/py.rs][src/py.rs]].
 2. Ongoing research on new sampling schemes.
    - Plots and experiments are in [[file:py][py/]].
+3. An implementation ([[file:src/schemes/anchors.rs][src/schemes/anchors.rs]]) and experiments ([[file:py/sus-anchors-1.py][py/sus-anchors-1.py]]) of SUS-anchors ([[https://arxiv.org/abs/2606.01190][arxiv]]).
 
 The SIMD-based random-minimizers implementation corresponding to [[https://curiouscoding.nl/posts/fast-minimizers/][this post]] has moved to [[https://github.com/rust-seq/simd-minimizers]].
 
@@ -18,5 +19,16 @@ The SIMD-based random-minimizers implementation corresponding to [[https://curio
 - *Decycling* and *double decycling* based minimizers (Pellow et al., 2023).
 - *Bidirectional anchors* (Loukides et al., 2023)
 - *Mod-sampling*, with *lr-minimizers* and *mod-minimizers* (our work).
+- *SUS-anchors*
 
 [[file:./fig/density_4.svg]]
+
+* Reproducing results
+1. Install [[https://github.com/pyo3/maturin][maturin]], the build system we use for creating python libraries out of
+   Rust code.
+2. Create a python environment: =just py-init= (=python -m venv -env=.) and load
+   it =source .env/bin/activate=
+3. Run =just py=  (=maturin develop -r=) to build
+   the python library.
+4. =cd py= and run =./sus-anchors-1.py= to reproduce the =sus-anchors-1.svg=
+   plot in the SUS-anchors paper. Lower =n= to =100000= or so for faster results.

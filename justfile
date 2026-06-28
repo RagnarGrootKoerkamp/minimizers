@@ -11,5 +11,7 @@ flame:
 flame-stat:
     cargo flamegraph --open --skip-after minimizers::MinimizerType::stats -- -n 100000 -s 256 eval --stats
 
+py-init:
+    python -m venv .env
 py:
     source .env/bin/activate && maturin develop -r
