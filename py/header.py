@@ -1,12 +1,11 @@
 import minimizers.minimizers
 import matplotlib.pyplot as plt
 import math
-import sympy
-from sympy import totient, isprime, divisors
+from sympy import divisors
 from sympy.functions.combinatorial.numbers import mobius
 from matplotlib.ticker import MaxNLocator, FormatStrFormatter, LogLocator, FuncFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from functools import cache
+from diskcache import Cache
 import fractions
 import json
 
@@ -66,7 +65,9 @@ def plot_lower_bounds(
     diff=False,
 ):
     # Fix for density factor
-    f = lambda w: w + 1 if df else 1
+    def f(w):
+        return w + 1 if df else 1
+
     if mini:
         plt.plot(
             xs,
@@ -213,10 +214,6 @@ def gp(sigma, w, k):
 
 
 ## Cache rust calls
-
-
-from diskcache import Cache
-
 diskcache = Cache("cache")
 
 _text_len = 0
@@ -236,7 +233,13 @@ def density_inner(tp, text_len, w, k, sigma, **args):
     return minimizers.density(tp, text, w, k, sigma, **args)
 
 
-def density(tp, w, k, sigma, **args):
+def density(tp, w, kk, sigma, **args):
+    if "k" in args:
+        k = args.pop("k")
+        k = min(k, w)
+        w -= k - 1
+    else:
+        k = kk
     return density_inner(tp, _text_len, w, k, sigma, **args)
 
 
