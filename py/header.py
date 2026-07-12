@@ -277,9 +277,11 @@ def plot(
     ax=None,
     save=True,
     show_legend=True,
+    best_only=False,
     **kwargs,
 ):
     data = []
+    k_annotations = []  # Store annotation data for later application when split is used
     if ax is not None:
         plt.sca(ax)
     ax = plt.gca()
@@ -302,6 +304,9 @@ def plot(
     else:
         wks = [(w, k) for k in ks]
         xs = ks
+
+    # When best_only=True, group schemes by (tp, label) and collect all their densities
+    scheme_densities = {}  # Maps (tp, label) -> list of (index, ds, args)
 
     for i, tp_args in enumerate(tps):
         if isinstance(tp_args, tuple):
@@ -377,6 +382,65 @@ def plot(
                 data.append(my_args)
                 ds.append(d)
         print(ds[0])
+
+        # Track densities by scheme
+        if best_only:
+            scheme_key = (tp, args.get("label", tp))
+            if scheme_key not in scheme_densities:
+                scheme_densities[scheme_key] = []
+            scheme_densities[scheme_key].append((i, ds, args))
+
+    # Now plot: either all schemes individually or best only per scheme
+    schemes_to_plot = []
+    if best_only:
+        # Plot only the best (minimum) for each scheme
+        for scheme_key, density_list in scheme_densities.items():
+            # Compute element-wise minimum across all k values for this scheme
+            # and track which k gives the minimum at each position
+            # density_list contains: [(index, ds, args), ...]
+            # where each entry is a different k value for the same scheme
+
+            best_ds = []
+            best_ks = []  # Track which k value gives the minimum at each position
+
+            # Get all k values for this scheme
+            scheme_k_values = []
+            for _, _, variant_args in density_list:
+                # The k value is in the args of each variant
+                k_val = variant_args.get("k", k)
+                scheme_k_values.append(k_val)
+
+            # For each position (w value in plot_w mode), find which k gives minimum
+            all_ds = [ds for _, ds, _ in density_list]
+            for pos_idx, vals in enumerate(zip(*all_ds)):
+                min_val = min(vals)
+                min_idx = vals.index(min_val)
+                best_ds.append(min_val)
+                # The k that gave this minimum is scheme_k_values[min_idx]
+                best_ks.append(scheme_k_values[min_idx])
+
+            # Use the args from the first entry of this scheme
+            _, _, args = density_list[0]
+            schemes_to_plot.append((scheme_key[0], args, best_ds, False, True, best_ks))
+    else:
+        # Plot all as before
+        idx = 0
+        for i, tp_args in enumerate(tps):
+            if isinstance(tp_args, tuple):
+                tp, args = tp_args
+            else:
+                tp = tp_args
+                args = {}
+            # Extract the ds for this tp from data
+            num_points = len(ts) if plot_t else len(wks)
+            ds = [data[idx + j]["d"] for j in range(num_points)]
+            idx += num_points
+            is_last = bold_last and i == len(tps) - 1
+            schemes_to_plot.append((tp, args, ds, is_last, False, None))
+
+    # Plot all schemes
+    for tp, args, ds, is_last, is_best, best_ks in schemes_to_plot:
+        last = 1.5 if is_last else 0
         lc = args.get("lc", None)
         ls = args.get("ls", None)
         label = str(args.get("label", tp))
@@ -405,6 +469,9 @@ def plot(
         if args.get("modulo", False):
             lw -= 0.5
         alpha = 1
+        marker = "o"
+        markersize = 2 + last
+
         if args.get("thin", False):
             alpha = 0.4
             lw = 0.5
@@ -417,9 +484,9 @@ def plot(
             label=None,
             linestyle=ls,
             color=lc,
-            marker="o",
-            markersize=2 + last,
-            lw=input_lw,
+            marker=marker,
+            markersize=markersize,
+            lw=input_lw if input_lw > 0 else lw,
             alpha=alpha,
         )
 
@@ -432,16 +499,18 @@ def plot(
             else:
                 dm = d
             dms.append(dm)
+
         plt.plot(
             xs,
             dms,
             label=None,
             color=line.get_color(),
             markersize=0,
-            lw=lw,
+            lw=lw if input_lw == 0 else input_lw,
             alpha=alpha,
         )
-        # Add unified legend item.
+
+        # Add unified legend item
         plt.plot(
             [],
             [],
@@ -449,8 +518,48 @@ def plot(
             color=line.get_color(),
             marker="o",
             markersize=2 + last,
-            lw=lw,
+            lw=lw if input_lw == 0 else input_lw,
         )
+
+        # Add annotations for k value changes (only for best curves)
+        if is_best and best_ks is not None:
+            prev_k = None
+            for i, (x, y, curr_k) in enumerate(zip(xs, ds, best_ks)):
+                if prev_k is None or curr_k != prev_k:
+                    # Highlight this marker
+                    plt.plot(
+                        [x],
+                        [y],
+                        marker="o",
+                        markersize=4,
+                        color=line.get_color(),
+                        # markeredgecolor="black",
+                        # markeredgewidth=1.0,
+                        zorder=100,
+                    )
+                    # Add annotation above the point
+                    k_annotations.append(
+                        (
+                            {
+                                "text": f"${curr_k}$",
+                                "x": x,
+                                "y": y,
+                                "color": line.get_color(),
+                            }
+                        )
+                    )
+                    ax.annotate(
+                        f"${curr_k}$",
+                        xy=(x, y),
+                        xytext=(0, 5),
+                        textcoords="offset points",
+                        ha="center",
+                        va="bottom",
+                        fontsize=7,
+                        color=line.get_color(),
+                        weight="bold",
+                    )
+                prev_k = curr_k
 
     for _ in range(add):
         plt.plot([], [], label=" ", alpha=0)
@@ -524,6 +633,20 @@ def plot(
         ax_right.spines["left"].set_visible(False)
         ax_right.spines["right"].set_visible(False)
         ax_right.tick_params(left=False, labelleft=False)
+
+        # Copy annotations to the right axes (only those with x >= split)
+        for ann_data in k_annotations:
+            ax_right.annotate(
+                ann_data["text"],
+                xy=(ann_data["x"], ann_data["y"]),
+                xytext=(0, 5),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=7,
+                color=ann_data["color"],
+                weight="bold",
+            )
 
     if show_legend:
         if plot_w and not df:
