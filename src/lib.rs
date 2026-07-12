@@ -122,7 +122,7 @@ pub fn collect_stats(
     let mut ps = vec![0; w];
     let mut ds = vec![0; 2 * w + 1];
     let mut transfer = vec![vec![0; w]; w];
-    let mut last = 0;
+    let mut last = usize::MAX;
     let mut counts = HashMap::new();
     let mut dist_counts = HashMap::new();
     let mut last_x = 0;

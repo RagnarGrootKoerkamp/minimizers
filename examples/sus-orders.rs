@@ -1,3 +1,4 @@
+//! Investigate the density of SUS-anchors with a random order.
 use clap::Parser;
 use minimizers::{
     de_bruijn_seq::cyclic_exact_density_string, generate_true_random_string, order::RandomLexO,
