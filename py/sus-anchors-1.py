@@ -6,7 +6,7 @@ import header as h
 from header import plot
 import matplotlib.pyplot as plt
 
-n = 100000
+n = 10000000
 w = 0
 k = 1
 
@@ -40,11 +40,11 @@ for ax, sigma in zip(axes, sigmas):
         ("DoubleDecycling", {"k": 8, "lc": "black", "label": "Double Decycling"}),
         ("DoubleDecycling", {"k": 9, "lc": "black", "label": "Double Decycling"}),
         ("DoubleDecycling", {"k": 10, "lc": "black", "label": "Double Decycling"}),
-        ("Greedy", {"k": 2, "label": "Greedy", "lc": "red"}),
-        ("Greedy", {"k": 3, "label": "Greedy", "lc": "grey"}),
-        ("Greedy", {"k": 4, "label": "Greedy", "lc": "grey"}),
-        ("Greedy", {"k": 5, "label": "Greedy", "lc": "grey"}),
-        ("Greedy", {"k": 6, "label": "Greedy", "lc": "grey"}),
+        ("Greedy", {"k": 2, "label": "Greedy Miminizer", "lc": "red"}),
+        ("Greedy", {"k": 3, "label": "Greedy Miminizer", "lc": "grey"}),
+        ("Greedy", {"k": 4, "label": "Greedy Miminizer", "lc": "grey"}),
+        ("Greedy", {"k": 5, "label": "Greedy Miminizer", "lc": "grey"}),
+        ("Greedy", {"k": 6, "label": "Greedy Miminizer", "lc": "grey"}),
         # Minimizers
         ("Lex", {"k": 2, "label": "Lex Minimizer", "lc": "#660066"}),
         ("Lex", {"k": 3, "label": "Lex Minimizer", "lc": "#0000dd"}),
@@ -55,15 +55,6 @@ for ax, sigma in zip(axes, sigmas):
         ("Lex", {"k": 8, "label": "Lex Minimizer", "lc": "#000066"}),
         ("Lex", {"k": 9, "label": "Lex Minimizer", "lc": "#000066"}),
         ("Lex", {"k": 10, "label": "Lex Minimizer", "lc": "#000066"}),
-        ("AntiLex", {"k": 2, "label": "Antilex Minimizer", "lc": "#000099"}),
-        ("AntiLex", {"k": 3, "label": "Antilex Minimizer", "lc": "#770077"}),
-        ("AntiLex", {"k": 4, "label": "Antilex Minimizer", "lc": "#660066"}),
-        ("AntiLex", {"k": 5, "label": "Antilex Minimizer", "lc": "#550055"}),
-        ("AntiLex", {"k": 6, "label": "Antilex Minimizer", "lc": "#440044"}),
-        ("AntiLex", {"k": 7, "label": "Antilex Minimizer", "lc": "#440044"}),
-        ("AntiLex", {"k": 8, "label": "Antilex Minimizer", "lc": "#440044"}),
-        ("AntiLex", {"k": 9, "label": "Antilex Minimizer", "lc": "#440044"}),
-        ("AntiLex", {"k": 10, "label": "Antilex Minimizer", "lc": "#440044"}),
         ("Random", {"k": 2, "lc": "orange", "label": "Random Minimizer"}),
         ("Random", {"k": 3, "lc": "orange", "label": "Random Minimizer"}),
         ("Random", {"k": 4, "lc": "orange", "label": "Random Minimizer"}),
@@ -73,6 +64,15 @@ for ax, sigma in zip(axes, sigmas):
         ("Random", {"k": 8, "lc": "orange", "label": "Random Minimizer"}),
         ("Random", {"k": 9, "lc": "orange", "label": "Random Minimizer"}),
         ("Random", {"k": 10, "lc": "orange", "label": "Random Minimizer"}),
+        ("AntiLex", {"k": 2, "label": "Antilex Minimizer", "lc": "#000099"}),
+        ("AntiLex", {"k": 3, "label": "Antilex Minimizer", "lc": "#770077"}),
+        ("AntiLex", {"k": 4, "label": "Antilex Minimizer", "lc": "#660066"}),
+        ("AntiLex", {"k": 5, "label": "Antilex Minimizer", "lc": "#550055"}),
+        ("AntiLex", {"k": 6, "label": "Antilex Minimizer", "lc": "#440044"}),
+        ("AntiLex", {"k": 7, "label": "Antilex Minimizer", "lc": "#440044"}),
+        ("AntiLex", {"k": 8, "label": "Antilex Minimizer", "lc": "#440044"}),
+        ("AntiLex", {"k": 9, "label": "Antilex Minimizer", "lc": "#440044"}),
+        ("AntiLex", {"k": 10, "label": "Antilex Minimizer", "lc": "#440044"}),
         ("SusLex", {"lc": "#a00080", "label": "Lex SUS-anchor"}),
         # FIXME
         # ("SusABB", {"lc": "#6010b0", "label": "Sus-anchor ABB"}),
@@ -158,6 +158,8 @@ for ax, sigma in zip(axes, sigmas):
         best_only=True,
     )
     ax.set_title(f"$\\sigma={sigma}$", fontsize=11)
+    if sigma > 2:
+        ax.set_ylabel(None)
 
 
 # Shared legend from the first subplot's handles

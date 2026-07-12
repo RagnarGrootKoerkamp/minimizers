@@ -23,7 +23,7 @@ def style(ax, w, ks, title=None, plot_w=False, plot_t=False, df=False):
     if not plot_w:
         ax.spines["bottom"].set_visible(False)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
+    ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
 
     if df:
         ax.set_ylabel("Density factor")
@@ -478,9 +478,16 @@ def plot(
             last = -1
             label = None
 
+        # filter out density=1 points from greedymini; very hacky
+        vals = list(zip(*[(x, d) for x, d in zip(xs, ds) if d < (3.5 if df else 1)]))
+        if vals:
+            xs2, ds2 = vals
+        else:
+            xs2, ds2 = [], []
+
         (line,) = plt.plot(
-            xs,
-            ds,
+            xs2,
+            ds2,
             label=None,
             linestyle=ls,
             color=lc,
@@ -531,7 +538,7 @@ def plot(
                         [x],
                         [y],
                         marker="o",
-                        markersize=4,
+                        markersize=3,
                         color=line.get_color(),
                         # markeredgecolor="black",
                         # markeredgewidth=1.0,
@@ -551,7 +558,7 @@ def plot(
                     ax.annotate(
                         f"${curr_k}$",
                         xy=(x, y),
-                        xytext=(0, 5),
+                        xytext=(0, 3),
                         textcoords="offset points",
                         ha="center",
                         va="bottom",
@@ -626,7 +633,7 @@ def plot(
         )
         # ax_right.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{int(x)}"))
         ax_right.set_ylim(ymin=ymin, ymax=ymax)
-        ax_right.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
+        ax_right.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
         ax_right.yaxis.set_major_locator(MaxNLocator(nbins=10))
         ax_right.grid(True, axis="both", color="#ccc", linewidth=0.5)
         ax_right.spines["top"].set_visible(False)
@@ -639,7 +646,7 @@ def plot(
             ax_right.annotate(
                 ann_data["text"],
                 xy=(ann_data["x"], ann_data["y"]),
-                xytext=(0, 5),
+                xytext=(0, 3),
                 textcoords="offset points",
                 ha="center",
                 va="bottom",
